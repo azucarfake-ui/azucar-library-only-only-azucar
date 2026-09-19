@@ -247,6 +247,19 @@ local function hoverAccent(obj)
 	end)
 end
 
+-- Desliza un elemento desde fuera de pantalla (a la izquierda) hasta su
+-- posición real. "restingPos" es la posición final (la que ya tenía el
+-- elemento armado); esta función lo manda afuera un instante y lo hace
+-- entrar con una curva que arranca rápido y frena suave.
+local function slideInFromLeft(inst, distance, duration)
+	if not inst or not inst.Parent then return end
+	local restingPos = inst.Position
+	inst.Position = UDim2.new(restingPos.X.Scale, restingPos.X.Offset - (distance or 260), restingPos.Y.Scale, restingPos.Y.Offset)
+	TweenService:Create(inst, TweenInfo.new(duration or 0.32, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+		Position = restingPos,
+	}):Play()
+end
+
 function UI:SetAccentColor(paletteName)
 	local palette = Palettes[paletteName]
 	if not palette then
@@ -441,7 +454,7 @@ function UI:CreateWindow(config)
 	-- "rbxassetid://..." crudo del ícono). Ahora entra ícono + NOMBRE.
 	local RAIL_W   = config.RailWidth or 148
 	local PANEL_W  = config.PanelWidth or 275
-	local HEADER_H = 32
+	local HEADER_H = 24
 	-- Más arriba: antes arrancaba en 8px por debajo del borde del área
 	-- útil. Ahora queda pegada al tope.
 	local TOP_Y    = config.TopOffset or 0
@@ -449,7 +462,7 @@ function UI:CreateWindow(config)
 	-- no se pase del borde de la pantalla. Todo lo demás (cabecera-riel,
 	-- riel-panel, panel-grupo) va a 0: sin separación, para que no se
 	-- vea nada del fondo del juego colándose entre los bloques.
-	local BOTTOM_MARGIN = config.BottomMargin or 2
+	local BOTTOM_MARGIN = config.BottomMargin or 0
 
 	local ScreenGui = new("ScreenGui", {
 		Name = "AzucarHackerUI",
@@ -654,6 +667,9 @@ function UI:CreateWindow(config)
 		end
 	end))
 
+	slideInFromLeft(Header, 260, 0.3)
+	slideInFromLeft(Rail, 260, 0.34)
+
 	table.insert(UI.Windows, Window)
 	return Window
 end
@@ -692,6 +708,19 @@ end
 function UI:Show()
 	self.Root.Visible = true
 	self._visible = true
+
+	slideInFromLeft(self.Header, 260, 0.3)
+	slideInFromLeft(self.Rail, 260, 0.34)
+	for _, tab in ipairs(self._tabs or {}) do
+		if tab.Panel.Visible then
+			slideInFromLeft(tab.Panel, 260, 0.38)
+		end
+		for _, group in pairs(tab._groupPanels) do
+			if group.Instance.Visible then
+				slideInFromLeft(group.Instance, 260, 0.42)
+			end
+		end
+	end
 end
 
 function UI:Hide()
@@ -962,7 +991,11 @@ function UI:CreateTab(config)
 	end)
 
 	table.insert(self._connections, TabBtn.MouseButton1Click:Connect(function()
-		self:SelectTab(name)
+		if Panel.Visible then
+			self:SelectTab(nil)
+		else
+			self:SelectTab(name)
+		end
 	end))
 
 	table.insert(self._tabs, Tab)
@@ -972,9 +1005,14 @@ end
 function UI:SelectTab(name)
 	for _, tab in ipairs(self._tabs or {}) do
 		local selected = (tab.Name == name)
+		local wasVisible = tab.Panel.Visible
 
 		tab.Panel.Visible = selected
 		tab.Button.BackgroundColor3 = selected and Theme.PanelAlt or Theme.Panel
+
+		if selected and not wasVisible then
+			slideInFromLeft(tab.Panel, 200, 0.3)
+		end
 
 		if tab.Mark then
 			tab.Mark.BackgroundTransparency = selected and 0 or 1
@@ -1095,6 +1133,9 @@ function UI:CreateGroup(config)
 		GroupPanel.Visible = not GroupPanel.Visible
 		Arrow.Text = GroupPanel.Visible and "<" or ">"
 		Arrow.TextColor3 = GroupPanel.Visible and Theme.Active or Theme.TextDim
+		if GroupPanel.Visible then
+			slideInFromLeft(GroupPanel, 200, 0.3)
+		end
 	end))
 
 	return setmetatable({
