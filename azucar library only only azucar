@@ -1,71 +1,13 @@
 --[[
-	AzucarHackerUI  v2.1.0
+	AzucarHackerUI  v3.0.0
 	======================
-	Panel estilo exploit: botones de pestaña SUELTOS y redondeados a la
-	izquierda; al tocar uno se abre una ventana cuadrada y centrada con
-	su columna de filas, y las filas de tipo "Grupo" abren OTRA ventanita
-	al lado. Todo oscuro, tipografía monoespaciada.
-
-	MOTOR IDÉNTICO AL DE SugarUI: mismos Callbacks en hilos independientes
-	(task.spawn + pcall, concurrencia ilimitada), mismos Flags/FlagValues,
-	misma limpieza de conexiones, mismos alias de campos:
-		Text | Name                  → texto de la fila
-		Min/Max | Range = {min, max} → rango del slider
-		Default | CurrentValue       → valor inicial
-		Increment | Step             → salto del slider
-		Callback | Logic = TuTabla   → lógica a ejecutar
-
-	NOVEDADES DE ESTA VERSIÓN (v2.1.0):
-
-	1. Rojo más intenso/saturado en toda la interfaz (Theme.Active).
-	2. Los TABS son más grandes (más altos y anchos) y con mejor
-	   tipografía para el nuevo tamaño.
-	3. Borde de los tabs en AZUL OSCURO (Theme.TabBorder) en vez del gris
-	   genérico — solo los tabs, el resto de la UI sigue con su borde
-	   normal.
-	4. El tab, al presionarlo/abrirlo, pasa a ROJO OSCURO
-	   (Theme.TabActiveBg) en vez del rojo brillante de acento — así el
-	   botón entero no encandila, y el rojo intenso queda reservado para
-	   texto, rellenos de sliders, etc.
-	5. La ventana que se abre al tocar un tab (y la de los Grupos) ahora
-	   es REDONDEADA y usa el mismo negro "brilloso" (degradado +
-	   reflejo) que ya tenían los tabs, en vez de un panel gris plano.
-	6. FIX del brillo: antes la franja de brillo de cada tab era un
-	   rectángulo con transparencia FIJA, que en algunos fondos se veía
-	   como una lisa línea gris dura (el bug que se reportó, la rayita
-	   arriba del botón). Ahora es un degradado de TRANSPARENCIA (opaco
-	   en el centro de la franja, transparente en ambos bordes), así se
-	   diluye en vez de cortar en seco — se ve como un reflejo real, no
-	   como una línea pegada. Si después de esto todavía aparece una
-	   línea gris por ENCIMA del primer tab (fuera de su propio botón),
-	   eso ya no lo dibuja este script — es el borde del visor de Studio
-	   o la reserva de la topbar de Roblox, no un elemento de la UI.
-
-	Uso básico:
-
-		local UI = loadstring(game:HttpGet("...AzucarHackerUI.lua"))()
-
-		local Window = UI:CreateWindow({ Title = "Azúcar Hub", Subtitle = "v1" })
-
-		local Combate = Window:CreateTab({ Name = "Combate", Icon = "C" })
-
-		Combate:CreateSection("Farmeo")
-
-		Combate:CreateToggle({
-			Text = "Auto Farm",
-			Flag = "AutoFarm",
-			Callback = function(state)
-				while state and UI.FlagValues["AutoFarm"] do
-					task.wait(0.1)
-				end
-			end,
-		})
-
-		local Avanzado = Combate:CreateGroup({ Name = "Ajustes avanzados" })
-		Avanzado:CreateSlider({ Text = "Velocidad", Range = {0, 200}, Default = 16,
-			Callback = function(v) print(v) end })
-
-		UI:SetAccentColor("Azul")   -- "Rojo" | "Azul" | "Verde" | "Blanco"
+	Modificaciones a pedido:
+	- Tabs ubicados en la parte superior (centro), horizontales y más largos.
+	- Brillo "real": Se cambió la franja gris dura por un degradado blanco superior (efecto cristal) y un gradiente de fondo.
+	- Bordes de los tabs en azul oscuro (TabBorder) más grueso.
+	- Rojo de acento puro e intenso (255, 0, 0).
+	- Tab seleccionado en rojo oscuro.
+	- Ventanas (Paneles) 100% redondeadas y con negro brilloso real en el fondo.
 ]]
 
 local TweenService     = game:GetService("TweenService")
@@ -74,13 +16,13 @@ local UserInputService  = game:GetService("UserInputService")
 
 local UI = {}
 
-UI.Version    = "2.1.0"
+UI.Version    = "3.0.0"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
 
 -- ============================================================
--- 	RED DE SEGURIDAD: un Create... inexistente no mata el script
+-- 	RED DE SEGURIDAD
 -- ============================================================
 local Stub = {}
 Stub.__index = function()
@@ -148,29 +90,20 @@ local Theme = {
 	Border    = Color3.fromRGB(44, 44, 51),
 	Text      = Color3.fromRGB(238, 238, 242),
 	TextDim   = Color3.fromRGB(138, 138, 148),
-	-- Rojo más intenso/saturado que antes (era 226,52,52).
-	Active    = Color3.fromRGB(255, 32, 42),
-	ActiveDim = Color3.fromRGB(178, 20, 28),
+	Active    = Color3.fromRGB(255, 0, 0), -- ROJO PURO INTENSO
+	ActiveDim = Color3.fromRGB(178, 0, 0),
 	Font      = Enum.Font.Code,
 	FontBold  = Enum.Font.Code,
-	-- 0 = esquinas rectas en el resto de la UI (filas, etc). Los tabs y
-	-- las ventanas flotantes (Panel/Grupo) usan roundCorner() en vez de
-	-- esto, con SU propio radio fijo.
 	CornerRadius = 0,
-	-- Negro "brilloso" de los tabs en reposo (no seleccionados).
-	TabIdle = Color3.fromRGB(9, 9, 11),
-	-- Borde azul oscuro, solo para los tabs.
-	TabBorder = Color3.fromRGB(24, 48, 112),
-	-- Rojo OSCURO para el tab cuando está presionado/abierto (distinto
-	-- del rojo de acento brillante, para que el botón entero no encandile).
-	TabActiveBg = Color3.fromRGB(108, 16, 20),
-	-- Negro "brilloso" de las ventanas (Panel/Grupo) y sus barras de título.
-	PanelGlossyBg = Color3.fromRGB(9, 9, 11),
+	TabIdle = Color3.fromRGB(15, 15, 18), -- Negro base
+	TabBorder = Color3.fromRGB(10, 30, 90), -- AZUL OSCURO PARA LOS BORDES DE TABS
+	TabActiveBg = Color3.fromRGB(90, 0, 0), -- ROJO OSCURO AL TOCAR
+	PanelGlossyBg = Color3.fromRGB(15, 15, 18), -- Negro base para el brillo
 }
 UI.Theme = Theme
 
 local Palettes = {
-	Rojo   = { Active = Color3.fromRGB(255, 32, 42),  ActiveDim = Color3.fromRGB(178, 20, 28) },
+	Rojo   = { Active = Color3.fromRGB(255, 0, 0),    ActiveDim = Color3.fromRGB(178, 0, 0) },
 	Azul   = { Active = Color3.fromRGB(48, 132, 232), ActiveDim = Color3.fromRGB(28, 84, 160) },
 	Verde  = { Active = Color3.fromRGB(52, 199, 105), ActiveDim = Color3.fromRGB(30, 132, 70) },
 	Blanco = { Active = Color3.fromRGB(226, 226, 232), ActiveDim = Color3.fromRGB(150, 150, 158) },
@@ -178,10 +111,6 @@ local Palettes = {
 UI.Palettes = Palettes
 UI.CurrentPalette = "Rojo"
 
--- Todo lo que se pinta con el color de acento se anota acá con la
--- función exacta que necesita para repintarse. SetAccentColor recorre la
--- lista con un pcall por entrada: si un elemento ya fue destruido, el
--- resto de la interfaz igual se repinta entera.
 local accentListeners = {}
 
 local function onAccent(fn)
@@ -203,7 +132,6 @@ local function new(class, props, children)
 	return inst
 end
 
--- Bordes CUADRADOS en el resto de la interfaz (ver comentario en Theme).
 local function corner(radius)
 	local r = Theme.CornerRadius or 0
 	if r <= 0 then
@@ -212,9 +140,6 @@ local function corner(radius)
 	return new("UICorner", { CornerRadius = UDim.new(0, radius or r) })
 end
 
--- Radio fijo, IGNORA Theme.CornerRadius. Para los tabs y las ventanas
--- flotantes (Panel/Grupo), que van redondeadas aunque el resto de la UI
--- sea cuadrada.
 local function roundCorner(radius)
 	return new("UICorner", { CornerRadius = UDim.new(0, radius or 14) })
 end
@@ -237,9 +162,6 @@ local function tween(inst, props, time)
 	return inst
 end
 
--- Hover que lee el color EN EL MOMENTO del evento (no el que tenía
--- cuando se creó el elemento), así nunca se queda pegado con el acento
--- viejo después de un cambio de paleta.
 local function hoverRow(obj)
 	obj.MouseEnter:Connect(function()
 		tween(obj, { BackgroundColor3 = Theme.PanelAlt })
@@ -249,59 +171,36 @@ local function hoverRow(obj)
 	end)
 end
 
-local function hoverAccent(obj)
-	obj.MouseEnter:Connect(function()
-		tween(obj, { BackgroundColor3 = Theme.ActiveDim })
-	end)
-	obj.MouseLeave:Connect(function()
-		tween(obj, { BackgroundColor3 = Theme.Active })
-	end)
-end
-
--- Degradado negro "brilloso" reutilizable: gris claro arriba → negro
--- casi puro abajo. Antes solo lo tenían los tabs; ahora también las
--- barras de título de las ventanas (Panel/Grupo), para que compartan el
--- mismo look "negro brilloso".
+-- Gradient "Metálico/Brilloso" de fondo
 local function glossyGradient(rotation)
 	return new("UIGradient", {
 		Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0.00, Color3.fromRGB(72, 72, 78)),
-			ColorSequenceKeypoint.new(0.35, Color3.fromRGB(22, 22, 25)),
-			ColorSequenceKeypoint.new(1.00, Color3.fromRGB(4, 4, 5)),
+			ColorSequenceKeypoint.new(0.00, Color3.fromRGB(80, 80, 90)), -- Luz arriba
+			ColorSequenceKeypoint.new(0.45, Color3.fromRGB(22, 22, 25)),
+			ColorSequenceKeypoint.new(0.50, Color3.fromRGB(8, 8, 10)),   -- Corte metálico
+			ColorSequenceKeypoint.new(1.00, Color3.fromRGB(2, 2, 2)),    -- Oscuro abajo
 		}),
 		Rotation = rotation or 90,
 	})
 end
 
--- Brillo/reflejo SUAVE: antes esto era un rectángulo con transparencia
--- FIJA (0.86), que en ciertos fondos se veía como una línea gris dura y
--- recta — el bug reportado. Ahora usa un degradado de TRANSPARENCIA:
--- transparente en ambos extremos, más opaco (pero nunca sólido) en el
--- centro de la franja. Así se diluye en vez de cortar en seco, y se lee
--- como un reflejo de verdad. Active = false para no bloquear clicks.
-local function glossyShine(parent, height, insetX, insetY)
-	height = height or 8
-	insetX = insetX or 8
-	insetY = insetY or 3
-
+-- Brillo de "cristal" real, sin lineas duras grises.
+local function realGlossyShine(parent, radius)
 	local shine = new("Frame", {
-		Name = "Shine",
-		Size = UDim2.new(1, -insetX * 2, 0, height),
-		Position = UDim2.new(0, insetX, 0, insetY),
+		Name = "GlossyReflection",
+		Size = UDim2.new(1, 0, 0.45, 0), -- Cubre la mitad superior
+		Position = UDim2.new(0, 0, 0, 0),
 		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
 		BorderSizePixel = 0,
 		ZIndex = (parent.ZIndex or 1) + 1,
 		Parent = parent,
 	}, {
-		roundCorner(math.floor(height / 2)),
+		roundCorner(radius or 14),
 		new("UIGradient", {
-			Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 255, 255)),
+			Rotation = 90,
 			Transparency = NumberSequence.new({
-				NumberSequenceKeypoint.new(0.00, 1.00),
-				NumberSequenceKeypoint.new(0.18, 0.74),
-				NumberSequenceKeypoint.new(0.50, 0.64),
-				NumberSequenceKeypoint.new(0.82, 0.74),
-				NumberSequenceKeypoint.new(1.00, 1.00),
+				NumberSequenceKeypoint.new(0.00, 0.82), -- Blanco muy suave arriba
+				NumberSequenceKeypoint.new(1.00, 1.00), -- 100% transparente en el medio
 			}),
 		}),
 	})
@@ -309,25 +208,19 @@ local function glossyShine(parent, height, insetX, insetY)
 	return shine
 end
 
--- Desliza un elemento desde fuera de pantalla (a la izquierda) hasta su
--- posición real. "restingPos" es la posición final (la que ya tenía el
--- elemento armado); esta función lo manda afuera un instante y lo hace
--- entrar con una curva que arranca rápido y frena suave.
-local function slideInFromLeft(inst, distance, duration)
+-- Nueva animación: Deslizar desde ARRIBA (porque los tabs están arriba)
+local function slideInFromTop(inst, distance, duration)
 	if not inst or not inst.Parent then return end
 	local restingPos = inst.Position
-	inst.Position = UDim2.new(restingPos.X.Scale, restingPos.X.Offset - (distance or 260), restingPos.Y.Scale, restingPos.Y.Offset)
-	TweenService:Create(inst, TweenInfo.new(duration or 0.32, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+	inst.Position = UDim2.new(restingPos.X.Scale, restingPos.X.Offset, restingPos.Y.Scale, restingPos.Y.Offset - (distance or 80))
+	TweenService:Create(inst, TweenInfo.new(duration or 0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
 		Position = restingPos,
 	}):Play()
 end
 
 function UI:SetAccentColor(paletteName)
 	local palette = Palettes[paletteName]
-	if not palette then
-		warn("[AzucarHackerUI] Paleta desconocida: " .. tostring(paletteName))
-		return
-	end
+	if not palette then return end
 	UI.CurrentPalette = paletteName
 	Theme.Active    = palette.Active
 	Theme.ActiveDim = palette.ActiveDim
@@ -337,87 +230,42 @@ function UI:SetAccentColor(paletteName)
 end
 
 -- ============================================================
--- 	NÚCLEO: CALLBACKS EN HILOS INDEPENDIENTES (SIN LÍMITE)
+-- 	NÚCLEO
 -- ============================================================
--- Cada disparo de un callback vive en su propio hilo y se anota en el
--- CONJUNTO controller._threads. Podés disparar el mismo control muchas
--- veces seguidas, o varios controles a la vez: ninguna lógica pisa a
--- otra, ninguna congela la interfaz, y :Stop() las corta TODAS.
 local function safeCall(controller, fn, ...)
 	fn = fn or function() end
-	if typeof(fn) ~= "function" then
-		return nil
-	end
-
+	if typeof(fn) ~= "function" then return nil end
 	local args = table.pack(...)
-
-	if controller then
-		controller._threads = controller._threads or {}
-	end
-
+	if controller then controller._threads = controller._threads or {} end
 	return task.spawn(function()
 		local thisThread = coroutine.running()
-		if controller then
-			controller._threads[thisThread] = true
-		end
-
-		local ok, err = pcall(function()
-			fn(table.unpack(args, 1, args.n))
-		end)
-		if not ok then
-			warn("[AzucarHackerUI] Error en tu callback: " .. tostring(err))
-		end
-
-		if controller and controller._threads then
-			controller._threads[thisThread] = nil
-		end
+		if controller then controller._threads[thisThread] = true end
+		local ok, err = pcall(function() fn(table.unpack(args, 1, args.n)) end)
+		if not ok then warn("[AzucarHackerUI] Error: " .. tostring(err)) end
+		if controller and controller._threads then controller._threads[thisThread] = nil end
 	end)
 end
 
 local function stopAllThreads(controller)
-	if not controller._threads then
-		return
-	end
-	for th in pairs(controller._threads) do
-		pcall(task.cancel, th)
-	end
+	if not controller._threads then return end
+	for th in pairs(controller._threads) do pcall(task.cancel, th) end
 	controller._threads = {}
 end
 
--- Acepta Callback = function(...), o Logic = tabla con
--- :Enable/:Disable/:Toggle/:Set/:Run, o una función suelta.
 local function resolveCallback(config)
-	if typeof(config.Callback) == "function" then
-		return config.Callback
-	end
-
+	if typeof(config.Callback) == "function" then return config.Callback end
 	local logic = config.Logic
-	if logic == nil then
-		return function() end
-	end
-	if typeof(logic) == "function" then
-		return logic
-	end
+	if logic == nil then return function() end end
+	if typeof(logic) == "function" then return logic end
 	if typeof(logic) == "table" then
 		return function(value)
 			if typeof(value) == "boolean" then
-				if value and typeof(logic.Enable) == "function" then
-					logic.Enable()
-					return
-				end
-				if not value and typeof(logic.Disable) == "function" then
-					logic.Disable()
-					return
-				end
+				if value and typeof(logic.Enable) == "function" then logic.Enable(); return end
+				if not value and typeof(logic.Disable) == "function" then logic.Disable(); return end
 			end
-			if typeof(logic.Toggle) == "function" then
-				logic.Toggle(value)
-			elseif typeof(logic.Set) == "function" then
-				logic.Set(value)
-			elseif typeof(logic.Run) == "function" then
-				logic.Run(value)
-			else
-				warn("[AzucarHackerUI] La tabla pasada en Logic no tiene :Toggle/:Enable+Disable/:Set/:Run.")
+			if typeof(logic.Toggle) == "function" then logic.Toggle(value)
+			elseif typeof(logic.Set) == "function" then logic.Set(value)
+			elseif typeof(logic.Run) == "function" then logic.Run(value)
 			end
 		end
 	end
@@ -425,35 +273,20 @@ local function resolveCallback(config)
 end
 
 local function registerFlag(flagName, controller, initialValue)
-	if not flagName then
-		return
-	end
+	if not flagName then return end
 	UI.Flags[flagName] = controller
 	UI.FlagValues[flagName] = initialValue
 end
 
--- Guardar el valor de una flag SIN reventar cuando el control no tiene
--- Flag. En Lua, "tabla[nil] = valor" lanza "table index is nil" y mata
--- el hilo ahí mismo: cualquier Toggle/Slider/Dropdown creado sin Flag
--- (o sea, la mayoría) se rompía apenas lo tocabas.
 local function setFlagValue(flagName, value)
-	if flagName == nil then
-		return
-	end
+	if flagName == nil then return end
 	UI.FlagValues[flagName] = value
 end
 
--- Devuelve el contenedor donde va la fila y la ventana dueña, sin
--- importar si el método se llamó sobre un Tab, sobre un Grupo, o por
--- error sobre la propia ventana.
 local function host(self)
-	if self.List then
-		return self.List, (self.Window or self), self
-	end
+	if self.List then return self.List, (self.Window or self), self end
 	if self._tabs and self._tabs[1] then
 		local firstTab = self._tabs[1]
-		warn("[AzucarHackerUI] Creaste un control sobre la ventana en vez de sobre una pestaña. "
-			.. "Se agregó a la primera pestaña para que no se pierda.")
 		return firstTab.List, self, firstTab
 	end
 	return nil, (self.Window or self), self
@@ -466,10 +299,7 @@ end
 
 local function baseRow(self, height)
 	local list, window, owner = host(self)
-	if not list then
-		return nil, window, owner
-	end
-
+	if not list then return nil, window, owner end
 	local row = new("Frame", {
 		Size = UDim2.new(1, 0, 0, height or 30),
 		BackgroundColor3 = Theme.Row,
@@ -477,7 +307,6 @@ local function baseRow(self, height)
 		LayoutOrder = nextOrder(owner),
 		Parent = list,
 	}, { pad(0, 0, 10, 0, 10) })
-
 	return row, window, owner
 end
 
@@ -497,10 +326,7 @@ end
 
 local function clickLayer(row)
 	return new("TextButton", {
-		Text = "",
-		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 1, 0),
-		Parent = row,
+		Text = "", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Parent = row,
 	})
 end
 
@@ -512,16 +338,15 @@ function UI:CreateWindow(config)
 
 	local title = config.Title or config.Name or "Azúcar Hub"
 
-	-- Tabs más grandes que antes (130x36 → 140x46), para que se lean
-	-- mejor y se sientan menos apretados.
-	local TAB_W = config.TabWidth or 140
-	local TAB_H = config.TabHeight or 46
-	local TAB_GAP = config.TabGap or 10
-	local TABS_X = config.TabsX or 16
-	local TABS_Y = config.TabsY or 16
+	-- Tabs largos y altos
+	local TAB_W = config.TabWidth or 160
+	local TAB_H = config.TabHeight or 40
+	local TAB_GAP = config.TabGap or 12
+	-- Y arriba (20 píxeles de margen superior)
+	local TABS_Y = config.TabsY or 20
 
-	local PANEL_W = config.PanelWidth or 380
-	local PANEL_H = config.PanelHeight or 320
+	local PANEL_W = config.PanelWidth or 420
+	local PANEL_H = config.PanelHeight or 350
 
 	local ScreenGui = new("ScreenGui", {
 		Name = "AzucarHackerUI",
@@ -532,9 +357,7 @@ function UI:CreateWindow(config)
 	})
 
 	local protectGui = rawget(_G, "protectgui") or rawget(_G, "protect_gui")
-	if typeof(protectGui) == "function" then
-		pcall(protectGui, ScreenGui)
-	end
+	if typeof(protectGui) == "function" then pcall(protectGui, ScreenGui) end
 	ScreenGui.Parent = getGuiParent()
 
 	local Root = new("Frame", {
@@ -544,22 +367,22 @@ function UI:CreateWindow(config)
 		Parent = ScreenGui,
 	})
 
-	-- ---------------- Columna de tabs SUELTOS ----------------
-	-- Sin fondo ni borde propio: solo un contenedor invisible que
-	-- acomoda los botones en fila, cada uno separado del resto por
-	-- TAB_GAP. Ninguno queda "pegado" a otro, y no hay ninguna línea o
-	-- divisor extra dibujado por este contenedor.
+	-- Contenedor Horizontal para los tabs (arriba, centrado)
 	local TabsHolder = new("Frame", {
 		Name = "TabsHolder",
-		Size = UDim2.new(0, TAB_W, 1, -(TABS_Y * 2)),
-		Position = UDim2.new(0, TABS_X, 0, TABS_Y),
+		Size = UDim2.new(1, 0, 0, TAB_H + 10),
+		Position = UDim2.new(0, 0, 0, TABS_Y),
 		BackgroundTransparency = 1,
 		Parent = Root,
 	}, {
-		new("UIListLayout", { Padding = UDim.new(0, TAB_GAP), SortOrder = Enum.SortOrder.LayoutOrder }),
+		new("UIListLayout", { 
+			FillDirection = Enum.FillDirection.Horizontal, 
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			Padding = UDim.new(0, TAB_GAP), 
+			SortOrder = Enum.SortOrder.LayoutOrder 
+		}),
 	})
 
-	-- ---------------- Notificaciones ----------------
 	local NotifyHolder = new("Frame", {
 		Name = "Notifications",
 		Size = UDim2.new(0, 250, 1, -20),
@@ -567,11 +390,7 @@ function UI:CreateWindow(config)
 		BackgroundTransparency = 1,
 		Parent = ScreenGui,
 	}, {
-		new("UIListLayout", {
-			Padding = UDim.new(0, 6),
-			VerticalAlignment = Enum.VerticalAlignment.Bottom,
-			SortOrder = Enum.SortOrder.LayoutOrder,
-		}),
+		new("UIListLayout", { Padding = UDim.new(0, 6), VerticalAlignment = Enum.VerticalAlignment.Bottom, SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
 
 	local Window = setmetatable({
@@ -589,50 +408,30 @@ function UI:CreateWindow(config)
 		_visible     = true,
 	}, UI)
 
-	local function track(conn)
-		table.insert(Window._connections, conn)
-		return conn
-	end
-
-	-- ---------------- Tecla para abrir/cerrar TODO ----------------
 	local toggleKey = config.ToggleKey or Enum.KeyCode.K
-	track(UserInputService.InputBegan:Connect(function(input, gameProcessed)
-		if gameProcessed then return end
-		if input.KeyCode == toggleKey then
-			Window:Toggle()
-		end
+	table.insert(Window._connections, UserInputService.InputBegan:Connect(function(input, gp)
+		if not gp and input.KeyCode == toggleKey then Window:Toggle() end
 	end))
 
-	slideInFromLeft(TabsHolder, 200, 0.3)
-
+	slideInFromTop(TabsHolder, 80, 0.3)
 	table.insert(UI.Windows, Window)
 	return Window
 end
 
--- ============================================================
--- 	MÉTODOS DE VENTANA
--- ============================================================
 function UI:MoveTo(offsetX, offsetY)
 	self.TabsHolder.Position = UDim2.new(0, offsetX, 0, offsetY)
 end
 
-function UI:SetTitle(text)
-	self.Title = tostring(text)
-end
+function UI:SetTitle(text) self.Title = tostring(text) end
 
 function UI:Show()
 	self.Root.Visible = true
 	self._visible = true
-
-	slideInFromLeft(self.TabsHolder, 200, 0.3)
+	slideInFromTop(self.TabsHolder, 80, 0.3)
 	for _, tab in ipairs(self._tabs or {}) do
-		if tab.Panel.Visible then
-			slideInFromLeft(tab.Panel, 260, 0.35)
-		end
+		if tab.Panel.Visible then slideInFromTop(tab.Panel, 50, 0.35) end
 		for _, group in pairs(tab._groupPanels) do
-			if group.Instance.Visible then
-				slideInFromLeft(group.Instance, 260, 0.4)
-			end
+			if group.Instance.Visible then slideInFromTop(group.Instance, 50, 0.4) end
 		end
 	end
 end
@@ -643,155 +442,86 @@ function UI:Hide()
 end
 
 function UI:Toggle()
-	if self._visible then
-		self:Hide()
-	else
-		self:Show()
-	end
+	if self._visible then self:Hide() else self:Show() end
 end
 
 function UI:Notify(config)
 	config = config or {}
-	local holder = self.NotifyHolder
-	if not holder then return end
-
-	local card = new("Frame", {
-		Size = UDim2.new(1, 0, 0, 56),
-		BackgroundColor3 = Theme.Panel,
-		BorderSizePixel = 0,
-		Parent = holder,
-	}, { corner(4), stroke(Theme.Border, 1), pad(8) })
-
-	new("Frame", {
-		Size = UDim2.new(0, 2, 1, 0),
-		Position = UDim2.new(0, -8, 0, -8),
-		BackgroundColor3 = Theme.Active,
-		BorderSizePixel = 0,
-		Parent = card,
-	})
-
-	new("TextLabel", {
-		Text = config.Title or "Aviso",
-		Font = Theme.FontBold,
-		TextSize = 12,
-		TextColor3 = Theme.Text,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 15),
-		Parent = card,
-	})
-
-	new("TextLabel", {
-		Text = config.Content or config.Text or "",
-		Font = Theme.Font,
-		TextSize = 11,
-		TextColor3 = Theme.TextDim,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextYAlignment = Enum.TextYAlignment.Top,
-		TextWrapped = true,
-		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 0, 0, 17),
-		Size = UDim2.new(1, 0, 1, -17),
-		Parent = card,
-	})
-
-	task.delay(config.Duration or 3, function()
-		pcall(function() card:Destroy() end)
-	end)
+	if not self.NotifyHolder then return end
+	local card = new("Frame", { Size = UDim2.new(1, 0, 0, 56), BackgroundColor3 = Theme.Panel, BorderSizePixel = 0, Parent = self.NotifyHolder }, { corner(4), stroke(Theme.Border, 1), pad(8) })
+	new("Frame", { Size = UDim2.new(0, 2, 1, 0), Position = UDim2.new(0, -8, 0, -8), BackgroundColor3 = Theme.Active, BorderSizePixel = 0, Parent = card })
+	new("TextLabel", { Text = config.Title or "Aviso", Font = Theme.FontBold, TextSize = 12, TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 15), Parent = card })
+	new("TextLabel", { Text = config.Content or config.Text or "", Font = Theme.Font, TextSize = 11, TextColor3 = Theme.TextDim, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 17), Size = UDim2.new(1, 0, 1, -17), Parent = card })
+	task.delay(config.Duration or 3, function() pcall(function() card:Destroy() end) end)
 	return card
 end
 
 function UI:Destroy()
-	for _, conn in ipairs(self._connections or {}) do
-		pcall(function() conn:Disconnect() end)
-	end
-	if self.ScreenGui then
-		pcall(function() self.ScreenGui:Destroy() end)
-	end
+	for _, conn in ipairs(self._connections or {}) do pcall(function() conn:Disconnect() end) end
+	if self.ScreenGui then pcall(function() self.ScreenGui:Destroy() end) end
 	for i, w in ipairs(UI.Windows) do
-		if w == self then
-			table.remove(UI.Windows, i)
-			break
-		end
+		if w == self then table.remove(UI.Windows, i); break end
 	end
 end
 
 -- ============================================================
--- 	CREATE TAB — botón suelto (redondo, negro brilloso) + ventana
--- 	centrada al tocarlo
+-- 	CREATE TAB
 -- ============================================================
 function UI:CreateTab(config)
 	config = config or {}
 	local name = config.Text or config.Name or ("Tab " .. (#self._tabs + 1))
 
-	-- Botón SUELTO: su propio fondo, su propio borde (azul oscuro),
-	-- separado del resto por el espacio real que deja TabsHolder
-	-- (UIListLayout + TabGap). Redondeado, con degradado + reflejo para
-	-- que se lea "negro brilloso" en vez de un rectángulo chato.
+	-- Botón superior
 	local TabBtn = new("TextButton", {
 		Name = name,
 		Text = "",
 		AutoButtonColor = false,
 		BackgroundColor3 = Theme.TabIdle,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, self.TAB_H),
+		Size = UDim2.new(0, self.TAB_W, 0, self.TAB_H), -- Tamaño fijo horizontal
 		LayoutOrder = #self._tabs,
 		Parent = self.TabsHolder,
 	}, {
-		roundCorner(16),
-		stroke(Theme.TabBorder, 1.5),
-		glossyGradient(90),
+		roundCorner(12),
+		stroke(Theme.TabBorder, 2), -- Azul Oscuro y más grueso
+		glossyGradient(90), -- Base metálica negra
 	})
 
-	glossyShine(TabBtn, math.floor(self.TAB_H * 0.24), 6, 4)
-
-	hoverRow(TabBtn) -- se pisa por el repintado de SelectTab, pero deja hover mientras está cerrada
+	realGlossyShine(TabBtn, 12) -- Brillo de cristal real
+	hoverRow(TabBtn)
 
 	local TabName = new("TextLabel", {
 		Name = "TabName",
 		Text = name,
 		Font = Theme.FontBold,
-		TextSize = 13,
+		TextSize = 14, -- Más grande para tabs largos
 		TextColor3 = Theme.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Center,
-		TextTruncate = Enum.TextTruncate.AtEnd,
 		BackgroundTransparency = 1,
 		ZIndex = 3,
-		Size = UDim2.new(1, -34, 1, 0),
-		Position = UDim2.new(0, 8, 0, 0),
+		Size = UDim2.new(1, 0, 1, 0), -- Ocupa todo el centro sin flechas feas
+		Position = UDim2.new(0, 0, 0, 0),
 		Parent = TabBtn,
 	})
 
-	-- Flechita propia de la pestaña: ">" cerrada, "<" abierta.
-	local TabArrow = new("TextLabel", {
-		Name = "TabArrow",
-		Text = ">",
-		Font = Theme.FontBold,
-		TextSize = 14,
-		TextColor3 = Theme.TextDim,
-		BackgroundTransparency = 1,
-		ZIndex = 3,
-		Size = UDim2.new(0, 20, 1, 0),
-		Position = UDim2.new(1, -24, 0, 0),
-		Parent = TabBtn,
-	})
-
-	-- ---------------- Ventana centrada con la lógica de este tab ----------------
-	-- Redondeada y "negro brilloso", igual que los tabs, en vez del
-	-- panel gris plano de antes.
+	-- Panel central brilloso
 	local Panel = new("Frame", {
 		Name = name .. "Panel",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Size = UDim2.new(0, self.PANEL_W, 0, self.PANEL_H),
-		Position = UDim2.new(0.5, 0, 0.5, 0),
+		-- Posicionado al medio, ligeramente más abajo de los tabs
+		Position = UDim2.new(0.5, 0, 0.5, 30),
 		BackgroundColor3 = Theme.PanelGlossyBg,
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
 		Visible = false,
 		ZIndex = 10,
 		Parent = self.Root,
-	}, { roundCorner(18), stroke(Theme.Border, 1) })
+	}, { 
+		roundCorner(18), 
+		stroke(Theme.Border, 1),
+		glossyGradient(45) -- Le da el toque negro brilloso a la interfaz entera
+	})
 
 	local PanelTitle = new("TextLabel", {
 		Name = "PanelTitle",
@@ -800,78 +530,32 @@ function UI:CreateTab(config)
 		TextSize = 13,
 		TextColor3 = Theme.Active,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextTruncate = Enum.TextTruncate.AtEnd,
 		BackgroundColor3 = Theme.PanelGlossyBg,
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, 32),
+		BackgroundTransparency = 1, -- Para no tapar el gradiente del Panel
 		ZIndex = 10,
 		Parent = Panel,
-	}, { roundCorner(18), glossyGradient(90), pad(0, 0, 12, 0, 12) })
-	glossyShine(PanelTitle, 6, 10, 4)
+	}, { pad(0, 0, 12, 0, 12) })
+
 	onAccent(function()
-		if PanelTitle.Parent then
-			PanelTitle.TextColor3 = Theme.Active
-		end
+		if PanelTitle.Parent then PanelTitle.TextColor3 = Theme.Active end
 	end)
 
-	-- Botón de cerrar dentro de la propia ventana (además de tocar el
-	-- tab de nuevo, o la tecla K).
 	local CloseBtn = new("TextButton", {
-		Text = "X",
-		Font = Theme.FontBold,
-		TextSize = 12,
-		TextColor3 = Theme.TextDim,
-		AutoButtonColor = false,
-		BackgroundTransparency = 1,
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -10, 0.5, 0),
-		Size = UDim2.new(0, 20, 0, 20),
-		ZIndex = 12,
-		Parent = PanelTitle,
+		Text = "X", Font = Theme.FontBold, TextSize = 12, TextColor3 = Theme.TextDim, AutoButtonColor = false, BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.new(0, 20, 0, 20), ZIndex = 12, Parent = PanelTitle,
 	})
 
 	local List = new("ScrollingFrame", {
-		Name = "List",
-		Size = UDim2.new(1, 0, 1, -32),
-		Position = UDim2.new(0, 0, 0, 32),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		ScrollBarThickness = 3,
-		ScrollBarImageColor3 = Theme.Border,
-		CanvasSize = UDim2.new(0, 0, 0, 0),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		ZIndex = 10,
-		Parent = Panel,
-	}, {
-		new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }),
-		pad(0, 6, 0, 10, 0),
-	})
+		Name = "List", Size = UDim2.new(1, 0, 1, -32), Position = UDim2.new(0, 0, 0, 32), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 3, ScrollBarImageColor3 = Theme.Border, CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, ZIndex = 10, Parent = Panel,
+	}, { new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }), pad(0, 6, 0, 10, 0) })
 
-	local Tab = setmetatable({
-		Window       = self,
-		Button       = TabBtn,
-		NameLabel    = TabName,
-		Arrow        = TabArrow,
-		Panel        = Panel,
-		PanelTitle   = PanelTitle,
-		List         = List,
-		Name         = name,
-		_rowCount    = 0,
-		_groupPanels = {},
-	}, UI)
+	local Tab = setmetatable({ Window = self, Button = TabBtn, NameLabel = TabName, Panel = Panel, PanelTitle = PanelTitle, List = List, Name = name, _rowCount = 0, _groupPanels = {} }, UI)
 
-	table.insert(self._connections, CloseBtn.MouseButton1Click:Connect(function()
-		self:SelectTab(nil)
-	end))
-
+	table.insert(self._connections, CloseBtn.MouseButton1Click:Connect(function() self:SelectTab(nil) end))
 	table.insert(self._connections, TabBtn.MouseButton1Click:Connect(function()
-		if Panel.Visible then
-			self:SelectTab(nil)
-		else
-			self:SelectTab(name)
-		end
+		if Panel.Visible then self:SelectTab(nil) else self:SelectTab(name) end
 	end))
-
 	table.insert(self._tabs, Tab)
 	return Tab
 end
@@ -882,24 +566,14 @@ function UI:SelectTab(name)
 		local wasVisible = tab.Panel.Visible
 
 		tab.Panel.Visible = selected
-		-- Negro brilloso en reposo; ROJO OSCURO (no el rojo de acento
-		-- brillante) cuando está abierta — así el botón entero no
-		-- encandila. El degradado y el reflejo son capas hijas
-		-- separadas, así que siguen viéndose "brillosas" encima de
-		-- cualquiera de los dos colores.
+		-- Cambio a ROJO OSCURO si está activo, NEGRO BRILLOSO si no.
 		tab.Button.BackgroundColor3 = selected and Theme.TabActiveBg or Theme.TabIdle
 
 		if selected and not wasVisible then
-			slideInFromLeft(tab.Panel, 260, 0.32)
+			slideInFromTop(tab.Panel, 50, 0.32)
 		end
 
-		if tab.NameLabel then
-			tab.NameLabel.TextColor3 = selected and Theme.Text or Theme.TextDim
-		end
-		if tab.Arrow then
-			tab.Arrow.Text = selected and "<" or ">"
-			tab.Arrow.TextColor3 = selected and Theme.Text or Theme.TextDim
-		end
+		if tab.NameLabel then tab.NameLabel.TextColor3 = selected and Theme.Text or Theme.TextDim end
 
 		if not selected then
 			for _, group in pairs(tab._groupPanels) do
@@ -912,225 +586,87 @@ function UI:SelectTab(name)
 end
 
 -- ============================================================
--- 	CREATE GROUP — fila con flecha que abre otra ventanita al lado
--- 	de la principal (misma idea, también redondeada y negra brillosa).
+-- 	CREATE GROUP
 -- ============================================================
 function UI:CreateGroup(config)
 	config = config or {}
 	local name = config.Text or config.Name or "Grupo"
 	local list, window, owner = host(self)
-	if not list then
-		warn("[AzucarHackerUI] CreateGroup necesita una pestaña. Creá primero un CreateTab.")
-		return setmetatable({}, Stub)
-	end
+	if not list then return setmetatable({}, Stub) end
 
-	local Row = new("Frame", {
-		Size = UDim2.new(1, 0, 0, 30),
-		BackgroundColor3 = Theme.Row,
-		BorderSizePixel = 0,
-		LayoutOrder = nextOrder(owner),
-		Parent = list,
-	}, { pad(0, 0, 10, 0, 10) })
+	local Row = new("Frame", { Size = UDim2.new(1, 0, 0, 30), BackgroundColor3 = Theme.Row, BorderSizePixel = 0, LayoutOrder = nextOrder(owner), Parent = list }, { pad(0, 0, 10, 0, 10) })
 	hoverRow(Row)
-
 	rowLabel(Row, name, 20)
 
-	local Arrow = new("TextLabel", {
-		Text = ">",
-		Font = Theme.FontBold,
-		TextSize = 13,
-		TextColor3 = Theme.TextDim,
-		BackgroundTransparency = 1,
-		Size = UDim2.new(0, 16, 1, 0),
-		Position = UDim2.new(1, -16, 0, 0),
-		Parent = Row,
-	})
+	local Arrow = new("TextLabel", { Text = ">", Font = Theme.FontBold, TextSize = 13, TextColor3 = Theme.TextDim, BackgroundTransparency = 1, Size = UDim2.new(0, 16, 1, 0), Position = UDim2.new(1, -16, 0, 0), Parent = Row })
 
-	-- Ventanita del grupo: mismo tamaño/estilo redondeado y negro
-	-- brilloso que la principal, corrida un poco para que se vea en
-	-- cascada al lado.
 	local GroupPanel = new("Frame", {
 		Name = name .. "GroupPanel",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Size = UDim2.new(0, window.PANEL_W, 0, window.PANEL_H),
-		Position = UDim2.new(0.5, 40, 0.5, 40),
+		Position = UDim2.new(0.5, 60, 0.5, 60), -- Un poco desplazada a la derecha y abajo
 		BackgroundColor3 = Theme.PanelGlossyBg,
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
 		Visible = false,
 		ZIndex = 12,
 		Parent = window.Root,
-	}, { roundCorner(18), stroke(Theme.Border, 1) })
+	}, { roundCorner(18), stroke(Theme.Border, 1), glossyGradient(45) })
 
-	local GroupTitle = new("TextLabel", {
-		Text = string.upper(name),
-		Font = Theme.FontBold,
-		TextSize = 13,
-		TextColor3 = Theme.Active,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		BackgroundColor3 = Theme.PanelGlossyBg,
-		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 32),
-		ZIndex = 12,
-		Parent = GroupPanel,
-	}, { roundCorner(18), glossyGradient(90), pad(0, 0, 12, 0, 12) })
-	glossyShine(GroupTitle, 6, 10, 4)
-	onAccent(function()
-		if GroupTitle.Parent then
-			GroupTitle.TextColor3 = Theme.Active
-		end
-	end)
+	local GroupTitle = new("TextLabel", { Text = string.upper(name), Font = Theme.FontBold, TextSize = 13, TextColor3 = Theme.Active, TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 32), ZIndex = 12, Parent = GroupPanel }, { pad(0, 0, 12, 0, 12) })
+	onAccent(function() if GroupTitle.Parent then GroupTitle.TextColor3 = Theme.Active end end)
 
-	local GroupCloseBtn = new("TextButton", {
-		Text = "X",
-		Font = Theme.FontBold,
-		TextSize = 12,
-		TextColor3 = Theme.TextDim,
-		AutoButtonColor = false,
-		BackgroundTransparency = 1,
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -10, 0.5, 0),
-		Size = UDim2.new(0, 20, 0, 20),
-		ZIndex = 14,
-		Parent = GroupTitle,
-	})
+	local GroupCloseBtn = new("TextButton", { Text = "X", Font = Theme.FontBold, TextSize = 12, TextColor3 = Theme.TextDim, AutoButtonColor = false, BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.new(0, 20, 0, 20), ZIndex = 14, Parent = GroupTitle })
 
-	local GroupList = new("ScrollingFrame", {
-		Size = UDim2.new(1, 0, 1, -32),
-		Position = UDim2.new(0, 0, 0, 32),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		ScrollBarThickness = 3,
-		ScrollBarImageColor3 = Theme.Border,
-		CanvasSize = UDim2.new(0, 0, 0, 0),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		ZIndex = 12,
-		Parent = GroupPanel,
-	}, {
-		new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }),
-		pad(0, 6, 0, 10, 0),
-	})
+	local GroupList = new("ScrollingFrame", { Size = UDim2.new(1, 0, 1, -32), Position = UDim2.new(0, 0, 0, 32), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 3, ScrollBarImageColor3 = Theme.Border, CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, ZIndex = 12, Parent = GroupPanel }, { new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }), pad(0, 6, 0, 10, 0) })
 
 	local siblings = owner._groupPanels or self._groupPanels
-	if siblings then
-		siblings[name] = { Instance = GroupPanel, Arrow = Arrow }
-	end
+	if siblings then siblings[name] = { Instance = GroupPanel, Arrow = Arrow } end
 
 	local function closeGroup()
-		GroupPanel.Visible = false
-		Arrow.Text = ">"
-		Arrow.TextColor3 = Theme.TextDim
+		GroupPanel.Visible = false; Arrow.Text = ">"; Arrow.TextColor3 = Theme.TextDim
 	end
-
 	table.insert(window._connections, GroupCloseBtn.MouseButton1Click:Connect(closeGroup))
 
 	local Click = clickLayer(Row)
 	table.insert(window._connections, Click.MouseButton1Click:Connect(function()
 		if siblings then
 			for _, gp in pairs(siblings) do
-				if gp.Instance ~= GroupPanel then
-					gp.Instance.Visible = false
-					gp.Arrow.Text = ">"
-				end
+				if gp.Instance ~= GroupPanel then gp.Instance.Visible = false; gp.Arrow.Text = ">" end
 			end
 		end
 		GroupPanel.Visible = not GroupPanel.Visible
 		Arrow.Text = GroupPanel.Visible and "<" or ">"
 		Arrow.TextColor3 = GroupPanel.Visible and Theme.Active or Theme.TextDim
-		if GroupPanel.Visible then
-			slideInFromLeft(GroupPanel, 260, 0.32)
-		end
+		if GroupPanel.Visible then slideInFromTop(GroupPanel, 50, 0.32) end
 	end))
 
-	return setmetatable({
-		Window       = window,
-		Panel        = GroupPanel,
-		List         = GroupList,
-		Name         = name,
-		_rowCount    = 0,
-		_groupPanels = {},
-	}, UI)
+	return setmetatable({ Window = window, Panel = GroupPanel, List = GroupList, Name = name, _rowCount = 0, _groupPanels = {} }, UI)
 end
 
 -- ============================================================
--- 	SECCIÓN / ETIQUETA / PÁRRAFO / SEPARADOR
+-- 	SECCIÓN / CONTROLES BÁSICOS
 -- ============================================================
 function UI:CreateSection(config)
-	local text = config
-	if typeof(config) == "table" then
-		text = config.Text or config.Name or "Sección"
-	end
-
+	local text = typeof(config) == "table" and (config.Text or config.Name) or config
 	local list, _, owner = host(self)
 	if not list then return setmetatable({}, Stub) end
-
-	local holder = new("Frame", {
-		Size = UDim2.new(1, 0, 0, 24),
-		BackgroundTransparency = 1,
-		LayoutOrder = nextOrder(owner),
-		Parent = list,
-	}, { pad(0, 6, 10, 0, 10) })
-
-	local label = new("TextLabel", {
-		Text = string.upper(tostring(text)),
-		Font = Theme.FontBold,
-		TextSize = 11,
-		TextColor3 = Theme.TextDim,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 1, 0),
-		Parent = holder,
-	})
-
+	local holder = new("Frame", { Size = UDim2.new(1, 0, 0, 24), BackgroundTransparency = 1, LayoutOrder = nextOrder(owner), Parent = list }, { pad(0, 6, 10, 0, 10) })
+	local label = new("TextLabel", { Text = string.upper(tostring(text)), Font = Theme.FontBold, TextSize = 11, TextColor3 = Theme.TextDim, TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Parent = holder })
 	local controller = setmetatable({ Instance = label }, UI)
-	function controller:Set(newText)
-		label.Text = string.upper(tostring(newText))
-	end
+	function controller:Set(newText) label.Text = string.upper(tostring(newText)) end
 	return controller
 end
-
--- Alias: mucha gente lo llama CreateSectionLabel (así se llamaba en SugarUI).
-function UI:CreateSectionLabel(config)
-	return self:CreateSection(config)
-end
+function UI:CreateSectionLabel(config) return self:CreateSection(config) end
 
 function UI:CreateLabel(config)
-	local text = config
-	if typeof(config) == "table" then
-		text = config.Text or config.Name or ""
-	end
-
+	local text = typeof(config) == "table" and (config.Text or config.Name) or config
 	local list, _, owner = host(self)
 	if not list then return setmetatable({}, Stub) end
-
-	local holder = new("Frame", {
-		Size = UDim2.new(1, 0, 0, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundColor3 = Theme.Row,
-		BorderSizePixel = 0,
-		LayoutOrder = nextOrder(owner),
-		Parent = list,
-	}, { pad(0, 7, 10, 7, 10) })
-
-	local label = new("TextLabel", {
-		Text = tostring(text),
-		Font = Theme.Font,
-		TextSize = 12,
-		TextColor3 = Theme.Text,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextWrapped = true,
-		BackgroundTransparency = 1,
-		AutomaticSize = Enum.AutomaticSize.Y,
-		Size = UDim2.new(1, 0, 0, 0),
-		Parent = holder,
-	})
-
+	local holder = new("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = Theme.Row, BorderSizePixel = 0, LayoutOrder = nextOrder(owner), Parent = list }, { pad(0, 7, 10, 7, 10) })
+	local label = new("TextLabel", { Text = tostring(text), Font = Theme.Font, TextSize = 12, TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true, BackgroundTransparency = 1, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0), Parent = holder })
 	local controller = setmetatable({ Instance = label }, UI)
-	function controller:Set(newText)
-		label.Text = tostring(newText)
-	end
+	function controller:Set(newText) label.Text = tostring(newText) end
 	return controller
 end
 
@@ -1138,73 +674,19 @@ function UI:CreateParagraph(config)
 	config = config or {}
 	local list, _, owner = host(self)
 	if not list then return setmetatable({}, Stub) end
-
-	local holder = new("Frame", {
-		Size = UDim2.new(1, 0, 0, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundColor3 = Theme.Row,
-		BorderSizePixel = 0,
-		LayoutOrder = nextOrder(owner),
-		Parent = list,
-	}, {
-		pad(0, 8, 10, 8, 10),
-		new("UIListLayout", { Padding = UDim.new(0, 3), SortOrder = Enum.SortOrder.LayoutOrder }),
-	})
-
-	local titleLabel = new("TextLabel", {
-		Text = config.Title or config.Text or config.Name or "",
-		Font = Theme.FontBold,
-		TextSize = 12,
-		TextColor3 = Theme.Text,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextWrapped = true,
-		BackgroundTransparency = 1,
-		AutomaticSize = Enum.AutomaticSize.Y,
-		Size = UDim2.new(1, 0, 0, 0),
-		LayoutOrder = 1,
-		Parent = holder,
-	})
-
-	local bodyLabel = new("TextLabel", {
-		Text = config.Content or config.Description or "",
-		Font = Theme.Font,
-		TextSize = 11,
-		TextColor3 = Theme.TextDim,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextWrapped = true,
-		BackgroundTransparency = 1,
-		AutomaticSize = Enum.AutomaticSize.Y,
-		Size = UDim2.new(1, 0, 0, 0),
-		LayoutOrder = 2,
-		Parent = holder,
-	})
-
+	local holder = new("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = Theme.Row, BorderSizePixel = 0, LayoutOrder = nextOrder(owner), Parent = list }, { pad(0, 8, 10, 8, 10), new("UIListLayout", { Padding = UDim.new(0, 3), SortOrder = Enum.SortOrder.LayoutOrder }) })
+	local titleLabel = new("TextLabel", { Text = config.Title or config.Text or config.Name or "", Font = Theme.FontBold, TextSize = 12, TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true, BackgroundTransparency = 1, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0), LayoutOrder = 1, Parent = holder })
+	local bodyLabel = new("TextLabel", { Text = config.Content or config.Description or "", Font = Theme.Font, TextSize = 11, TextColor3 = Theme.TextDim, TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true, BackgroundTransparency = 1, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0), LayoutOrder = 2, Parent = holder })
 	local controller = setmetatable({ Instance = holder }, UI)
-	function controller:Set(newTitle, newContent)
-		if newTitle ~= nil then titleLabel.Text = tostring(newTitle) end
-		if newContent ~= nil then bodyLabel.Text = tostring(newContent) end
-	end
+	function controller:Set(t, c) if t then titleLabel.Text = tostring(t) end; if c then bodyLabel.Text = tostring(c) end end
 	return controller
 end
 
 function UI:CreateDivider()
 	local list, _, owner = host(self)
 	if not list then return setmetatable({}, Stub) end
-
-	local holder = new("Frame", {
-		Size = UDim2.new(1, 0, 0, 9),
-		BackgroundTransparency = 1,
-		LayoutOrder = nextOrder(owner),
-		Parent = list,
-	}, { pad(0, 4, 10, 4, 10) })
-
-	new("Frame", {
-		Size = UDim2.new(1, 0, 0, 1),
-		BackgroundColor3 = Theme.Border,
-		BorderSizePixel = 0,
-		Parent = holder,
-	})
-
+	local holder = new("Frame", { Size = UDim2.new(1, 0, 0, 9), BackgroundTransparency = 1, LayoutOrder = nextOrder(owner), Parent = list }, { pad(0, 4, 10, 4, 10) })
+	new("Frame", { Size = UDim2.new(1, 0, 0, 1), BackgroundColor3 = Theme.Border, BorderSizePixel = 0, Parent = holder })
 	return setmetatable({ Instance = holder }, UI)
 end
 
@@ -1213,46 +695,15 @@ end
 -- ============================================================
 function UI:CreateButton(config)
 	config = config or {}
-	local callback = resolveCallback(config)
-	local text = config.Text or config.Name or config.Title or "Botón"
-
 	local list, window, owner = host(self)
 	if not list then return setmetatable({}, Stub) end
-
-	local Btn = new("TextButton", {
-		Text = text,
-		Font = Theme.FontBold,
-		TextSize = 12,
-		TextColor3 = Theme.Text,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		AutoButtonColor = false,
-		BackgroundColor3 = Theme.Row,
-		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 30),
-		LayoutOrder = nextOrder(owner),
-		Parent = list,
-	}, { pad(0, 0, 10, 0, 10) })
+	local Btn = new("TextButton", { Text = config.Text or config.Name or config.Title or "Botón", Font = Theme.FontBold, TextSize = 12, TextColor3 = Theme.Text, AutoButtonColor = false, BackgroundColor3 = Theme.Row, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 30), LayoutOrder = nextOrder(owner), Parent = list }, { pad(0, 0, 10, 0, 10) })
 	hoverRow(Btn)
-
-	local Button = setmetatable({ Instance = Btn, Callback = callback, _threads = {} }, UI)
-
-	function Button:Set(...)
-		Btn.TextColor3 = Theme.Active
-		task.delay(0.15, function()
-			if Btn.Parent then Btn.TextColor3 = Theme.Text end
-		end)
-		return safeCall(self, self.Callback, ...)
-	end
+	local Button = setmetatable({ Instance = Btn, Callback = resolveCallback(config), _threads = {} }, UI)
+	function Button:Set(...) Btn.TextColor3 = Theme.Active; task.delay(0.15, function() if Btn.Parent then Btn.TextColor3 = Theme.Text end end); return safeCall(self, self.Callback, ...) end
 	Button.Fire = Button.Set
-
-	function Button:Stop()
-		stopAllThreads(self)
-	end
-
-	table.insert(window._connections, Btn.MouseButton1Click:Connect(function()
-		Button:Set()
-	end))
-
+	function Button:Stop() stopAllThreads(self) end
+	table.insert(window._connections, Btn.MouseButton1Click:Connect(function() Button:Set() end))
 	registerFlag(config.Flag, Button, nil)
 	return Button
 end
@@ -1262,56 +713,18 @@ end
 -- ============================================================
 function UI:CreateToggle(config)
 	config = config or {}
-	local callback = resolveCallback(config)
-
-	local state = config.Default
-	if state == nil then state = config.CurrentValue end
-	if state == nil then state = false end
-	state = not not state
-
+	local state = config.Default; if state == nil then state = config.CurrentValue end; if state == nil then state = false end; state = not not state
 	local Row, window = baseRow(self, 30)
 	if not Row then return setmetatable({}, Stub) end
 	hoverRow(Row)
-
 	rowLabel(Row, config.Text or config.Name or "Opción", 26)
-
-	local Box = new("Frame", {
-		Size = UDim2.new(0, 14, 0, 14),
-		Position = UDim2.new(1, -14, 0.5, -7),
-		BackgroundColor3 = state and Theme.Active or Theme.PanelAlt,
-		BorderSizePixel = 0,
-		Parent = Row,
-	}, { corner(3), stroke(Theme.Border, 1) })
-
-	local Toggle = setmetatable({ Box = Box, Value = state, Callback = callback, _threads = {} }, UI)
-
-	onAccent(function()
-		if Box.Parent then
-			Box.BackgroundColor3 = Toggle.Value and Theme.Active or Theme.PanelAlt
-		end
-	end)
-
-	function Toggle:Set(newState)
-		newState = not not newState
-		self.Value = newState
-		tween(Box, { BackgroundColor3 = newState and Theme.Active or Theme.PanelAlt })
-		setFlagValue(config.Flag, newState)
-		return safeCall(self, self.Callback, newState)
-	end
-
-	function Toggle:Get()
-		return self.Value
-	end
-
-	function Toggle:Stop()
-		stopAllThreads(self)
-	end
-
-	local Click = clickLayer(Row)
-	table.insert(window._connections, Click.MouseButton1Click:Connect(function()
-		Toggle:Set(not Toggle.Value)
-	end))
-
+	local Box = new("Frame", { Size = UDim2.new(0, 14, 0, 14), Position = UDim2.new(1, -14, 0.5, -7), BackgroundColor3 = state and Theme.Active or Theme.PanelAlt, BorderSizePixel = 0, Parent = Row }, { corner(3), stroke(Theme.Border, 1) })
+	local Toggle = setmetatable({ Box = Box, Value = state, Callback = resolveCallback(config), _threads = {} }, UI)
+	onAccent(function() if Box.Parent then Box.BackgroundColor3 = Toggle.Value and Theme.Active or Theme.PanelAlt end end)
+	function Toggle:Set(s) s = not not s; self.Value = s; tween(Box, { BackgroundColor3 = s and Theme.Active or Theme.PanelAlt }); setFlagValue(config.Flag, s); return safeCall(self, self.Callback, s) end
+	function Toggle:Get() return self.Value end
+	function Toggle:Stop() stopAllThreads(self) end
+	table.insert(window._connections, clickLayer(Row).MouseButton1Click:Connect(function() Toggle:Set(not Toggle.Value) end))
 	registerFlag(config.Flag, Toggle, state)
 	return Toggle
 end
@@ -1321,188 +734,44 @@ end
 -- ============================================================
 function UI:CreateSlider(config)
 	config = config or {}
-	local callback = resolveCallback(config)
-
 	local rangeMin, rangeMax = config.Min, config.Max
-	if typeof(config.Range) == "table" then
-		rangeMin = rangeMin or config.Range[1]
-		rangeMax = rangeMax or config.Range[2]
-	end
-	local min = rangeMin or 0
-	local max = rangeMax or 100
-	if max <= min then max = min + 1 end
+	if typeof(config.Range) == "table" then rangeMin = rangeMin or config.Range[1]; rangeMax = rangeMax or config.Range[2] end
+	local min = rangeMin or 0; local max = rangeMax or 100; if max <= min then max = min + 1 end
+	local step = config.Increment or config.Step or 1; if step <= 0 then step = 1 end
+	local decimals = 0; if step < 1 then decimals = #tostring(step):gsub("^%d*%.?", ""); if decimals > 3 then decimals = 3 end end
 
-	local step = config.Increment or config.Step or 1
-	if step <= 0 then step = 1 end
-
-	local decimals = 0
-	if step < 1 then
-		decimals = #tostring(step):gsub("^%d*%.?", "")
-		if decimals > 3 then decimals = 3 end
-	end
-
-	local function snap(v)
-		v = math.clamp(v, min, max)
-		local snapped = min + math.floor((v - min) / step + 0.5) * step
-		return math.clamp(snapped, min, max)
-	end
-
-	local function show(v)
-		if decimals > 0 then
-			return string.format("%." .. decimals .. "f", v)
-		end
-		return tostring(math.floor(v + 0.5))
-	end
+	local function snap(v) v = math.clamp(v, min, max); return math.clamp(min + math.floor((v - min) / step + 0.5) * step, min, max) end
+	local function show(v) if decimals > 0 then return string.format("%." .. decimals .. "f", v) end return tostring(math.floor(v + 0.5)) end
 
 	local value = snap(config.Default or config.CurrentValue or min)
-
 	local Row, window = baseRow(self, 42)
 	if not Row then return setmetatable({}, Stub) end
-
-	-- El slider es más alto que una fila normal, así que necesita su
-	-- propio margen vertical. Se cambia el padding con cuidado: si por lo
-	-- que sea la fila no trajera uno, no se revienta acá.
-	local oldPad = Row:FindFirstChildOfClass("UIPadding")
-	if oldPad then
-		oldPad:Destroy()
-	end
+	local oldPad = Row:FindFirstChildOfClass("UIPadding"); if oldPad then oldPad:Destroy() end
 	pad(0, 6, 10, 6, 10).Parent = Row
 
-	new("TextLabel", {
-		Text = config.Text or config.Name or "Valor",
-		Font = Theme.Font,
-		TextSize = 12,
-		TextColor3 = Theme.Text,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		BackgroundTransparency = 1,
-		Size = UDim2.new(1, -52, 0, 15),
-		Parent = Row,
-	})
+	new("TextLabel", { Text = config.Text or config.Name or "Valor", Font = Theme.Font, TextSize = 12, TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1, Size = UDim2.new(1, -52, 0, 15), Parent = Row })
+	local ValueLabel = new("TextLabel", { Text = show(value), Font = Theme.FontBold, TextSize = 12, TextColor3 = Theme.Active, TextXAlignment = Enum.TextXAlignment.Right, BackgroundTransparency = 1, Size = UDim2.new(0, 50, 0, 15), Position = UDim2.new(1, -50, 0, 0), Parent = Row })
+	onAccent(function() if ValueLabel.Parent then ValueLabel.TextColor3 = Theme.Active end end)
 
-	local ValueLabel = new("TextLabel", {
-		Text = show(value),
-		Font = Theme.FontBold,
-		TextSize = 12,
-		TextColor3 = Theme.Active,
-		TextXAlignment = Enum.TextXAlignment.Right,
-		BackgroundTransparency = 1,
-		Size = UDim2.new(0, 50, 0, 15),
-		Position = UDim2.new(1, -50, 0, 0),
-		Parent = Row,
-	})
-	onAccent(function()
-		if ValueLabel.Parent then
-			ValueLabel.TextColor3 = Theme.Active
-		end
-	end)
+	local Track = new("Frame", { Size = UDim2.new(1, 0, 0, 4), Position = UDim2.new(0, 0, 0, 22), BackgroundColor3 = Theme.PanelAlt, BorderSizePixel = 0, Parent = Row }, { corner(2) })
+	local function ratio(v) return (v - min) / (max - min) end
+	local Fill = new("Frame", { Size = UDim2.new(ratio(value), 0, 1, 0), BackgroundColor3 = Theme.Active, BorderSizePixel = 0, Parent = Track }, { corner(2) })
+	onAccent(function() if Fill.Parent then Fill.BackgroundColor3 = Theme.Active end end)
+	local Knob = new("Frame", { Size = UDim2.new(0, 10, 0, 10), Position = UDim2.new(ratio(value), -5, 0.5, -5), BackgroundColor3 = Theme.Text, BorderSizePixel = 0, Parent = Track }, { corner(5) })
 
-	local Track = new("Frame", {
-		Size = UDim2.new(1, 0, 0, 4),
-		Position = UDim2.new(0, 0, 0, 22),
-		BackgroundColor3 = Theme.PanelAlt,
-		BorderSizePixel = 0,
-		Parent = Row,
-	}, { corner(2) })
+	local Slider = setmetatable({ Track = Track, Fill = Fill, Knob = Knob, Value = value, Min = min, Max = max, Callback = resolveCallback(config), _threads = {} }, UI)
+	local function repaint(v) local r = ratio(v); Fill.Size = UDim2.new(r, 0, 1, 0); Knob.Position = UDim2.new(r, -5, 0.5, -5); ValueLabel.Text = show(v) end
+	function Slider:Set(nv) nv = snap(tonumber(nv) or min); self.Value = nv; repaint(nv); setFlagValue(config.Flag, nv); return safeCall(self, self.Callback, nv) end
+	function Slider:Get() return self.Value end
+	function Slider:Stop() stopAllThreads(self) end
 
-	local function ratio(v)
-		return (v - min) / (max - min)
-	end
-
-	local Fill = new("Frame", {
-		Size = UDim2.new(ratio(value), 0, 1, 0),
-		BackgroundColor3 = Theme.Active,
-		BorderSizePixel = 0,
-		Parent = Track,
-	}, { corner(2) })
-	onAccent(function()
-		if Fill.Parent then
-			Fill.BackgroundColor3 = Theme.Active
-		end
-	end)
-
-	local Knob = new("Frame", {
-		Size = UDim2.new(0, 10, 0, 10),
-		Position = UDim2.new(ratio(value), -5, 0.5, -5),
-		BackgroundColor3 = Theme.Text,
-		BorderSizePixel = 0,
-		Parent = Track,
-	}, { corner(5) })
-
-	local Slider = setmetatable({
-		Track = Track, Fill = Fill, Knob = Knob,
-		Value = value, Min = min, Max = max,
-		Callback = callback, _threads = {},
-	}, UI)
-
-	local function repaint(v)
-		local r = ratio(v)
-		Fill.Size = UDim2.new(r, 0, 1, 0)
-		Knob.Position = UDim2.new(r, -5, 0.5, -5)
-		ValueLabel.Text = show(v)
-	end
-
-	function Slider:Set(newValue)
-		newValue = snap(tonumber(newValue) or min)
-		self.Value = newValue
-		repaint(newValue)
-		setFlagValue(config.Flag, newValue)
-		return safeCall(self, self.Callback, newValue)
-	end
-
-	function Slider:Get()
-		return self.Value
-	end
-
-	function Slider:Stop()
-		stopAllThreads(self)
-	end
-
-	-- Arrastre aislado: el listener de movimiento es global, así que cada
-	-- slider comprueba que el mouse esté sobre SU propio riel antes de
-	-- moverse. Y el fin del arrastre se detecta con InputEnded (que
-	-- siempre dispara), nunca con input.Changed.
 	local dragging = false
+	local function setFromX(xPos) Slider:Set(min + math.clamp((xPos - Track.AbsolutePosition.X) / math.max(Track.AbsoluteSize.X, 1), 0, 1) * (max - min)) end
+	local function mouseOn() local ok, pos = pcall(function() return UserInputService:GetMouseLocation() end); if not ok then return true end; return pos.Y >= Track.AbsolutePosition.Y - 22 and pos.Y <= Track.AbsolutePosition.Y + Track.AbsoluteSize.Y + 22 end
 
-	local function setFromX(xPos)
-		local relative = math.clamp((xPos - Track.AbsolutePosition.X) / math.max(Track.AbsoluteSize.X, 1), 0, 1)
-		Slider:Set(min + relative * (max - min))
-	end
-
-	local function mouseIsOnThisTrack()
-		local ok, mousePos = pcall(function()
-			return UserInputService:GetMouseLocation()
-		end)
-		if not ok then return true end
-		local tPos, tSize = Track.AbsolutePosition, Track.AbsoluteSize
-		return mousePos.Y >= tPos.Y - 22 and mousePos.Y <= tPos.Y + tSize.Y + 22
-	end
-
-	table.insert(window._connections, Track.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1
-			or input.UserInputType == Enum.UserInputType.Touch then
-			dragging = true
-			setFromX(input.Position.X)
-		end
-	end))
-
-	table.insert(window._connections, UserInputService.InputChanged:Connect(function(input)
-		if not dragging then return end
-		if input.UserInputType ~= Enum.UserInputType.MouseMovement
-			and input.UserInputType ~= Enum.UserInputType.Touch then
-			return
-		end
-		if mouseIsOnThisTrack() then
-			setFromX(input.Position.X)
-		end
-	end))
-
-	table.insert(window._connections, UserInputService.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1
-			or input.UserInputType == Enum.UserInputType.Touch then
-			dragging = false
-		end
-	end))
+	table.insert(window._connections, Track.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = true; setFromX(input.Position.X) end end))
+	table.insert(window._connections, UserInputService.InputChanged:Connect(function(input) if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and mouseOn() then setFromX(input.Position.X) end end))
+	table.insert(window._connections, UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end end))
 
 	registerFlag(config.Flag, Slider, value)
 	return Slider
@@ -1513,445 +782,102 @@ end
 -- ============================================================
 function UI:CreateDropdown(config)
 	config = config or {}
-	local callback = resolveCallback(config)
 	local options = config.Options or config.Values or {}
-
-	local function display(value)
-		if typeof(value) == "Instance" then
-			return value.Name
-		end
-		if typeof(value) == "table" and value.Name then
-			return tostring(value.Name)
-		end
-		return tostring(value)
-	end
-
-	local function isValid(value)
-		for _, opt in ipairs(options) do
-			if opt == value then return true end
-		end
-		return false
-	end
-
+	local function display(v) return typeof(v) == "Instance" and v.Name or (typeof(v) == "table" and v.Name or tostring(v)) end
+	local function isValid(v) for _, o in ipairs(options) do if o == v then return true end end return false end
 	local selected = options[1]
-	local wanted = config.Default
-	if wanted == nil then wanted = config.CurrentOption end
-	if wanted ~= nil and isValid(wanted) then
-		selected = wanted
-	end
+	local wanted = config.Default; if wanted == nil then wanted = config.CurrentOption end; if wanted ~= nil and isValid(wanted) then selected = wanted end
 
 	local Row, window = baseRow(self, 30)
 	if not Row then return setmetatable({}, Stub) end
-	Row.ClipsDescendants = true
-	Row.ZIndex = 2
-
-	-- Caja compartida para que listHeight() lea siempre las opciones
-	-- actuales, incluso después de un :Refresh().
+	Row.ClipsDescendants = true; Row.ZIndex = 2
 	local Dropdown_Options_Ref = { options }
 
-	new("TextLabel", {
-		Text = config.Text or config.Name or "Opciones",
-		Font = Theme.Font,
-		TextSize = 12,
-		TextColor3 = Theme.TextDim,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		BackgroundTransparency = 1,
-		Size = UDim2.new(0.45, 0, 0, 30),
-		ZIndex = 2,
-		Parent = Row,
-	})
+	new("TextLabel", { Text = config.Text or config.Name or "Opciones", Font = Theme.Font, TextSize = 12, TextColor3 = Theme.TextDim, TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1, Size = UDim2.new(0.45, 0, 0, 30), ZIndex = 2, Parent = Row })
+	local SelectedLabel = new("TextLabel", { Text = selected ~= nil and display(selected) or "-", Font = Theme.FontBold, TextSize = 12, TextColor3 = Theme.Active, TextXAlignment = Enum.TextXAlignment.Right, BackgroundTransparency = 1, Position = UDim2.new(0.45, 8, 0, 0), Size = UDim2.new(0.55, -22, 0, 30), ZIndex = 2, Parent = Row })
+	local Arrow = new("TextLabel", { Text = "+", Font = Theme.FontBold, TextSize = 13, TextColor3 = Theme.TextDim, BackgroundTransparency = 1, Position = UDim2.new(1, -12, 0, 0), Size = UDim2.new(0, 12, 0, 30), ZIndex = 2, Parent = Row })
+	onAccent(function() if SelectedLabel.Parent then SelectedLabel.TextColor3 = Theme.Active end end)
 
-	local SelectedLabel = new("TextLabel", {
-		Text = selected ~= nil and display(selected) or "-",
-		Font = Theme.FontBold,
-		TextSize = 12,
-		TextColor3 = Theme.Active,
-		TextXAlignment = Enum.TextXAlignment.Right,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		BackgroundTransparency = 1,
-		Position = UDim2.new(0.45, 8, 0, 0),
-		Size = UDim2.new(0.55, -22, 0, 30),
-		ZIndex = 2,
-		Parent = Row,
-	})
-
-	-- Indicador de abierto/cerrado del acordeón.
-	local Arrow = new("TextLabel", {
-		Text = "+",
-		Font = Theme.FontBold,
-		TextSize = 13,
-		TextColor3 = Theme.TextDim,
-		BackgroundTransparency = 1,
-		Position = UDim2.new(1, -12, 0, 0),
-		Size = UDim2.new(0, 12, 0, 30),
-		ZIndex = 2,
-		Parent = Row,
-	})
-	onAccent(function()
-		if SelectedLabel.Parent then
-			SelectedLabel.TextColor3 = Theme.Active
-		end
-	end)
-
-	-- ACORDEÓN, no lista flotante: al abrirse, la fila CRECE y la lista
-	-- vive adentro. Una lista flotante quedaba cortada por el panel con
-	-- scroll y no se podían ver las últimas opciones.
 	local ROW_H = 30
-	local function listHeight()
-		local count = math.min(math.max(#Dropdown_Options_Ref[1], 1), 6)
-		return count * 24 + 8
-	end
+	local function listHeight() return math.min(math.max(#Dropdown_Options_Ref[1], 1), 6) * 24 + 8 end
 
-	local ListFrame = new("ScrollingFrame", {
-		Size = UDim2.new(1, 20, 0, math.min(math.max(#options, 1), 6) * 24 + 8),
-		Position = UDim2.new(0, -10, 0, ROW_H),
-		BackgroundColor3 = Theme.PanelAlt,
-		BorderSizePixel = 0,
-		Visible = false,
-		ZIndex = 20,
-		ScrollBarThickness = 3,
-		ScrollBarImageColor3 = Theme.Border,
-		CanvasSize = UDim2.new(0, 0, 0, 0),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		Parent = Row,
-	}, {
-		stroke(Theme.Border, 1),
-		pad(4),
-		new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }),
-	})
+	local ListFrame = new("ScrollingFrame", { Size = UDim2.new(1, 20, 0, listHeight()), Position = UDim2.new(0, -10, 0, ROW_H), BackgroundColor3 = Theme.PanelAlt, BorderSizePixel = 0, Visible = false, ZIndex = 20, ScrollBarThickness = 3, ScrollBarImageColor3 = Theme.Border, CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, Parent = Row }, { stroke(Theme.Border, 1), pad(4), new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }) })
+	local Dropdown = setmetatable({ Value = selected, Options = options, Callback = resolveCallback(config), _threads = {} }, UI)
 
-	local Dropdown = setmetatable({
-		Value = selected, Options = options,
-		Callback = callback, _threads = {},
-	}, UI)
+	function Dropdown:Set(opt) self.Value = opt; SelectedLabel.Text = display(opt); setFlagValue(config.Flag, opt); return safeCall(self, self.Callback, opt) end
+	function Dropdown:Get() return self.Value end
+	function Dropdown:Stop() stopAllThreads(self) end
 
-	function Dropdown:Set(option)
-		self.Value = option
-		SelectedLabel.Text = display(option)
-		setFlagValue(config.Flag, option)
-		return safeCall(self, self.Callback, option)
-	end
-
-	function Dropdown:Get()
-		return self.Value
-	end
-
-	function Dropdown:Stop()
-		stopAllThreads(self)
-	end
-
-	-- Declarada acá arriba para que el clic de cada opción pueda cerrar
-	-- el acordeón (se define más abajo, cuando ya existe todo lo que usa).
 	local setOpen
-
 	local function buildOptions()
-		for _, child in ipairs(ListFrame:GetChildren()) do
-			if child:IsA("TextButton") then
-				child:Destroy()
-			end
-		end
-
-		if #Dropdown.Options == 0 then
-			new("TextLabel", {
-				Text = "(vacío)",
-				Font = Theme.Font,
-				TextSize = 11,
-				TextColor3 = Theme.TextDim,
-				BackgroundTransparency = 1,
-				Size = UDim2.new(1, 0, 0, 22),
-				ZIndex = 21,
-				Parent = ListFrame,
-			})
-			return
-		end
-
+		for _, child in ipairs(ListFrame:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
+		if #Dropdown.Options == 0 then new("TextLabel", { Text = "(vacío)", Font = Theme.Font, TextSize = 11, TextColor3 = Theme.TextDim, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 22), ZIndex = 21, Parent = ListFrame }); return end
 		for index, optionValue in ipairs(Dropdown.Options) do
-			local OptionBtn = new("TextButton", {
-				Text = display(optionValue),
-				Font = Theme.Font,
-				TextSize = 11,
-				TextColor3 = Theme.Text,
-				TextXAlignment = Enum.TextXAlignment.Left,
-				TextTruncate = Enum.TextTruncate.AtEnd,
-				AutoButtonColor = false,
-				BackgroundColor3 = Theme.Panel,
-				BorderSizePixel = 0,
-				Size = UDim2.new(1, 0, 0, 22),
-				LayoutOrder = index,
-				ZIndex = 21,
-				Parent = ListFrame,
-			}, { corner(3), pad(0, 0, 6, 0, 6) })
-
-			OptionBtn.MouseEnter:Connect(function()
-				tween(OptionBtn, { BackgroundColor3 = Theme.Row })
-			end)
-			OptionBtn.MouseLeave:Connect(function()
-				tween(OptionBtn, { BackgroundColor3 = Theme.Panel })
-			end)
-
-			table.insert(window._connections, OptionBtn.MouseButton1Click:Connect(function()
-				Dropdown:Set(optionValue)
-				-- Cerrar el acordeón COMPLETO. Antes solo se ocultaba la
-				-- lista, pero la fila quedaba estirada y dejaba un hueco
-				-- vacío enorme en el panel. Esto pasaba siempre, pero se
-				-- notaba sobre todo en las listas de jugadores.
-				if setOpen then
-					setOpen(false)
-				else
-					ListFrame.Visible = false
-				end
-			end))
+			local OptionBtn = new("TextButton", { Text = display(optionValue), Font = Theme.Font, TextSize = 11, TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left, AutoButtonColor = false, BackgroundColor3 = Theme.Panel, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 22), LayoutOrder = index, ZIndex = 21, Parent = ListFrame }, { corner(3), pad(0, 0, 6, 0, 6) })
+			OptionBtn.MouseEnter:Connect(function() tween(OptionBtn, { BackgroundColor3 = Theme.Row }) end)
+			OptionBtn.MouseLeave:Connect(function() tween(OptionBtn, { BackgroundColor3 = Theme.Panel }) end)
+			table.insert(window._connections, OptionBtn.MouseButton1Click:Connect(function() Dropdown:Set(optionValue); if setOpen then setOpen(false) else ListFrame.Visible = false end end))
 		end
 	end
 
-	-- Refrescar opciones en caliente (ej: lista de jugadores del servidor).
-	function Dropdown:Refresh(newOptions, keepSelection)
-		self.Options = newOptions or {}
-		options = self.Options
-		Dropdown_Options_Ref[1] = self.Options
-		buildOptions()
-		local h = listHeight()
-		ListFrame.Size = UDim2.new(1, 20, 0, h)
-		Row.Size = UDim2.new(1, 0, 0, ListFrame.Visible and (ROW_H + h + 4) or ROW_H)
-		if not keepSelection then
-			self.Value = self.Options[1]
-			SelectedLabel.Text = self.Value ~= nil and display(self.Value) or "-"
-		end
-	end
+	function Dropdown:Refresh(newOpts, keepSel) self.Options = newOpts or {}; options = self.Options; Dropdown_Options_Ref[1] = self.Options; buildOptions(); local h = listHeight(); ListFrame.Size = UDim2.new(1, 20, 0, h); Row.Size = UDim2.new(1, 0, 0, ListFrame.Visible and (ROW_H + h + 4) or ROW_H); if not keepSel then self.Value = self.Options[1]; SelectedLabel.Text = self.Value ~= nil and display(self.Value) or "-" end end
 	Dropdown.SetOptions = Dropdown.Refresh
-
 	buildOptions()
 
-	local Click = clickLayer(Row)
-	Click.ZIndex = 3
-	Click.Size = UDim2.new(1, 0, 0, ROW_H)
-
-	function setOpen(open)
-		ListFrame.Visible = open
-		local h = listHeight()
-		ListFrame.Size = UDim2.new(1, 20, 0, h)
-		Row.Size = UDim2.new(1, 0, 0, open and (ROW_H + h + 4) or ROW_H)
-		Arrow.Text = open and "-" or "+"
-	end
-
-	table.insert(window._connections, Click.MouseButton1Click:Connect(function()
-		setOpen(not ListFrame.Visible)
-	end))
-
+	local Click = clickLayer(Row); Click.ZIndex = 3; Click.Size = UDim2.new(1, 0, 0, ROW_H)
+	function setOpen(open) ListFrame.Visible = open; local h = listHeight(); ListFrame.Size = UDim2.new(1, 20, 0, h); Row.Size = UDim2.new(1, 0, 0, open and (ROW_H + h + 4) or ROW_H); Arrow.Text = open and "-" or "+" end
+	table.insert(window._connections, Click.MouseButton1Click:Connect(function() setOpen(not ListFrame.Visible) end))
 	registerFlag(config.Flag, Dropdown, selected)
 	return Dropdown
 end
 
--- ============================================================
--- 	INPUT (caja de texto)
--- ============================================================
 function UI:CreateInput(config)
 	config = config or {}
-	local callback = resolveCallback(config)
-
 	local Row, window = baseRow(self, 30)
 	if not Row then return setmetatable({}, Stub) end
-
-	new("TextLabel", {
-		Text = config.Text or config.Name or "Texto",
-		Font = Theme.Font,
-		TextSize = 12,
-		TextColor3 = Theme.Text,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		BackgroundTransparency = 1,
-		Size = UDim2.new(0.42, 0, 1, 0),
-		Parent = Row,
-	})
-
-	local Box = new("TextBox", {
-		Text = tostring(config.Default or config.CurrentValue or ""),
-		PlaceholderText = config.PlaceholderText or config.Placeholder or "...",
-		Font = Theme.Font,
-		TextSize = 11,
-		TextColor3 = Theme.Text,
-		PlaceholderColor3 = Theme.TextDim,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		ClearTextOnFocus = false,
-		ClipsDescendants = true,
-		BackgroundColor3 = Theme.PanelAlt,
-		BorderSizePixel = 0,
-		Position = UDim2.new(0.44, 0, 0.5, -10),
-		Size = UDim2.new(0.56, 0, 0, 20),
-		Parent = Row,
-	}, { corner(3), stroke(Theme.Border, 1), pad(0, 0, 6, 0, 6) })
-
-	local Input = setmetatable({ Instance = Box, Value = Box.Text, Callback = callback, _threads = {} }, UI)
-
-	function Input:Set(text)
-		self.Value = tostring(text)
-		Box.Text = self.Value
-		setFlagValue(config.Flag, self.Value)
-		return safeCall(self, self.Callback, self.Value)
-	end
-
-	function Input:Get()
-		return Box.Text
-	end
-
-	function Input:Stop()
-		stopAllThreads(self)
-	end
-
-	table.insert(window._connections, Box.FocusLost:Connect(function(enterPressed)
-		if enterPressed or config.FireOnLoseFocus then
-			Input.Value = Box.Text
-			setFlagValue(config.Flag, Box.Text)
-			safeCall(Input, Input.Callback, Box.Text)
-		end
-	end))
-
+	new("TextLabel", { Text = config.Text or config.Name or "Texto", Font = Theme.Font, TextSize = 12, TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1, Size = UDim2.new(0.42, 0, 1, 0), Parent = Row })
+	local Box = new("TextBox", { Text = tostring(config.Default or config.CurrentValue or ""), PlaceholderText = config.PlaceholderText or "...", Font = Theme.Font, TextSize = 11, TextColor3 = Theme.Text, PlaceholderColor3 = Theme.TextDim, TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false, BackgroundColor3 = Theme.PanelAlt, BorderSizePixel = 0, Position = UDim2.new(0.44, 0, 0.5, -10), Size = UDim2.new(0.56, 0, 0, 20), Parent = Row }, { corner(3), stroke(Theme.Border, 1), pad(0, 0, 6, 0, 6) })
+	local Input = setmetatable({ Instance = Box, Value = Box.Text, Callback = resolveCallback(config), _threads = {} }, UI)
+	function Input:Set(t) self.Value = tostring(t); Box.Text = self.Value; setFlagValue(config.Flag, self.Value); return safeCall(self, self.Callback, self.Value) end
+	function Input:Get() return Box.Text end
+	function Input:Stop() stopAllThreads(self) end
+	table.insert(window._connections, Box.FocusLost:Connect(function(e) if e or config.FireOnLoseFocus then Input.Value = Box.Text; setFlagValue(config.Flag, Box.Text); safeCall(Input, Input.Callback, Box.Text) end end))
 	registerFlag(config.Flag, Input, Box.Text)
 	return Input
 end
 
--- ============================================================
--- 	KEYBIND
--- ============================================================
 function UI:CreateKeybind(config)
 	config = config or {}
-	local callback = resolveCallback(config)
-
-	local currentKey = config.Default or config.CurrentKeybind or Enum.KeyCode.RightShift
-	if typeof(currentKey) == "string" then
-		local ok, parsed = pcall(function()
-			return Enum.KeyCode[currentKey]
-		end)
-		currentKey = (ok and parsed) or Enum.KeyCode.RightShift
-	end
-
+	local currentKey = config.Default or Enum.KeyCode.RightShift
+	if typeof(currentKey) == "string" then local ok, p = pcall(function() return Enum.KeyCode[currentKey] end); currentKey = ok and p or Enum.KeyCode.RightShift end
 	local listening = false
-
 	local Row, window = baseRow(self, 30)
 	if not Row then return setmetatable({}, Stub) end
-
 	rowLabel(Row, config.Text or config.Name or "Tecla", 66)
-
-	local KeyButton = new("TextButton", {
-		Text = currentKey.Name,
-		Font = Theme.FontBold,
-		TextSize = 11,
-		TextColor3 = Theme.Text,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		AutoButtonColor = false,
-		BackgroundColor3 = Theme.PanelAlt,
-		BorderSizePixel = 0,
-		Size = UDim2.new(0, 60, 0, 20),
-		Position = UDim2.new(1, -60, 0.5, -10),
-		Parent = Row,
-	}, { corner(3), stroke(Theme.Border, 1) })
-
-	local Keybind = setmetatable({ Value = currentKey, Callback = callback, _threads = {} }, UI)
-
-	function Keybind:Set(keyCode)
-		if typeof(keyCode) == "string" then
-			local ok, parsed = pcall(function() return Enum.KeyCode[keyCode] end)
-			keyCode = (ok and parsed) or self.Value
-		end
-		self.Value = keyCode
-		KeyButton.Text = keyCode.Name
-		setFlagValue(config.Flag, keyCode)
-	end
-
-	function Keybind:Get()
-		return self.Value
-	end
-
-	function Keybind:Stop()
-		stopAllThreads(self)
-	end
-
-	table.insert(window._connections, KeyButton.MouseButton1Click:Connect(function()
-		listening = true
-		KeyButton.Text = "..."
-		KeyButton.TextColor3 = Theme.Active
-	end))
-
-	table.insert(window._connections, UserInputService.InputBegan:Connect(function(input, gameProcessed)
-		if listening and input.UserInputType == Enum.UserInputType.Keyboard then
-			listening = false
-			KeyButton.TextColor3 = Theme.Text
-			Keybind:Set(input.KeyCode)
-			return
-		end
-		if not listening and not gameProcessed and input.KeyCode == Keybind.Value then
-			safeCall(Keybind, Keybind.Callback, Keybind.Value)
-		end
-	end))
-
+	local KeyButton = new("TextButton", { Text = currentKey.Name, Font = Theme.FontBold, TextSize = 11, TextColor3 = Theme.Text, AutoButtonColor = false, BackgroundColor3 = Theme.PanelAlt, BorderSizePixel = 0, Size = UDim2.new(0, 60, 0, 20), Position = UDim2.new(1, -60, 0.5, -10), Parent = Row }, { corner(3), stroke(Theme.Border, 1) })
+	local Keybind = setmetatable({ Value = currentKey, Callback = resolveCallback(config), _threads = {} }, UI)
+	function Keybind:Set(kc) if typeof(kc) == "string" then local ok, p = pcall(function() return Enum.KeyCode[kc] end); kc = ok and p or self.Value end; self.Value = kc; KeyButton.Text = kc.Name; setFlagValue(config.Flag, kc) end
+	function Keybind:Get() return self.Value end
+	function Keybind:Stop() stopAllThreads(self) end
+	table.insert(window._connections, KeyButton.MouseButton1Click:Connect(function() listening = true; KeyButton.Text = "..."; KeyButton.TextColor3 = Theme.Active end))
+	table.insert(window._connections, UserInputService.InputBegan:Connect(function(input, gp) if listening and input.UserInputType == Enum.UserInputType.Keyboard then listening = false; KeyButton.TextColor3 = Theme.Text; Keybind:Set(input.KeyCode); return end; if not listening and not gp and input.KeyCode == Keybind.Value then safeCall(Keybind, Keybind.Callback, Keybind.Value) end end))
 	registerFlag(config.Flag, Keybind, currentKey)
 	return Keybind
 end
 
--- ============================================================
--- 	ESTADÍSTICA (número grande + etiqueta)
--- ============================================================
 function UI:CreateStat(config)
 	config = config or {}
 	local list, _, owner = host(self)
 	if not list then return setmetatable({}, Stub) end
-
-	local holder = new("Frame", {
-		Size = UDim2.new(1, 0, 0, 44),
-		BackgroundColor3 = Theme.Row,
-		BorderSizePixel = 0,
-		LayoutOrder = nextOrder(owner),
-		Parent = list,
-	}, { pad(0, 5, 10, 5, 10) })
-
-	local ValueLabel = new("TextLabel", {
-		Text = tostring(config.Value or "0"),
-		Font = Theme.FontBold,
-		TextSize = 20,
-		TextColor3 = Theme.Active,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 21),
-		Parent = holder,
-	})
-	onAccent(function()
-		if ValueLabel.Parent then
-			ValueLabel.TextColor3 = Theme.Active
-		end
-	end)
-
-	new("TextLabel", {
-		Text = config.Label or config.Text or config.Name or "",
-		Font = Theme.Font,
-		TextSize = 11,
-		TextColor3 = Theme.TextDim,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 0, 0, 21),
-		Size = UDim2.new(1, 0, 0, 13),
-		Parent = holder,
-	})
-
+	local holder = new("Frame", { Size = UDim2.new(1, 0, 0, 44), BackgroundColor3 = Theme.Row, BorderSizePixel = 0, LayoutOrder = nextOrder(owner), Parent = list }, { pad(0, 5, 10, 5, 10) })
+	local ValueLabel = new("TextLabel", { Text = tostring(config.Value or "0"), Font = Theme.FontBold, TextSize = 20, TextColor3 = Theme.Active, TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 21), Parent = holder })
+	onAccent(function() if ValueLabel.Parent then ValueLabel.TextColor3 = Theme.Active end end)
+	new("TextLabel", { Text = config.Label or config.Text or config.Name or "", Font = Theme.Font, TextSize = 11, TextColor3 = Theme.TextDim, TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 21), Size = UDim2.new(1, 0, 0, 13), Parent = holder })
 	local Stat = setmetatable({ Instance = ValueLabel, Value = config.Value or "0" }, UI)
-
-	function Stat:Set(newValue)
-		self.Value = newValue
-		ValueLabel.Text = tostring(newValue)
-	end
-
+	function Stat:Set(nv) self.Value = nv; ValueLabel.Text = tostring(nv) end
 	registerFlag(config.Flag, Stat, config.Value)
 	return Stat
 end
-
--- Compatibilidad con SugarUI: allá las estadísticas iban dentro de una
--- fila horizontal. Acá van una debajo de otra (la columna es angosta),
--- así que CreateStatRow simplemente devuelve el mismo contenedor.
-function UI:CreateStatRow()
-	return self
-end
+function UI:CreateStatRow() return self end
 
 return UI
