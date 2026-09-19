@@ -448,30 +448,25 @@ end
 function UI:CreateWindow(config)
 	config = config or {}
 
-	local title    = config.Title or config.Name or "Azúcar Hub"
-	local subtitle = config.Subtitle or config.SubTitle or ""
-	-- Riel ancho: antes eran 46px y solo entraba la inicial (o peor, el
-	-- "rbxassetid://..." crudo del ícono). Ahora entra ícono + NOMBRE.
-	local RAIL_W   = config.RailWidth or 148
-	local PANEL_W  = config.PanelWidth or 275
-	local HEADER_H = 24
-	-- Más arriba: antes arrancaba en 8px por debajo del borde del área
-	-- útil. Ahora queda pegada al tope.
-	local TOP_Y    = config.TopOffset or 0
-	-- Único margen que queda: un colchón chico abajo para que el panel
-	-- no se pase del borde de la pantalla. Todo lo demás (cabecera-riel,
-	-- riel-panel, panel-grupo) va a 0: sin separación, para que no se
-	-- vea nada del fondo del juego colándose entre los bloques.
-	local BOTTOM_MARGIN = config.BottomMargin or 0
+	local title = config.Title or config.Name or "Azúcar Hub"
+
+	-- Ancho de cada botón de pestaña (sueltos, no forman un bloque).
+	local TAB_W = config.TabWidth or 130
+	local TAB_H = config.TabHeight or 36
+	local TAB_GAP = config.TabGap or 10
+	local TABS_X = config.TabsX or 16
+	local TABS_Y = config.TabsY or 16
+
+	-- La ventana que aparece al centro con la lógica: más cuadrada que
+	-- una columna larga, no una franja pegada al costado.
+	local PANEL_W = config.PanelWidth or 380
+	local PANEL_H = config.PanelHeight or 320
 
 	local ScreenGui = new("ScreenGui", {
 		Name = "AzucarHackerUI",
 		ResetOnSpawn = false,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		DisplayOrder = 999,
-		-- false a propósito: así Roblox baja el contenido por debajo de
-		-- su propia barra superior y el título/las pestañas dejan de
-		-- quedar tapados (era el motivo de que "no se viera nada" arriba).
 		IgnoreGuiInset = false,
 	})
 
@@ -481,9 +476,6 @@ function UI:CreateWindow(config)
 	end
 	ScreenGui.Parent = getGuiParent()
 
-	-- Raíz a pantalla completa y transparente: los paneles se ubican
-	-- adentro por offset y nunca quedan recortados por los bordes de un
-	-- contenedor angosto.
 	local Root = new("Frame", {
 		Name = "Root",
 		Size = UDim2.new(1, 0, 1, 0),
@@ -491,125 +483,19 @@ function UI:CreateWindow(config)
 		Parent = ScreenGui,
 	})
 
-	-- ---------------- Cabecera con el NOMBRE ----------------
-	local Header = new("Frame", {
-		Name = "Header",
-		Size = UDim2.new(0, RAIL_W + PANEL_W, 0, HEADER_H),
-		Position = UDim2.new(0, 0, 0, TOP_Y),
-		BackgroundColor3 = Theme.Header,
-		BorderSizePixel = 0,
+	-- ---------------- Columna de tabs SUELTOS ----------------
+	-- Sin fondo ni borde propio: solo un contenedor invisible que
+	-- acomoda los botones en fila, cada uno separado del resto por
+	-- TAB_GAP. Ninguno queda "pegado" a otro.
+	local TabsHolder = new("Frame", {
+		Name = "TabsHolder",
+		Size = UDim2.new(0, TAB_W, 1, -(TABS_Y * 2)),
+		Position = UDim2.new(0, TABS_X, 0, TABS_Y),
+		BackgroundTransparency = 1,
 		Parent = Root,
-	}, { corner(6), stroke(Theme.Border, 1) })
-
-	local AccentBar = new("Frame", {
-		Name = "AccentBar",
-		Size = UDim2.new(0, 3, 0, 18),
-		Position = UDim2.new(0, 8, 0.5, -9),
-		BackgroundColor3 = Theme.Active,
-		BorderSizePixel = 0,
-		Parent = Header,
-	}, { corner(2) })
-	onAccent(function()
-		if AccentBar.Parent then
-			AccentBar.BackgroundColor3 = Theme.Active
-		end
-	end)
-
-	local TitleLabel = new("TextLabel", {
-		Name = "Title",
-		Text = title,
-		Font = Theme.FontBold,
-		TextSize = 14,
-		TextColor3 = Theme.Text,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 18, 0, 0),
-		Size = UDim2.new(1, -112, 1, 0),
-		Parent = Header,
-	})
-
-	local SubLabel
-	if subtitle ~= "" then
-		TitleLabel.Size = UDim2.new(0, math.min(#title * 9 + 8, 130), 1, 0)
-		SubLabel = new("TextLabel", {
-			Text = subtitle,
-			Font = Theme.Font,
-			TextSize = 11,
-			TextColor3 = Theme.TextDim,
-			TextXAlignment = Enum.TextXAlignment.Left,
-			TextTruncate = Enum.TextTruncate.AtEnd,
-			BackgroundTransparency = 1,
-			Position = UDim2.new(0, 18 + TitleLabel.Size.X.Offset + 6, 0, 0),
-			Size = UDim2.new(1, -(TitleLabel.Size.X.Offset + 134), 1, 0),
-			Parent = Header,
-		})
-	end
-
-	-- En vez de los botones "—" y "X" va el sello de la librería.
-	-- Para abrir/cerrar el panel se usa la tecla K (o config.ToggleKey).
-	local BrandLabel = new("TextLabel", {
-		Name = "Brand",
-		Text = "Azucar UI",
-		Font = Theme.FontBold,
-		TextSize = 12,
-		TextColor3 = Theme.Active,
-		TextXAlignment = Enum.TextXAlignment.Right,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		BackgroundTransparency = 1,
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -10, 0.5, 0),
-		Size = UDim2.new(0, 90, 1, 0),
-		Parent = Header,
-	})
-	onAccent(function()
-		if BrandLabel.Parent then
-			BrandLabel.TextColor3 = Theme.Active
-		end
-	end)
-
-	-- ---------------- Riel de pestañas ----------------
-	local Rail = new("Frame", {
-		Name = "Rail",
-		Size = UDim2.new(0, RAIL_W, 1, -(TOP_Y + HEADER_H + BOTTOM_MARGIN)),
-		Position = UDim2.new(0, 0, 0, TOP_Y + HEADER_H),
-		BackgroundColor3 = Theme.Rail,
-		BorderSizePixel = 0,
-		Parent = Root,
-	}, { corner(6), stroke(Theme.Border, 1) })
-
-	local RailList = new("ScrollingFrame", {
-		Name = "RailList",
-		Size = UDim2.new(1, 0, 1, 0),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		ScrollBarThickness = 2,
-		ScrollBarImageColor3 = Theme.Border,
-		CanvasSize = UDim2.new(0, 0, 0, 0),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		Parent = Rail,
 	}, {
-		new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }),
-		pad(0, 6, 5, 6, 5),
+		new("UIListLayout", { Padding = UDim.new(0, TAB_GAP), SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
-
-	-- ---------------- Aviso "sin pestañas todavía" ----------------
-	-- Si tu script muere antes de crear la primera pestaña, esto te lo
-	-- dice en pantalla en vez de dejarte un panel negro mudo.
-	local EmptyHint = new("TextLabel", {
-		Name = "EmptyHint",
-		Text = "Sin pestañas.\nRevisá la consola (F9):\nalgo cortó tu script\nantes de crearlas.",
-		Font = Theme.Font,
-		TextSize = 12,
-		TextColor3 = Theme.TextDim,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextYAlignment = Enum.TextYAlignment.Top,
-		BackgroundColor3 = Theme.Panel,
-		BorderSizePixel = 0,
-		Size = UDim2.new(0, PANEL_W, 0, 90),
-		Position = UDim2.new(0, RAIL_W, 0, TOP_Y + HEADER_H),
-		Parent = Root,
-	}, { stroke(Theme.Border, 1), pad(10) })
 
 	-- ---------------- Notificaciones ----------------
 	local NotifyHolder = new("Frame", {
@@ -627,20 +513,15 @@ function UI:CreateWindow(config)
 	})
 
 	local Window = setmetatable({
-		ScreenGui   = ScreenGui,
-		Root        = Root,
-		Header      = Header,
-		TitleLabel  = TitleLabel,
-		SubLabel    = SubLabel,
-		Rail        = Rail,
-		RailList    = RailList,
-		EmptyHint   = EmptyHint,
+		ScreenGui    = ScreenGui,
+		Root         = Root,
+		TabsHolder   = TabsHolder,
 		NotifyHolder = NotifyHolder,
-		RAIL_W      = RAIL_W,
-		PANEL_W     = PANEL_W,
-		HEADER_H    = HEADER_H,
-		TOP_Y       = TOP_Y,
-		BOTTOM_MARGIN = BOTTOM_MARGIN,
+		Title        = title,
+		TAB_W        = TAB_W,
+		TAB_H        = TAB_H,
+		PANEL_W      = PANEL_W,
+		PANEL_H      = PANEL_H,
 		_tabs        = {},
 		_connections = {},
 		_visible     = true,
@@ -651,14 +532,7 @@ function UI:CreateWindow(config)
 		return conn
 	end
 
-	-- ---------------- Ventana FIJA ----------------
-	-- Antes la cabecera se podía arrastrar con el mouse. Se sacó a
-	-- propósito: la interfaz queda clavada en su lugar y no hay forma de
-	-- correrla sin querer mientras jugás. Si algún día la querés mover
-	-- desde código, Window:MoveTo(x, y) sigue existiendo.
-	Header.Active = false
-
-	-- ---------------- Tecla para abrir/cerrar ----------------
+	-- ---------------- Tecla para abrir/cerrar TODO ----------------
 	local toggleKey = config.ToggleKey or Enum.KeyCode.K
 	track(UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
@@ -667,8 +541,7 @@ function UI:CreateWindow(config)
 		end
 	end))
 
-	slideInFromLeft(Header, 260, 0.3)
-	slideInFromLeft(Rail, 260, 0.34)
+	slideInFromLeft(TabsHolder, 200, 0.3)
 
 	table.insert(UI.Windows, Window)
 	return Window
@@ -678,46 +551,25 @@ end
 -- 	MÉTODOS DE VENTANA
 -- ============================================================
 function UI:MoveTo(offsetX, offsetY)
-	self.TOP_Y = offsetY
-	self._originX = offsetX
-
-	self.Header.Position = UDim2.new(0, offsetX, 0, offsetY)
-	self.Rail.Position   = UDim2.new(0, offsetX, 0, offsetY + self.HEADER_H)
-	self.Rail.Size       = UDim2.new(0, self.RAIL_W, 1, -(offsetY + self.HEADER_H + self.BOTTOM_MARGIN))
-
-	if self.EmptyHint then
-		self.EmptyHint.Position = UDim2.new(0, offsetX + self.RAIL_W, 0, offsetY + self.HEADER_H)
-	end
-
-	for _, tab in ipairs(self._tabs) do
-		tab.Panel.Position = UDim2.new(0, offsetX + self.RAIL_W, 0, offsetY + self.HEADER_H)
-		tab.Panel.Size     = UDim2.new(0, self.PANEL_W, 1, -(offsetY + self.HEADER_H + self.BOTTOM_MARGIN))
-		for _, group in pairs(tab._groupPanels) do
-			group.Instance.Position = UDim2.new(0, offsetX + self.RAIL_W + self.PANEL_W, 0, offsetY + self.HEADER_H)
-			group.Instance.Size     = UDim2.new(0, self.PANEL_W, 1, -(offsetY + self.HEADER_H + self.BOTTOM_MARGIN))
-		end
-	end
+	self.TabsHolder.Position = UDim2.new(0, offsetX, 0, offsetY)
 end
 
 function UI:SetTitle(text)
-	if self.TitleLabel then
-		self.TitleLabel.Text = tostring(text)
-	end
+	self.Title = tostring(text)
 end
 
 function UI:Show()
 	self.Root.Visible = true
 	self._visible = true
 
-	slideInFromLeft(self.Header, 260, 0.3)
-	slideInFromLeft(self.Rail, 260, 0.34)
+	slideInFromLeft(self.TabsHolder, 200, 0.3)
 	for _, tab in ipairs(self._tabs or {}) do
 		if tab.Panel.Visible then
-			slideInFromLeft(tab.Panel, 260, 0.38)
+			slideInFromLeft(tab.Panel, 260, 0.35)
 		end
 		for _, group in pairs(tab._groupPanels) do
 			if group.Instance.Visible then
-				slideInFromLeft(group.Instance, 260, 0.42)
+				slideInFromLeft(group.Instance, 260, 0.4)
 			end
 		end
 	end
@@ -804,162 +656,112 @@ function UI:Destroy()
 end
 
 -- ============================================================
--- 	CREATE TAB
+-- 	CREATE TAB — botón suelto + ventana centrada al tocarlo
 -- ============================================================
 function UI:CreateTab(config)
 	config = config or {}
 	local name = config.Text or config.Name or ("Tab " .. (#self._tabs + 1))
-	local isFirst = #self._tabs == 0
 
-	if self.EmptyHint then
-		self.EmptyHint:Destroy()
-		self.EmptyHint = nil
-	end
-
-	local originX = self._originX or 0
-
-	-- Botón en el riel: barra de acento + cuadro de ícono + NOMBRE.
+	-- Botón SUELTO: su propio fondo, su propio borde, separado del resto
+	-- por el espacio real que deja TabsHolder (UIListLayout + TabGap).
+	-- No hay ningún panel detrás que los una a todos.
 	local TabBtn = new("TextButton", {
 		Name = name,
 		Text = "",
 		AutoButtonColor = false,
-		BackgroundColor3 = isFirst and Theme.PanelAlt or Theme.Panel,
+		BackgroundColor3 = Theme.Panel,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 34),
-		Parent = self.RailList,
-	}, { corner(4), stroke(Theme.Border, 1) })
+		Size = UDim2.new(1, 0, 0, self.TAB_H),
+		LayoutOrder = #self._tabs,
+		Parent = self.TabsHolder,
+	}, { corner(6), stroke(Theme.Border, 1) })
+	hoverRow(TabBtn)
 
-	-- Barrita de acento a la izquierda que marca cuál está abierta.
-	local TabMark = new("Frame", {
-		Name = "Mark",
-		Size = UDim2.new(0, 3, 0, 18),
-		Position = UDim2.new(0, 0, 0.5, -9),
-		BackgroundColor3 = Theme.Active,
-		BackgroundTransparency = isFirst and 0 or 1,
-		BorderSizePixel = 0,
-		Parent = TabBtn,
-	}, { corner(2) })
-	onAccent(function()
-		if TabMark.Parent then
-			TabMark.BackgroundColor3 = Theme.Active
-		end
-	end)
-
-	-- El ícono puede venir como LETRA/emoji o como IMAGEN. Si te pasan un
-	-- "rbxassetid://123", un "http://..." o solo los números, se arma un
-	-- ImageLabel. Antes eso se metía como texto y en el riel aparecía el
-	-- "id://44..." cortado, tapando el nombre de la pestaña.
-	local icon = config.Icon
-	local iconIsImage = false
-	local iconImage = icon
-
-	if typeof(icon) == "string" then
-		if icon:match("^rbxassetid://") or icon:match("^http") then
-			iconIsImage = true
-		elseif icon:match("^%d+$") then
-			iconIsImage = true
-			iconImage = "rbxassetid://" .. icon
-		end
-	elseif typeof(icon) == "number" then
-		iconIsImage = true
-		iconImage = "rbxassetid://" .. tostring(icon)
-	end
-
-	local IconBox
-	if iconIsImage then
-		IconBox = new("ImageLabel", {
-			Name = "Icon",
-			Image = iconImage,
-			ScaleType = Enum.ScaleType.Fit,
-			BackgroundColor3 = Theme.Rail,
-			BorderSizePixel = 0,
-			Size = UDim2.new(0, 22, 0, 22),
-			Position = UDim2.new(0, 9, 0.5, -11),
-			Parent = TabBtn,
-		}, { corner(4), pad(3) })
-	else
-		IconBox = new("TextLabel", {
-			Name = "Icon",
-			Text = (typeof(icon) == "string" and icon ~= "" and icon)
-				or string.upper(string.sub(name, 1, 1)),
-			Font = Theme.FontBold,
-			TextSize = 12,
-			TextColor3 = isFirst and Theme.Active or Theme.TextDim,
-			TextTruncate = Enum.TextTruncate.AtEnd,
-			ClipsDescendants = true,
-			BackgroundColor3 = Theme.Rail,
-			BorderSizePixel = 0,
-			Size = UDim2.new(0, 22, 0, 22),
-			Position = UDim2.new(0, 9, 0.5, -11),
-			Parent = TabBtn,
-		}, { corner(4) })
-	end
-
-	-- EL NOMBRE DE LA PESTAÑA (esto era lo que no aparecía por ningún lado)
 	local TabName = new("TextLabel", {
 		Name = "TabName",
 		Text = name,
 		Font = Theme.FontBold,
 		TextSize = 12,
-		TextColor3 = isFirst and Theme.Text or Theme.TextDim,
-		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = Theme.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Center,
 		TextTruncate = Enum.TextTruncate.AtEnd,
-		ClipsDescendants = true,
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 38, 0, 0),
-		Size = UDim2.new(1, -44, 1, 0),
+		Size = UDim2.new(1, -8, 1, 0),
+		Position = UDim2.new(0, 4, 0, 0),
 		Parent = TabBtn,
 	})
 
-	-- Panel de la pestaña
+	-- ---------------- Ventana centrada con la lógica de este tab ----------------
 	local Panel = new("Frame", {
 		Name = name .. "Panel",
-		Size = UDim2.new(0, self.PANEL_W, 1, -(self.TOP_Y + self.HEADER_H + self.BOTTOM_MARGIN)),
-		Position = UDim2.new(0, originX + self.RAIL_W, 0, self.TOP_Y + self.HEADER_H),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Size = UDim2.new(0, self.PANEL_W, 0, self.PANEL_H),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
 		BackgroundColor3 = Theme.Panel,
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
-		Visible = isFirst,
+		Visible = false,
+		ZIndex = 10,
 		Parent = self.Root,
-	}, { corner(6), stroke(Theme.Border, 1) })
+	}, { corner(8), stroke(Theme.Border, 1) })
 
 	local PanelTitle = new("TextLabel", {
 		Name = "PanelTitle",
 		Text = string.upper(name),
 		Font = Theme.FontBold,
-		TextSize = 12,
-		TextColor3 = Theme.Text,
+		TextSize = 13,
+		TextColor3 = Theme.Active,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		BackgroundColor3 = Theme.PanelAlt,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 26),
+		Size = UDim2.new(1, 0, 0, 30),
+		ZIndex = 10,
 		Parent = Panel,
-	}, { pad(0, 0, 10, 0, 10) })
+	}, { pad(0, 0, 12, 0, 12) })
+	onAccent(function()
+		if PanelTitle.Parent then
+			PanelTitle.TextColor3 = Theme.Active
+		end
+	end)
+
+	-- Botón de cerrar dentro de la propia ventana (además de tocar el
+	-- tab de nuevo, o la tecla K).
+	local CloseBtn = new("TextButton", {
+		Text = "X",
+		Font = Theme.FontBold,
+		TextSize = 12,
+		TextColor3 = Theme.TextDim,
+		AutoButtonColor = false,
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -10, 0.5, 0),
+		Size = UDim2.new(0, 20, 0, 20),
+		ZIndex = 11,
+		Parent = PanelTitle,
+	})
 
 	local List = new("ScrollingFrame", {
 		Name = "List",
-		Size = UDim2.new(1, 0, 1, -26),
-		Position = UDim2.new(0, 0, 0, 26),
+		Size = UDim2.new(1, 0, 1, -30),
+		Position = UDim2.new(0, 0, 0, 30),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 3,
 		ScrollBarImageColor3 = Theme.Border,
 		CanvasSize = UDim2.new(0, 0, 0, 0),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ZIndex = 10,
 		Parent = Panel,
 	}, {
 		new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }),
-		pad(0, 4, 0, 8, 0),
+		pad(0, 6, 0, 10, 0),
 	})
 
 	local Tab = setmetatable({
 		Window       = self,
 		Button       = TabBtn,
-		Mark         = TabMark,
-		IconBox      = IconBox,
 		NameLabel    = TabName,
-		IconIsImage  = iconIsImage,
 		Panel        = Panel,
 		PanelTitle   = PanelTitle,
 		List         = List,
@@ -968,27 +770,9 @@ function UI:CreateTab(config)
 		_groupPanels = {},
 	}, UI)
 
-	onAccent(function()
-		if TabBtn.Parent and Panel.Visible then
-			TabMark.BackgroundColor3 = Theme.Active
-			if not iconIsImage then
-				IconBox.TextColor3 = Theme.Active
-			end
-		end
-	end)
-
-	TabBtn.MouseEnter:Connect(function()
-		if not Panel.Visible then
-			tween(TabBtn, { BackgroundColor3 = Theme.PanelAlt })
-			TabName.TextColor3 = Theme.Text
-		end
-	end)
-	TabBtn.MouseLeave:Connect(function()
-		if not Panel.Visible then
-			tween(TabBtn, { BackgroundColor3 = Theme.Panel })
-			TabName.TextColor3 = Theme.TextDim
-		end
-	end)
+	table.insert(self._connections, CloseBtn.MouseButton1Click:Connect(function()
+		self:SelectTab(nil)
+	end))
 
 	table.insert(self._connections, TabBtn.MouseButton1Click:Connect(function()
 		if Panel.Visible then
@@ -1011,18 +795,11 @@ function UI:SelectTab(name)
 		tab.Button.BackgroundColor3 = selected and Theme.PanelAlt or Theme.Panel
 
 		if selected and not wasVisible then
-			slideInFromLeft(tab.Panel, 200, 0.3)
+			slideInFromLeft(tab.Panel, 260, 0.32)
 		end
 
-		if tab.Mark then
-			tab.Mark.BackgroundTransparency = selected and 0 or 1
-			tab.Mark.BackgroundColor3 = Theme.Active
-		end
 		if tab.NameLabel then
-			tab.NameLabel.TextColor3 = selected and Theme.Text or Theme.TextDim
-		end
-		if tab.IconBox and not tab.IconIsImage then
-			tab.IconBox.TextColor3 = selected and Theme.Active or Theme.TextDim
+			tab.NameLabel.TextColor3 = selected and Theme.Active or Theme.TextDim
 		end
 
 		if not selected then
@@ -1036,7 +813,8 @@ function UI:SelectTab(name)
 end
 
 -- ============================================================
--- 	CREATE GROUP — fila con flecha que abre otra columna al lado
+-- 	CREATE GROUP — fila con flecha que abre otra ventanita al lado
+-- 	de la principal (misma idea, también centrada/cuadrada).
 -- ============================================================
 function UI:CreateGroup(config)
 	config = config or {}
@@ -1069,56 +847,82 @@ function UI:CreateGroup(config)
 		Parent = Row,
 	})
 
-	local originX = window._originX or 0
-
+	-- Ventanita del grupo: mismo tamaño/estilo cuadrado que la principal,
+	-- pero corrida un poco para que se vea en cascada al lado.
 	local GroupPanel = new("Frame", {
 		Name = name .. "GroupPanel",
-		Size = UDim2.new(0, window.PANEL_W, 1, -(window.TOP_Y + window.HEADER_H + window.BOTTOM_MARGIN)),
-		Position = UDim2.new(0, originX + window.RAIL_W + window.PANEL_W, 0, window.TOP_Y + window.HEADER_H),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Size = UDim2.new(0, window.PANEL_W, 0, window.PANEL_H),
+		Position = UDim2.new(0.5, 40, 0.5, 40),
 		BackgroundColor3 = Theme.Panel,
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
 		Visible = false,
+		ZIndex = 12,
 		Parent = window.Root,
-	}, { corner(6), stroke(Theme.Border, 1) })
+	}, { corner(8), stroke(Theme.Border, 1) })
 
 	local GroupTitle = new("TextLabel", {
 		Text = string.upper(name),
 		Font = Theme.FontBold,
-		TextSize = 12,
+		TextSize = 13,
 		TextColor3 = Theme.Active,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		BackgroundColor3 = Theme.PanelAlt,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 26),
+		Size = UDim2.new(1, 0, 0, 30),
+		ZIndex = 12,
 		Parent = GroupPanel,
-	}, { pad(0, 0, 10, 0, 10) })
+	}, { pad(0, 0, 12, 0, 12) })
 	onAccent(function()
 		if GroupTitle.Parent then
 			GroupTitle.TextColor3 = Theme.Active
 		end
 	end)
 
+	local GroupCloseBtn = new("TextButton", {
+		Text = "X",
+		Font = Theme.FontBold,
+		TextSize = 12,
+		TextColor3 = Theme.TextDim,
+		AutoButtonColor = false,
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -10, 0.5, 0),
+		Size = UDim2.new(0, 20, 0, 20),
+		ZIndex = 13,
+		Parent = GroupTitle,
+	})
+
 	local GroupList = new("ScrollingFrame", {
-		Size = UDim2.new(1, 0, 1, -26),
-		Position = UDim2.new(0, 0, 0, 26),
+		Size = UDim2.new(1, 0, 1, -30),
+		Position = UDim2.new(0, 0, 0, 30),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 3,
 		ScrollBarImageColor3 = Theme.Border,
 		CanvasSize = UDim2.new(0, 0, 0, 0),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ZIndex = 12,
 		Parent = GroupPanel,
 	}, {
 		new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }),
-		pad(0, 4, 0, 8, 0),
+		pad(0, 6, 0, 10, 0),
 	})
 
 	local siblings = owner._groupPanels or self._groupPanels
 	if siblings then
 		siblings[name] = { Instance = GroupPanel, Arrow = Arrow }
 	end
+
+	local function closeGroup()
+		GroupPanel.Visible = false
+		Arrow.Text = ">"
+		Arrow.TextColor3 = Theme.TextDim
+	end
+
+	table.insert(window._connections, GroupCloseBtn.MouseButton1Click:Connect(closeGroup))
 
 	local Click = clickLayer(Row)
 	table.insert(window._connections, Click.MouseButton1Click:Connect(function()
@@ -1134,7 +938,7 @@ function UI:CreateGroup(config)
 		Arrow.Text = GroupPanel.Visible and "<" or ">"
 		Arrow.TextColor3 = GroupPanel.Visible and Theme.Active or Theme.TextDim
 		if GroupPanel.Visible then
-			slideInFromLeft(GroupPanel, 200, 0.3)
+			slideInFromLeft(GroupPanel, 260, 0.32)
 		end
 	end))
 
