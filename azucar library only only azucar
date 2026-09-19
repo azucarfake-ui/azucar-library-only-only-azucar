@@ -171,13 +171,20 @@ local Theme = {
 	-- más abajo, porque el pedido fue "las tabs redondas" puntualmente,
 	-- sin redondear todo lo demás.
 	CornerRadius = 0,
-	-- Negro "brilloso" de las pestañas en reposo (no seleccionadas).
+	-- Negro "brilloso" de las pestañas y del panel que se abre (en
+	-- reposo / sin seleccionar).
 	TabIdle = Color3.fromRGB(9, 9, 11),
+	PanelGlossy = Color3.fromRGB(8, 8, 10),
+	-- Borde de las pestañas: azul oscuro en reposo, rojo oscuro cuando
+	-- están presionadas/abiertas.
+	TabBorderIdle = Color3.fromRGB(32, 62, 130),
+	TabBorderActive = Color3.fromRGB(120, 24, 24),
 }
 UI.Theme = Theme
 
 local Palettes = {
-	Rojo   = { Active = Color3.fromRGB(224, 48, 48),  ActiveDim = Color3.fromRGB(150, 30, 30) },
+	-- Rojo más intenso/saturado que antes (era un rojo más "apagado").
+	Rojo   = { Active = Color3.fromRGB(235, 18, 28),  ActiveDim = Color3.fromRGB(150, 10, 18) },
 	Azul   = { Active = Color3.fromRGB(48, 132, 232), ActiveDim = Color3.fromRGB(28, 84, 160) },
 	Verde  = { Active = Color3.fromRGB(52, 199, 105), ActiveDim = Color3.fromRGB(30, 132, 70) },
 	Blanco = { Active = Color3.fromRGB(226, 226, 232), ActiveDim = Color3.fromRGB(150, 150, 158) },
@@ -475,7 +482,7 @@ function UI:CreateWindow(config)
 
 	-- Ancho de cada botón de pestaña (sueltos, no forman un bloque).
 	local TAB_W = config.TabWidth or 130
-	local TAB_H = config.TabHeight or 36
+	local TAB_H = config.TabHeight or 48
 	local TAB_GAP = config.TabGap or 10
 	local TABS_X = config.TabsX or 16
 	local TABS_Y = config.TabsY or 16
