@@ -1,10 +1,10 @@
 --[[
-	AzucarHackerUI  v2.0.0
+	AzucarHackerUI  v2.1.0
 	======================
-	Panel estilo exploit: riel angosto de pestañas a la izquierda, cada
-	pestaña abre su columna de filas, y las filas de tipo "Grupo" abren
-	OTRA columna al lado. Todo oscuro, acento rojo cuando algo está
-	activo, tipografía monoespaciada.
+	Panel estilo exploit: botones de pestaña SUELTOS y redondeados a la
+	izquierda; al tocar uno se abre una ventana cuadrada y centrada con
+	su columna de filas, y las filas de tipo "Grupo" abren OTRA ventanita
+	al lado. Todo oscuro, tipografía monoespaciada.
 
 	MOTOR IDÉNTICO AL DE SugarUI: mismos Callbacks en hilos independientes
 	(task.spawn + pcall, concurrencia ilimitada), mismos Flags/FlagValues,
@@ -15,41 +15,31 @@
 		Increment | Step             → salto del slider
 		Callback | Logic = TuTabla   → lógica a ejecutar
 
-	POR QUÉ ANTES NO SE VEÍA NADA (arreglado acá):
+	NOVEDADES DE ESTA VERSIÓN (v2.1.0):
 
-	1. Todo quedaba TAPADO por la barra superior de Roblox.
-	   El ScreenGui usaba IgnoreGuiInset = true y el panel arrancaba en
-	   y = 0, así que el título de la pestaña y los primeros botones del
-	   riel quedaban debajo de la barra de Roblox (chat, menú, etc.).
-	   Ahora hay un margen superior real y el inset se respeta.
-
-	2. La ventana NO tenía título en ningún lado.
-	   No existía ningún elemento que mostrara config.Title — por eso
-	   "ni el mismo nombre" aparecía. Ahora hay una cabecera propia.
-
-	3. Faltaban la MITAD de los componentes.
-	   No existían CreateSection, CreateLabel, CreateParagraph,
-	   CreateInput, CreateDivider, CreateStat, CreateProfile, Notify...
-	   Si tu script de lógica llamaba a cualquiera de esos, Lua cortaba
-	   la ejecución ahí mismo con "attempt to call a nil value" y la UI
-	   se quedaba vacía para siempre — exactamente el síntoma que viste:
-	   un panel abierto, sin toggles, sin sliders, sin nada.
-
-	4. RED DE SEGURIDAD nueva: si aun así llamás a un método Create...
-	   que no existe, la librería ya NO rompe el script. Avisa por
-	   consola con warn() y devuelve un objeto inofensivo, así el resto
-	   de tus 4500 líneas se sigue construyendo igual.
-
-	5. PESTAÑAS REDONDAS Y BRILLOSAS (nuevo en esta versión)
-	   Las pestañas del riel ya no son cuadradas ni planas: esquinas
-	   redondeadas, un degradado sutil (más claro arriba, más oscuro
-	   abajo) más una franja de brillo cerca del borde superior, para
-	   que se lean como un botón negro "brilloso" en vez de un
-	   rectángulo chato. En reposo son negras; al tocarlas se ponen del
-	   color de acento (rojo por defecto) y les aparece una flechita "<"
-	   (estaba ">"); al cerrarlas vuelven a negro y la flecha vuelve a
-	   ">". Esto es SOLO de las pestañas del riel — los Grupos ya tenían
-	   su propia flecha y se mantienen igual.
+	1. Rojo más intenso/saturado en toda la interfaz (Theme.Active).
+	2. Los TABS son más grandes (más altos y anchos) y con mejor
+	   tipografía para el nuevo tamaño.
+	3. Borde de los tabs en AZUL OSCURO (Theme.TabBorder) en vez del gris
+	   genérico — solo los tabs, el resto de la UI sigue con su borde
+	   normal.
+	4. El tab, al presionarlo/abrirlo, pasa a ROJO OSCURO
+	   (Theme.TabActiveBg) en vez del rojo brillante de acento — así el
+	   botón entero no encandila, y el rojo intenso queda reservado para
+	   texto, rellenos de sliders, etc.
+	5. La ventana que se abre al tocar un tab (y la de los Grupos) ahora
+	   es REDONDEADA y usa el mismo negro "brilloso" (degradado +
+	   reflejo) que ya tenían los tabs, en vez de un panel gris plano.
+	6. FIX del brillo: antes la franja de brillo de cada tab era un
+	   rectángulo con transparencia FIJA, que en algunos fondos se veía
+	   como una lisa línea gris dura (el bug que se reportó, la rayita
+	   arriba del botón). Ahora es un degradado de TRANSPARENCIA (opaco
+	   en el centro de la franja, transparente en ambos bordes), así se
+	   diluye en vez de cortar en seco — se ve como un reflejo real, no
+	   como una línea pegada. Si después de esto todavía aparece una
+	   línea gris por ENCIMA del primer tab (fuera de su propio botón),
+	   eso ya no lo dibuja este script — es el borde del visor de Studio
+	   o la reserva de la topbar de Roblox, no un elemento de la UI.
 
 	Uso básico:
 
@@ -84,7 +74,7 @@ local UserInputService  = game:GetService("UserInputService")
 
 local UI = {}
 
-UI.Version    = "2.0.0"
+UI.Version    = "2.1.0"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -92,10 +82,6 @@ UI.FlagValues = {}
 -- ============================================================
 -- 	RED DE SEGURIDAD: un Create... inexistente no mata el script
 -- ============================================================
--- Objeto tonto: responde a CUALQUIER método devolviendo otro objeto
--- tonto. Sirve para que una cadena como
---    Tab:CreateLoQueSea({...}):Set(true)
--- no explote aunque "CreateLoQueSea" no exista en esta librería.
 local Stub = {}
 Stub.__index = function()
 	return function()
@@ -162,29 +148,29 @@ local Theme = {
 	Border    = Color3.fromRGB(44, 44, 51),
 	Text      = Color3.fromRGB(238, 238, 242),
 	TextDim   = Color3.fromRGB(138, 138, 148),
-	Active    = Color3.fromRGB(226, 52, 52),
-	ActiveDim = Color3.fromRGB(152, 32, 32),
+	-- Rojo más intenso/saturado que antes (era 226,52,52).
+	Active    = Color3.fromRGB(255, 32, 42),
+	ActiveDim = Color3.fromRGB(178, 20, 28),
 	Font      = Enum.Font.Code,
 	FontBold  = Enum.Font.Code,
-	-- 0 = esquinas rectas en el resto de la UI (filas, paneles, etc.).
-	-- Las pestañas del riel NO usan esto: tienen su propio radio fijo
-	-- más abajo, porque el pedido fue "las tabs redondas" puntualmente,
-	-- sin redondear todo lo demás.
+	-- 0 = esquinas rectas en el resto de la UI (filas, etc). Los tabs y
+	-- las ventanas flotantes (Panel/Grupo) usan roundCorner() en vez de
+	-- esto, con SU propio radio fijo.
 	CornerRadius = 0,
-	-- Negro "brilloso" de las pestañas y del panel que se abre (en
-	-- reposo / sin seleccionar).
+	-- Negro "brilloso" de los tabs en reposo (no seleccionados).
 	TabIdle = Color3.fromRGB(9, 9, 11),
-	PanelGlossy = Color3.fromRGB(8, 8, 10),
-	-- Borde de las pestañas: azul oscuro en reposo, rojo oscuro cuando
-	-- están presionadas/abiertas.
-	TabBorderIdle = Color3.fromRGB(32, 62, 130),
-	TabBorderActive = Color3.fromRGB(120, 24, 24),
+	-- Borde azul oscuro, solo para los tabs.
+	TabBorder = Color3.fromRGB(24, 48, 112),
+	-- Rojo OSCURO para el tab cuando está presionado/abierto (distinto
+	-- del rojo de acento brillante, para que el botón entero no encandile).
+	TabActiveBg = Color3.fromRGB(108, 16, 20),
+	-- Negro "brilloso" de las ventanas (Panel/Grupo) y sus barras de título.
+	PanelGlossyBg = Color3.fromRGB(9, 9, 11),
 }
 UI.Theme = Theme
 
 local Palettes = {
-	-- Rojo más intenso/saturado que antes (era un rojo más "apagado").
-	Rojo   = { Active = Color3.fromRGB(235, 18, 28),  ActiveDim = Color3.fromRGB(150, 10, 18) },
+	Rojo   = { Active = Color3.fromRGB(255, 32, 42),  ActiveDim = Color3.fromRGB(178, 20, 28) },
 	Azul   = { Active = Color3.fromRGB(48, 132, 232), ActiveDim = Color3.fromRGB(28, 84, 160) },
 	Verde  = { Active = Color3.fromRGB(52, 199, 105), ActiveDim = Color3.fromRGB(30, 132, 70) },
 	Blanco = { Active = Color3.fromRGB(226, 226, 232), ActiveDim = Color3.fromRGB(150, 150, 158) },
@@ -217,13 +203,7 @@ local function new(class, props, children)
 	return inst
 end
 
--- Bordes CUADRADOS en el resto de la interfaz. Se controla desde acá:
--- dejando Theme.CornerRadius en 0, todas las esquinas quedan rectas sin
--- tener que tocar una por una las decenas de llamadas a corner() que
--- hay repartidas por el archivo. Si algún día querés volver a
--- redondear TODO, cambiás ese único número. Las pestañas del riel usan
--- roundCorner() en vez de esta, para tener SU PROPIO radio fijo sin
--- afectar al resto.
+-- Bordes CUADRADOS en el resto de la interfaz (ver comentario en Theme).
 local function corner(radius)
 	local r = Theme.CornerRadius or 0
 	if r <= 0 then
@@ -232,8 +212,9 @@ local function corner(radius)
 	return new("UICorner", { CornerRadius = UDim.new(0, radius or r) })
 end
 
--- Radio fijo, IGNORA Theme.CornerRadius. Solo para las pestañas del
--- riel, que van redondeadas aunque el resto del panel sea cuadrado.
+-- Radio fijo, IGNORA Theme.CornerRadius. Para los tabs y las ventanas
+-- flotantes (Panel/Grupo), que van redondeadas aunque el resto de la UI
+-- sea cuadrada.
 local function roundCorner(radius)
 	return new("UICorner", { CornerRadius = UDim.new(0, radius or 14) })
 end
@@ -275,6 +256,57 @@ local function hoverAccent(obj)
 	obj.MouseLeave:Connect(function()
 		tween(obj, { BackgroundColor3 = Theme.Active })
 	end)
+end
+
+-- Degradado negro "brilloso" reutilizable: gris claro arriba → negro
+-- casi puro abajo. Antes solo lo tenían los tabs; ahora también las
+-- barras de título de las ventanas (Panel/Grupo), para que compartan el
+-- mismo look "negro brilloso".
+local function glossyGradient(rotation)
+	return new("UIGradient", {
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0.00, Color3.fromRGB(72, 72, 78)),
+			ColorSequenceKeypoint.new(0.35, Color3.fromRGB(22, 22, 25)),
+			ColorSequenceKeypoint.new(1.00, Color3.fromRGB(4, 4, 5)),
+		}),
+		Rotation = rotation or 90,
+	})
+end
+
+-- Brillo/reflejo SUAVE: antes esto era un rectángulo con transparencia
+-- FIJA (0.86), que en ciertos fondos se veía como una línea gris dura y
+-- recta — el bug reportado. Ahora usa un degradado de TRANSPARENCIA:
+-- transparente en ambos extremos, más opaco (pero nunca sólido) en el
+-- centro de la franja. Así se diluye en vez de cortar en seco, y se lee
+-- como un reflejo de verdad. Active = false para no bloquear clicks.
+local function glossyShine(parent, height, insetX, insetY)
+	height = height or 8
+	insetX = insetX or 8
+	insetY = insetY or 3
+
+	local shine = new("Frame", {
+		Name = "Shine",
+		Size = UDim2.new(1, -insetX * 2, 0, height),
+		Position = UDim2.new(0, insetX, 0, insetY),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BorderSizePixel = 0,
+		ZIndex = (parent.ZIndex or 1) + 1,
+		Parent = parent,
+	}, {
+		roundCorner(math.floor(height / 2)),
+		new("UIGradient", {
+			Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 255, 255)),
+			Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0.00, 1.00),
+				NumberSequenceKeypoint.new(0.18, 0.74),
+				NumberSequenceKeypoint.new(0.50, 0.64),
+				NumberSequenceKeypoint.new(0.82, 0.74),
+				NumberSequenceKeypoint.new(1.00, 1.00),
+			}),
+		}),
+	})
+	shine.Active = false
+	return shine
 end
 
 -- Desliza un elemento desde fuera de pantalla (a la izquierda) hasta su
@@ -480,15 +512,14 @@ function UI:CreateWindow(config)
 
 	local title = config.Title or config.Name or "Azúcar Hub"
 
-	-- Ancho de cada botón de pestaña (sueltos, no forman un bloque).
-	local TAB_W = config.TabWidth or 130
-	local TAB_H = config.TabHeight or 48
+	-- Tabs más grandes que antes (130x36 → 140x46), para que se lean
+	-- mejor y se sientan menos apretados.
+	local TAB_W = config.TabWidth or 140
+	local TAB_H = config.TabHeight or 46
 	local TAB_GAP = config.TabGap or 10
 	local TABS_X = config.TabsX or 16
 	local TABS_Y = config.TabsY or 16
 
-	-- La ventana que aparece al centro con la lógica: más cuadrada que
-	-- una columna larga, no una franja pegada al costado.
 	local PANEL_W = config.PanelWidth or 380
 	local PANEL_H = config.PanelHeight or 320
 
@@ -516,7 +547,8 @@ function UI:CreateWindow(config)
 	-- ---------------- Columna de tabs SUELTOS ----------------
 	-- Sin fondo ni borde propio: solo un contenedor invisible que
 	-- acomoda los botones en fila, cada uno separado del resto por
-	-- TAB_GAP. Ninguno queda "pegado" a otro.
+	-- TAB_GAP. Ninguno queda "pegado" a otro, y no hay ninguna línea o
+	-- divisor extra dibujado por este contenedor.
 	local TabsHolder = new("Frame", {
 		Name = "TabsHolder",
 		Size = UDim2.new(0, TAB_W, 1, -(TABS_Y * 2)),
@@ -693,11 +725,10 @@ function UI:CreateTab(config)
 	config = config or {}
 	local name = config.Text or config.Name or ("Tab " .. (#self._tabs + 1))
 
-	-- Botón SUELTO: su propio fondo, su propio borde, separado del resto
-	-- por el espacio real que deja TabsHolder (UIListLayout + TabGap).
-	-- No hay ningún panel detrás que los una a todos. Redondeado y con
-	-- un degradado + franja de brillo para que se lea "negro brilloso"
-	-- en vez de un rectángulo chato.
+	-- Botón SUELTO: su propio fondo, su propio borde (azul oscuro),
+	-- separado del resto por el espacio real que deja TabsHolder
+	-- (UIListLayout + TabGap). Redondeado, con degradado + reflejo para
+	-- que se lea "negro brilloso" en vez de un rectángulo chato.
 	local TabBtn = new("TextButton", {
 		Name = name,
 		Text = "",
@@ -708,30 +739,12 @@ function UI:CreateTab(config)
 		LayoutOrder = #self._tabs,
 		Parent = self.TabsHolder,
 	}, {
-		roundCorner(14),
-		stroke(Theme.Border, 1),
-		new("UIGradient", {
-			Color = ColorSequence.new({
-				ColorSequenceKeypoint.new(0.00, Color3.fromRGB(72, 72, 78)),
-				ColorSequenceKeypoint.new(0.35, Color3.fromRGB(22, 22, 25)),
-				ColorSequenceKeypoint.new(1.00, Color3.fromRGB(4, 4, 5)),
-			}),
-			Rotation = 90,
-		}),
+		roundCorner(16),
+		stroke(Theme.TabBorder, 1.5),
+		glossyGradient(90),
 	})
 
-	-- Franja de brillo cerca del borde superior (el típico "reflejo" de
-	-- un botón de plástico/vidrio negro brilloso).
-	new("Frame", {
-		Name = "Shine",
-		Size = UDim2.new(1, -8, 0, math.floor(self.TAB_H * 0.22)),
-		Position = UDim2.new(0, 4, 0, 3),
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-		BackgroundTransparency = 0.86,
-		BorderSizePixel = 0,
-		ZIndex = 2,
-		Parent = TabBtn,
-	}, { roundCorner(8) })
+	glossyShine(TabBtn, math.floor(self.TAB_H * 0.24), 6, 4)
 
 	hoverRow(TabBtn) -- se pisa por el repintado de SelectTab, pero deja hover mientras está cerrada
 
@@ -739,45 +752,46 @@ function UI:CreateTab(config)
 		Name = "TabName",
 		Text = name,
 		Font = Theme.FontBold,
-		TextSize = 12,
+		TextSize = 13,
 		TextColor3 = Theme.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		BackgroundTransparency = 1,
-		ZIndex = 2,
-		Size = UDim2.new(1, -30, 1, 0),
-		Position = UDim2.new(0, 6, 0, 0),
+		ZIndex = 3,
+		Size = UDim2.new(1, -34, 1, 0),
+		Position = UDim2.new(0, 8, 0, 0),
 		Parent = TabBtn,
 	})
 
-	-- Flechita propia de la pestaña: ">" cerrada, "<" abierta — el mismo
-	-- lenguaje visual que ya usaban los Grupos, pero en las tabs.
+	-- Flechita propia de la pestaña: ">" cerrada, "<" abierta.
 	local TabArrow = new("TextLabel", {
 		Name = "TabArrow",
 		Text = ">",
 		Font = Theme.FontBold,
-		TextSize = 13,
+		TextSize = 14,
 		TextColor3 = Theme.TextDim,
 		BackgroundTransparency = 1,
-		ZIndex = 2,
-		Size = UDim2.new(0, 18, 1, 0),
-		Position = UDim2.new(1, -22, 0, 0),
+		ZIndex = 3,
+		Size = UDim2.new(0, 20, 1, 0),
+		Position = UDim2.new(1, -24, 0, 0),
 		Parent = TabBtn,
 	})
 
 	-- ---------------- Ventana centrada con la lógica de este tab ----------------
+	-- Redondeada y "negro brilloso", igual que los tabs, en vez del
+	-- panel gris plano de antes.
 	local Panel = new("Frame", {
 		Name = name .. "Panel",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Size = UDim2.new(0, self.PANEL_W, 0, self.PANEL_H),
 		Position = UDim2.new(0.5, 0, 0.5, 0),
-		BackgroundColor3 = Theme.Panel,
+		BackgroundColor3 = Theme.PanelGlossyBg,
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
 		Visible = false,
 		ZIndex = 10,
 		Parent = self.Root,
-	}, { corner(8), stroke(Theme.Border, 1) })
+	}, { roundCorner(18), stroke(Theme.Border, 1) })
 
 	local PanelTitle = new("TextLabel", {
 		Name = "PanelTitle",
@@ -787,12 +801,13 @@ function UI:CreateTab(config)
 		TextColor3 = Theme.Active,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
-		BackgroundColor3 = Theme.PanelAlt,
+		BackgroundColor3 = Theme.PanelGlossyBg,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 30),
+		Size = UDim2.new(1, 0, 0, 32),
 		ZIndex = 10,
 		Parent = Panel,
-	}, { pad(0, 0, 12, 0, 12) })
+	}, { roundCorner(18), glossyGradient(90), pad(0, 0, 12, 0, 12) })
+	glossyShine(PanelTitle, 6, 10, 4)
 	onAccent(function()
 		if PanelTitle.Parent then
 			PanelTitle.TextColor3 = Theme.Active
@@ -811,14 +826,14 @@ function UI:CreateTab(config)
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -10, 0.5, 0),
 		Size = UDim2.new(0, 20, 0, 20),
-		ZIndex = 11,
+		ZIndex = 12,
 		Parent = PanelTitle,
 	})
 
 	local List = new("ScrollingFrame", {
 		Name = "List",
-		Size = UDim2.new(1, 0, 1, -30),
-		Position = UDim2.new(0, 0, 0, 30),
+		Size = UDim2.new(1, 0, 1, -32),
+		Position = UDim2.new(0, 0, 0, 32),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 3,
@@ -867,11 +882,12 @@ function UI:SelectTab(name)
 		local wasVisible = tab.Panel.Visible
 
 		tab.Panel.Visible = selected
-		-- Negro brilloso en reposo, color de acento (rojo por defecto)
-		-- cuando está abierta — el degradado y la franja de brillo son
-		-- capas hijas separadas, así que siguen viéndose "brillosas"
-		-- encima de cualquiera de los dos colores.
-		tab.Button.BackgroundColor3 = selected and Theme.Active or Theme.TabIdle
+		-- Negro brilloso en reposo; ROJO OSCURO (no el rojo de acento
+		-- brillante) cuando está abierta — así el botón entero no
+		-- encandila. El degradado y el reflejo son capas hijas
+		-- separadas, así que siguen viéndose "brillosas" encima de
+		-- cualquiera de los dos colores.
+		tab.Button.BackgroundColor3 = selected and Theme.TabActiveBg or Theme.TabIdle
 
 		if selected and not wasVisible then
 			slideInFromLeft(tab.Panel, 260, 0.32)
@@ -897,7 +913,7 @@ end
 
 -- ============================================================
 -- 	CREATE GROUP — fila con flecha que abre otra ventanita al lado
--- 	de la principal (misma idea, también centrada/cuadrada).
+-- 	de la principal (misma idea, también redondeada y negra brillosa).
 -- ============================================================
 function UI:CreateGroup(config)
 	config = config or {}
@@ -930,20 +946,21 @@ function UI:CreateGroup(config)
 		Parent = Row,
 	})
 
-	-- Ventanita del grupo: mismo tamaño/estilo cuadrado que la principal,
-	-- pero corrida un poco para que se vea en cascada al lado.
+	-- Ventanita del grupo: mismo tamaño/estilo redondeado y negro
+	-- brilloso que la principal, corrida un poco para que se vea en
+	-- cascada al lado.
 	local GroupPanel = new("Frame", {
 		Name = name .. "GroupPanel",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Size = UDim2.new(0, window.PANEL_W, 0, window.PANEL_H),
 		Position = UDim2.new(0.5, 40, 0.5, 40),
-		BackgroundColor3 = Theme.Panel,
+		BackgroundColor3 = Theme.PanelGlossyBg,
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
 		Visible = false,
 		ZIndex = 12,
 		Parent = window.Root,
-	}, { corner(8), stroke(Theme.Border, 1) })
+	}, { roundCorner(18), stroke(Theme.Border, 1) })
 
 	local GroupTitle = new("TextLabel", {
 		Text = string.upper(name),
@@ -952,12 +969,13 @@ function UI:CreateGroup(config)
 		TextColor3 = Theme.Active,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
-		BackgroundColor3 = Theme.PanelAlt,
+		BackgroundColor3 = Theme.PanelGlossyBg,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 30),
+		Size = UDim2.new(1, 0, 0, 32),
 		ZIndex = 12,
 		Parent = GroupPanel,
-	}, { pad(0, 0, 12, 0, 12) })
+	}, { roundCorner(18), glossyGradient(90), pad(0, 0, 12, 0, 12) })
+	glossyShine(GroupTitle, 6, 10, 4)
 	onAccent(function()
 		if GroupTitle.Parent then
 			GroupTitle.TextColor3 = Theme.Active
@@ -974,13 +992,13 @@ function UI:CreateGroup(config)
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -10, 0.5, 0),
 		Size = UDim2.new(0, 20, 0, 20),
-		ZIndex = 13,
+		ZIndex = 14,
 		Parent = GroupTitle,
 	})
 
 	local GroupList = new("ScrollingFrame", {
-		Size = UDim2.new(1, 0, 1, -30),
-		Position = UDim2.new(0, 0, 0, 30),
+		Size = UDim2.new(1, 0, 1, -32),
+		Position = UDim2.new(0, 0, 0, 32),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 3,
