@@ -40,6 +40,17 @@
 	   consola con warn() y devuelve un objeto inofensivo, así el resto
 	   de tus 4500 líneas se sigue construyendo igual.
 
+	5. PESTAÑAS REDONDAS Y BRILLOSAS (nuevo en esta versión)
+	   Las pestañas del riel ya no son cuadradas ni planas: esquinas
+	   redondeadas, un degradado sutil (más claro arriba, más oscuro
+	   abajo) más una franja de brillo cerca del borde superior, para
+	   que se lean como un botón negro "brilloso" en vez de un
+	   rectángulo chato. En reposo son negras; al tocarlas se ponen del
+	   color de acento (rojo por defecto) y les aparece una flechita "<"
+	   (estaba ">"); al cerrarlas vuelven a negro y la flecha vuelve a
+	   ">". Esto es SOLO de las pestañas del riel — los Grupos ya tenían
+	   su propia flecha y se mantienen igual.
+
 	Uso básico:
 
 		local UI = loadstring(game:HttpGet("...AzucarHackerUI.lua"))()
@@ -155,9 +166,13 @@ local Theme = {
 	ActiveDim = Color3.fromRGB(152, 32, 32),
 	Font      = Enum.Font.Code,
 	FontBold  = Enum.Font.Code,
-	-- 0 = esquinas rectas en toda la UI. Subilo si alguna vez las querés
-	-- redondeadas otra vez.
+	-- 0 = esquinas rectas en el resto de la UI (filas, paneles, etc.).
+	-- Las pestañas del riel NO usan esto: tienen su propio radio fijo
+	-- más abajo, porque el pedido fue "las tabs redondas" puntualmente,
+	-- sin redondear todo lo demás.
 	CornerRadius = 0,
+	-- Negro "brilloso" de las pestañas en reposo (no seleccionadas).
+	TabIdle = Color3.fromRGB(9, 9, 11),
 }
 UI.Theme = Theme
 
@@ -195,17 +210,25 @@ local function new(class, props, children)
 	return inst
 end
 
--- Bordes CUADRADOS en toda la interfaz. Se controla desde acá: dejando
--- Theme.CornerRadius en 0, todas las esquinas quedan rectas sin tener
--- que tocar una por una las decenas de llamadas a corner() que hay
--- repartidas por el archivo. Si algún día querés volver a redondear,
--- cambiás ese único número.
+-- Bordes CUADRADOS en el resto de la interfaz. Se controla desde acá:
+-- dejando Theme.CornerRadius en 0, todas las esquinas quedan rectas sin
+-- tener que tocar una por una las decenas de llamadas a corner() que
+-- hay repartidas por el archivo. Si algún día querés volver a
+-- redondear TODO, cambiás ese único número. Las pestañas del riel usan
+-- roundCorner() en vez de esta, para tener SU PROPIO radio fijo sin
+-- afectar al resto.
 local function corner(radius)
 	local r = Theme.CornerRadius or 0
 	if r <= 0 then
 		return new("UICorner", { CornerRadius = UDim.new(0, 0) })
 	end
 	return new("UICorner", { CornerRadius = UDim.new(0, radius or r) })
+end
+
+-- Radio fijo, IGNORA Theme.CornerRadius. Solo para las pestañas del
+-- riel, que van redondeadas aunque el resto del panel sea cuadrado.
+local function roundCorner(radius)
+	return new("UICorner", { CornerRadius = UDim.new(0, radius or 14) })
 end
 
 local function stroke(color, thickness)
@@ -656,7 +679,8 @@ function UI:Destroy()
 end
 
 -- ============================================================
--- 	CREATE TAB — botón suelto + ventana centrada al tocarlo
+-- 	CREATE TAB — botón suelto (redondo, negro brilloso) + ventana
+-- 	centrada al tocarlo
 -- ============================================================
 function UI:CreateTab(config)
 	config = config or {}
@@ -664,18 +688,45 @@ function UI:CreateTab(config)
 
 	-- Botón SUELTO: su propio fondo, su propio borde, separado del resto
 	-- por el espacio real que deja TabsHolder (UIListLayout + TabGap).
-	-- No hay ningún panel detrás que los una a todos.
+	-- No hay ningún panel detrás que los una a todos. Redondeado y con
+	-- un degradado + franja de brillo para que se lea "negro brilloso"
+	-- en vez de un rectángulo chato.
 	local TabBtn = new("TextButton", {
 		Name = name,
 		Text = "",
 		AutoButtonColor = false,
-		BackgroundColor3 = Theme.Panel,
+		BackgroundColor3 = Theme.TabIdle,
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, self.TAB_H),
 		LayoutOrder = #self._tabs,
 		Parent = self.TabsHolder,
-	}, { corner(6), stroke(Theme.Border, 1) })
-	hoverRow(TabBtn)
+	}, {
+		roundCorner(14),
+		stroke(Theme.Border, 1),
+		new("UIGradient", {
+			Color = ColorSequence.new({
+				ColorSequenceKeypoint.new(0.00, Color3.fromRGB(72, 72, 78)),
+				ColorSequenceKeypoint.new(0.35, Color3.fromRGB(22, 22, 25)),
+				ColorSequenceKeypoint.new(1.00, Color3.fromRGB(4, 4, 5)),
+			}),
+			Rotation = 90,
+		}),
+	})
+
+	-- Franja de brillo cerca del borde superior (el típico "reflejo" de
+	-- un botón de plástico/vidrio negro brilloso).
+	new("Frame", {
+		Name = "Shine",
+		Size = UDim2.new(1, -8, 0, math.floor(self.TAB_H * 0.22)),
+		Position = UDim2.new(0, 4, 0, 3),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundTransparency = 0.86,
+		BorderSizePixel = 0,
+		ZIndex = 2,
+		Parent = TabBtn,
+	}, { roundCorner(8) })
+
+	hoverRow(TabBtn) -- se pisa por el repintado de SelectTab, pero deja hover mientras está cerrada
 
 	local TabName = new("TextLabel", {
 		Name = "TabName",
@@ -686,8 +737,24 @@ function UI:CreateTab(config)
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, -8, 1, 0),
-		Position = UDim2.new(0, 4, 0, 0),
+		ZIndex = 2,
+		Size = UDim2.new(1, -30, 1, 0),
+		Position = UDim2.new(0, 6, 0, 0),
+		Parent = TabBtn,
+	})
+
+	-- Flechita propia de la pestaña: ">" cerrada, "<" abierta — el mismo
+	-- lenguaje visual que ya usaban los Grupos, pero en las tabs.
+	local TabArrow = new("TextLabel", {
+		Name = "TabArrow",
+		Text = ">",
+		Font = Theme.FontBold,
+		TextSize = 13,
+		TextColor3 = Theme.TextDim,
+		BackgroundTransparency = 1,
+		ZIndex = 2,
+		Size = UDim2.new(0, 18, 1, 0),
+		Position = UDim2.new(1, -22, 0, 0),
 		Parent = TabBtn,
 	})
 
@@ -762,6 +829,7 @@ function UI:CreateTab(config)
 		Window       = self,
 		Button       = TabBtn,
 		NameLabel    = TabName,
+		Arrow        = TabArrow,
 		Panel        = Panel,
 		PanelTitle   = PanelTitle,
 		List         = List,
@@ -792,14 +860,22 @@ function UI:SelectTab(name)
 		local wasVisible = tab.Panel.Visible
 
 		tab.Panel.Visible = selected
-		tab.Button.BackgroundColor3 = selected and Theme.PanelAlt or Theme.Panel
+		-- Negro brilloso en reposo, color de acento (rojo por defecto)
+		-- cuando está abierta — el degradado y la franja de brillo son
+		-- capas hijas separadas, así que siguen viéndose "brillosas"
+		-- encima de cualquiera de los dos colores.
+		tab.Button.BackgroundColor3 = selected and Theme.Active or Theme.TabIdle
 
 		if selected and not wasVisible then
 			slideInFromLeft(tab.Panel, 260, 0.32)
 		end
 
 		if tab.NameLabel then
-			tab.NameLabel.TextColor3 = selected and Theme.Active or Theme.TextDim
+			tab.NameLabel.TextColor3 = selected and Theme.Text or Theme.TextDim
+		end
+		if tab.Arrow then
+			tab.Arrow.Text = selected and "<" or ">"
+			tab.Arrow.TextColor3 = selected and Theme.Text or Theme.TextDim
 		end
 
 		if not selected then
