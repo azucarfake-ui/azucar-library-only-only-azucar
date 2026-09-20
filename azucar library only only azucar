@@ -1,9 +1,9 @@
 --[[
-	AzucarLegit  v1.5.0
+	AzucarLegit  v1.6.0
 	====================
 	(Antes: AzucarSlideUI / AzucarHackerUI)
 
-	CAMBIOS RECIENTES (hasta v1.5.0):
+	CAMBIOS RECIENTES (hasta v1.6.0):
 	  1. TRANSPARENCIA REAL. La tarjeta que abre cada pestaña ahora es
 	     un CanvasGroup: fondo, botones, toggles, sliders, listas,
 	     inputs, keybinds y stats se dibujan juntos y el conjunto se
@@ -27,6 +27,11 @@
 	     pestaña al presionarla; el toggle salta y brilla; el botón
 	     destella; la perilla del slider crece al arrastrarla.
 	     ANIMATED_FX = false los deja todos quietos.
+	  7. EFECTOS MÁS LLAMATIVOS: cometa blanco-rojo que gira por el
+	     borde y el aura (neblina más suave, 20 anillos); chispas
+	     rojas que salen flotando; brillo que recorre el título;
+	     franja de luz que barre la pestaña abierta; barrita roja que
+	     se enciende al pasar el mouse por botones y toggles.
 
 	IMPORTANTE: la lógica interna de cada control (CreateButton,
 	CreateToggle, CreateSlider, CreateDropdown, CreateInput,
@@ -61,7 +66,7 @@ local RunService       = game:GetService("RunService")
 
 local UI = {}
 
-UI.Version    = "1.5.0"
+UI.Version    = "1.6.0"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -78,17 +83,19 @@ local PANEL_WIDTH_PX = 600
 -- 	AURA ROJA Y DESENFOQUE — CAMBIÁ ESTOS NÚMEROS
 -- ============================================================
 -- AURA: neblina roja difuminada alrededor de la tarjeta.
-local AURA_SIZE_PX      = 30    -- cuánto se extiende hacia afuera (0 = sin aura)
-local AURA_TRANSPARENCY = 0.55  -- en el borde: 0 = muy fuerte, 1 = invisible
+local AURA_SIZE_PX      = 44    -- cuánto se extiende hacia afuera (0 = sin aura)
+local AURA_TRANSPARENCY = 0.45  -- en el borde: 0 = muy fuerte, 1 = invisible
 -- DESENFOQUE: mientras hay una pestaña abierta, el juego de atrás se ve
 -- borroso (se apaga solo al cerrarla o al ocultar la UI con K).
 local BLUR_SIZE = 16            -- 0 = sin desenfoque, 24 = fuerte
 -- AURITA DE LAS PESTAÑAS: halo chico y suave que se enciende al presionarlas.
-local PILL_AURA_SIZE_PX      = 9     -- cuánto se extiende (0 = sin aurita)
-local PILL_AURA_TRANSPARENCY = 0.72  -- 0 = fuerte, 1 = invisible (más alto = más sutil)
+local PILL_AURA_SIZE_PX      = 12    -- cuánto se extiende (0 = sin aurita)
+local PILL_AURA_TRANSPARENCY = 0.62  -- 0 = fuerte, 1 = invisible (más alto = más sutil)
 -- EFECTOS ANIMADOS: luz roja que da vueltas por el borde de la tarjeta y aura
 -- que "respira". true = con animación, false = todo quieto.
 local ANIMATED_FX = true
+-- CHISPAS: puntitos rojos que salen flotando desde el borde de la tarjeta abierta.
+local SPARKS_COUNT = 18         -- 0 = sin chispas
 
 -- ============================================================
 -- 	RED DE SEGURIDAD: un Create... inexistente no mata el script
@@ -260,11 +267,30 @@ end
 -- un cambio de paleta con SetAccentColor).
 local function hoverField(obj, base)
 	base = base or Theme.Field
+
+	-- Efecto: una barrita roja se enciende y crece a la izquierda de la
+	-- fila mientras el mouse está encima.
+	local mark = new("Frame", {
+		Name = "HoverMark",
+		Size = UDim2.new(0, 3, 0.35, 0),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 0, 0.5, 0),
+		BackgroundColor3 = Theme.Active,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Parent = obj,
+	}, { new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
+	onAccent(function()
+		if mark.Parent then mark.BackgroundColor3 = Theme.Active end
+	end)
+
 	obj.MouseEnter:Connect(function()
 		tween(obj, { BackgroundColor3 = Theme.LineOpen })
+		tween(mark, { BackgroundTransparency = 0, Size = UDim2.new(0, 3, 0.7, 0) }, 0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 	end)
 	obj.MouseLeave:Connect(function()
 		tween(obj, { BackgroundColor3 = base })
+		tween(mark, { BackgroundTransparency = 1, Size = UDim2.new(0, 3, 0.35, 0) }, 0.15)
 	end)
 end
 
@@ -765,7 +791,7 @@ function UI:CreateTab(config)
 	-- está abierta; se apaga al cerrarla o al abrir otra.
 	local pillStrokes, pillTargets = {}, {}
 	if PILL_AURA_SIZE_PX > 0 then
-		local RINGS = 6
+		local RINGS = 10
 		local step = PILL_AURA_SIZE_PX / RINGS
 		for k = 0, RINGS - 1 do
 			local grow = k * step
@@ -777,7 +803,7 @@ function UI:CreateTab(config)
 				BorderSizePixel = 0,
 				Parent = Pill,
 			}, { corner(radius + grow) })
-			local fade = (k / (RINGS - 1)) ^ 0.5
+			local fade = (k / (RINGS - 1)) ^ 0.8
 			local target = PILL_AURA_TRANSPARENCY + (1 - PILL_AURA_TRANSPARENCY) * fade
 			table.insert(pillTargets, target)
 			table.insert(pillStrokes, new("UIStroke", {
@@ -807,6 +833,29 @@ function UI:CreateTab(config)
 			tween(st, { Transparency = stayOn and pillTargets[i] or 1 }, 0.4)
 		end
 	end
+
+	-- Brillo: una franja de luz blanca que barre la pestaña abierta una y otra vez.
+	local Shine = new("Frame", {
+		Name = "Shine",
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundTransparency = 0,
+		BorderSizePixel = 0,
+		Visible = false,
+		Parent = Pill,
+	}, { corner(radius) })
+	local ShineGradient = new("UIGradient", {
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1),
+			NumberSequenceKeypoint.new(0.38, 1),
+			NumberSequenceKeypoint.new(0.5, 0.72),
+			NumberSequenceKeypoint.new(0.62, 1),
+			NumberSequenceKeypoint.new(1, 1),
+		}),
+		Rotation = 20,
+		Offset = Vector2.new(-1, 0),
+		Parent = Shine,
+	})
 
 	-- ---------------- La ventana flotante con las lógicas: tarjeta
 	-- redondeada aparte, cerca de las pestañas pero sin pegarse,
@@ -867,9 +916,9 @@ function UI:CreateTab(config)
 	})
 	local GlowScale = new("UIScale", { Scale = 0.9, Parent = Glow })
 
-	local glowStrokes, glowBase = {}, {}
+	local glowStrokes, glowBase, glowGradients = {}, {}, {}
 	if AURA_SIZE_PX > 0 then
-		local RINGS = 10
+		local RINGS = 20 -- muchos anillos finos = neblina suave (pocos se ven como "líneas")
 		local step = AURA_SIZE_PX / RINGS
 		for k = 0, RINGS - 1 do
 			local grow = k * step
@@ -881,14 +930,25 @@ function UI:CreateTab(config)
 				Parent = Glow,
 			}, { corner(20 + grow) })
 			-- El anillo de adentro es el más fuerte; el de afuera casi invisible.
-			local fade = (k / (RINGS - 1)) ^ 0.5
+			local fade = (k / (RINGS - 1)) ^ 0.8
 			local base = AURA_TRANSPARENCY + (1 - AURA_TRANSPARENCY) * fade
 			table.insert(glowBase, base)
-			table.insert(glowStrokes, new("UIStroke", {
+			local st = new("UIStroke", {
 				Color = Theme.Active,
-				Thickness = step + 1,
+				Thickness = step + 1.2,
 				Transparency = base,
 				Parent = ring,
+			})
+			table.insert(glowStrokes, st)
+			-- Cometa: el aura brilla mucho más donde pasa la "luz" que gira
+			-- alrededor de la tarjeta, y queda tenue en el resto.
+			table.insert(glowGradients, new("UIGradient", {
+				Transparency = NumberSequence.new({
+					NumberSequenceKeypoint.new(0, 0),
+					NumberSequenceKeypoint.new(0.5, 0.78),
+					NumberSequenceKeypoint.new(1, 0),
+				}),
+				Parent = st,
 			}))
 		end
 	end
@@ -897,23 +957,81 @@ function UI:CreateTab(config)
 	-- sobre el borde (opaco en un extremo, casi transparente en el
 	-- medio) al que se le va girando la rotación (ver Tab._fx).
 	local BorderGradient = nil
+	local function borderColors()
+		-- La "cabeza" de la luz es rojo casi blanco (caliente) y se va
+		-- enfriando a rojo oscuro en la cola.
+		local hot = Theme.Active:Lerp(Color3.fromRGB(255, 255, 255), 0.7)
+		return ColorSequence.new({
+			ColorSequenceKeypoint.new(0, hot),
+			ColorSequenceKeypoint.new(0.2, Theme.Active),
+			ColorSequenceKeypoint.new(0.5, Theme.ActiveDim),
+			ColorSequenceKeypoint.new(0.8, Theme.Active),
+			ColorSequenceKeypoint.new(1, hot),
+		})
+	end
 	if PanelStroke then
-		PanelStroke.Thickness = 2
-		PanelStroke.Transparency = 0.1
+		PanelStroke.Thickness = 2.5
+		PanelStroke.Transparency = 0
 		BorderGradient = new("UIGradient", {
-			Color = ColorSequence.new(Theme.Active, Theme.ActiveDim),
+			Color = borderColors(),
 			Transparency = NumberSequence.new({
 				NumberSequenceKeypoint.new(0, 0),
-				NumberSequenceKeypoint.new(0.5, 0.92),
+				NumberSequenceKeypoint.new(0.5, 0.9),
 				NumberSequenceKeypoint.new(1, 0),
 			}),
 			Parent = PanelStroke,
 		})
 		onAccent(function()
 			if BorderGradient.Parent then
-				BorderGradient.Color = ColorSequence.new(Theme.Active, Theme.ActiveDim)
+				BorderGradient.Color = borderColors()
 			end
 		end)
+	end
+
+	-- ---------------- CHISPAS ----------------
+	-- Puntitos rojos que nacen en el borde de la tarjeta, salen flotando
+	-- hacia afuera y se apagan. Viven dentro de Glow (detrás de la tarjeta).
+	local sparks = {}
+	for i = 1, SPARKS_COUNT do
+		local dot = new("Frame", {
+			Name = "Spark",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Size = UDim2.fromOffset(3, 3),
+			BackgroundColor3 = (i % 3 == 0) and Theme.Active:Lerp(Color3.fromRGB(255, 255, 255), 0.6) or Theme.Active,
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			Parent = Glow,
+		}, { new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
+		table.insert(sparks, { dot = dot, hot = (i % 3 == 0), born = nil, life = 2, x = 0, y = 0, vx = 0, vy = 0, size = 3 })
+	end
+	onAccent(function()
+		for _, sp in ipairs(sparks) do
+			if sp.dot.Parent then
+				sp.dot.BackgroundColor3 = sp.hot and Theme.Active:Lerp(Color3.fromRGB(255, 255, 255), 0.6) or Theme.Active
+			end
+		end
+	end)
+
+	local function respawnSpark(sp, now, stagger)
+		local W, H = Panel.Size.X.Offset, PANEL_H
+		local r = math.random() * (2 * W + 2 * H)
+		local nx, ny
+		if r < W then
+			sp.x, sp.y, nx, ny = r, 0, 0, -1
+		elseif r < 2 * W then
+			sp.x, sp.y, nx, ny = r - W, H, 0, 1
+		elseif r < 2 * W + H then
+			sp.x, sp.y, nx, ny = 0, r - 2 * W, -1, 0
+		else
+			sp.x, sp.y, nx, ny = W, r - 2 * W - H, 1, 0
+		end
+		local speed = 12 + math.random() * 32
+		local drift = (math.random() - 0.5) * 18
+		sp.vx = nx * speed + (ny ~= 0 and drift or 0)
+		sp.vy = ny * speed + (nx ~= 0 and drift or 0) - 8 -- un poco hacia arriba, como brasas
+		sp.life = 1.6 + math.random() * 1.8
+		sp.size = 2 + math.random() * 2.6
+		sp.born = now - (stagger and math.random() * sp.life or 0)
 	end
 
 	Panel:GetPropertyChangedSignal("Visible"):Connect(function()
@@ -954,7 +1072,7 @@ function UI:CreateTab(config)
 		Parent = Panel,
 	})
 
-	new("TextLabel", {
+	local PanelTitleLabel = new("TextLabel", {
 		Text = name,
 		Font = Theme.FontBold,
 		TextSize = 15,
@@ -966,6 +1084,27 @@ function UI:CreateTab(config)
 		Size = UDim2.new(1, -24, 1, 0),
 		Parent = PanelHeader,
 	})
+
+	-- Brillo rojo que recorre el título de izquierda a derecha (el texto
+	-- es blanco y el degradado le pinta una franja roja que se desliza).
+	local function titleColors()
+		local white = Color3.fromRGB(255, 255, 255)
+		return ColorSequence.new({
+			ColorSequenceKeypoint.new(0, white),
+			ColorSequenceKeypoint.new(0.4, white),
+			ColorSequenceKeypoint.new(0.5, Theme.Active),
+			ColorSequenceKeypoint.new(0.6, white),
+			ColorSequenceKeypoint.new(1, white),
+		})
+	end
+	local TitleGradient = new("UIGradient", {
+		Color = titleColors(),
+		Offset = Vector2.new(-1, 0),
+		Parent = PanelTitleLabel,
+	})
+	onAccent(function()
+		if TitleGradient.Parent then TitleGradient.Color = titleColors() end
+	end)
 
 	new("Frame", {
 		Position = UDim2.new(0, 14, 0, 42),
@@ -1028,7 +1167,10 @@ function UI:CreateTab(config)
 		end
 	end
 	Tab._paint = paintPill
-	Tab._auraOff = function() setPillAura(false) end
+	Tab._auraOff = function()
+		setPillAura(false)
+		Shine.Visible = false
+	end
 
 	-- Efectos animados de la tarjeta abierta (los llama el bucle Heartbeat
 	-- de la ventana): el aura "respira" y la luz del borde gira.
@@ -1036,13 +1178,36 @@ function UI:CreateTab(config)
 	Tab._fx = function(now)
 		if not ANIMATED_FX then return end
 		local appear = math.clamp((now - Tab._appearAt) / 0.35, 0, 1)
+
+		-- Aura que "respira".
 		local pulse = 0.5 + 0.5 * math.sin(now * 2.2)
-		local strength = (0.62 + 0.38 * pulse) * appear
+		local strength = (0.55 + 0.45 * pulse) * appear
 		for i, st in ipairs(glowStrokes) do
 			st.Transparency = 1 - (1 - glowBase[i]) * strength
 		end
-		if BorderGradient then
-			BorderGradient.Rotation = (now * 75) % 360
+
+		-- Luz cometa que gira por el borde y por el aura.
+		local rot = (now * 75) % 360
+		for _, g in ipairs(glowGradients) do g.Rotation = rot end
+		if BorderGradient then BorderGradient.Rotation = rot end
+
+		-- Brillo que recorre el título (cada ~3.6 s) y la pestaña (cada ~2.2 s).
+		TitleGradient.Offset = Vector2.new(-1 + 2 * ((now % 3.6) / 3.6), 0)
+		ShineGradient.Offset = Vector2.new(-1 + 2 * ((now % 2.2) / 2.2), 0)
+
+		-- Chispas.
+		for _, sp in ipairs(sparks) do
+			if sp.born == nil then
+				respawnSpark(sp, now, true)
+			elseif now - sp.born >= sp.life then
+				respawnSpark(sp, now, false)
+			end
+			local age = now - sp.born
+			local t = math.clamp(age / sp.life, 0, 1)
+			local sz = sp.size * (1 - 0.6 * t)
+			sp.dot.Position = UDim2.fromOffset(sp.x + sp.vx * age, sp.y + sp.vy * age)
+			sp.dot.Size = UDim2.fromOffset(sz, sz)
+			sp.dot.BackgroundTransparency = 1 - 0.92 * math.sin(t * math.pi) * appear
 		end
 	end
 
@@ -1078,6 +1243,8 @@ function UI:CreateTab(config)
 			Tab._isOpen = true
 			paintPill()
 			pulsePillAura(true)
+			Shine.Visible = true
+			for _, sp in ipairs(sparks) do sp.born = nil end -- las chispas arrancan de nuevo
 			tween(Arrow, { Rotation = 180 }, 0.15)
 			fitPanel() -- reafirma el ancho cada vez que se abre
 			Panel.Visible = true
@@ -1093,6 +1260,7 @@ function UI:CreateTab(config)
 			Tab._isOpen = false
 			paintPill()
 			setPillAura(false)
+			Shine.Visible = false
 			tween(Arrow, { Rotation = 0 }, 0.15)
 			Panel.Visible = false
 		end
@@ -1209,13 +1377,14 @@ function UI:CreateToggle(config)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, -34, 1, 0),
+		Position = UDim2.new(0, 10, 0, 0),
+		Size = UDim2.new(1, -44, 1, 0),
 		Parent = Row,
 	})
 
 	local Box = new("Frame", {
 		Size = UDim2.new(0, 14, 0, 14),
-		Position = UDim2.new(1, -14, 0.5, -7),
+		Position = UDim2.new(1, -24, 0.5, -7),
 		BackgroundColor3 = state and Theme.Active or Theme.Border,
 		BorderSizePixel = 0,
 		Parent = Row,
