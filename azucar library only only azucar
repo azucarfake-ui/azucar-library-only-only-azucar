@@ -1,9 +1,9 @@
 --[[
-	AzucarLegit  v1.6.0
+	AzucarLegit  v1.6.1
 	====================
 	(Antes: AzucarSlideUI / AzucarHackerUI)
 
-	CAMBIOS RECIENTES (hasta v1.6.0):
+	CAMBIOS RECIENTES (hasta v1.6.1):
 	  1. TRANSPARENCIA REAL. La tarjeta que abre cada pestaña ahora es
 	     un CanvasGroup: fondo, botones, toggles, sliders, listas,
 	     inputs, keybinds y stats se dibujan juntos y el conjunto se
@@ -32,6 +32,10 @@
 	     rojas que salen flotando; brillo que recorre el título;
 	     franja de luz que barre la pestaña abierta; barrita roja que
 	     se enciende al pasar el mouse por botones y toggles.
+	  8. MENOS ANILLOS: el aura de la tarjeta usa 5 anillos y la de
+	     las pestañas 3 (AURA_RINGS / PILL_AURA_RINGS). Y si volvés a
+	     ejecutar el script, la ventana vieja se destruye sola (antes
+	     quedaba debajo, con su pestaña abierta y su aura encendidas).
 
 	IMPORTANTE: la lógica interna de cada control (CreateButton,
 	CreateToggle, CreateSlider, CreateDropdown, CreateInput,
@@ -66,7 +70,7 @@ local RunService       = game:GetService("RunService")
 
 local UI = {}
 
-UI.Version    = "1.6.0"
+UI.Version    = "1.6.1"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -83,14 +87,16 @@ local PANEL_WIDTH_PX = 600
 -- 	AURA ROJA Y DESENFOQUE — CAMBIÁ ESTOS NÚMEROS
 -- ============================================================
 -- AURA: neblina roja difuminada alrededor de la tarjeta.
-local AURA_SIZE_PX      = 44    -- cuánto se extiende hacia afuera (0 = sin aura)
+local AURA_SIZE_PX      = 30    -- cuánto se extiende hacia afuera (0 = sin aura)
 local AURA_TRANSPARENCY = 0.45  -- en el borde: 0 = muy fuerte, 1 = invisible
+local AURA_RINGS        = 5     -- cuántos anillos forman el aura (menos = menos anillos)
 -- DESENFOQUE: mientras hay una pestaña abierta, el juego de atrás se ve
 -- borroso (se apaga solo al cerrarla o al ocultar la UI con K).
 local BLUR_SIZE = 16            -- 0 = sin desenfoque, 24 = fuerte
 -- AURITA DE LAS PESTAÑAS: halo chico y suave que se enciende al presionarlas.
-local PILL_AURA_SIZE_PX      = 12    -- cuánto se extiende (0 = sin aurita)
+local PILL_AURA_SIZE_PX      = 8     -- cuánto se extiende (0 = sin aurita)
 local PILL_AURA_TRANSPARENCY = 0.62  -- 0 = fuerte, 1 = invisible (más alto = más sutil)
+local PILL_AURA_RINGS        = 3     -- anillos de la aurita de cada pestaña
 -- EFECTOS ANIMADOS: luz roja que da vueltas por el borde de la tarjeta y aura
 -- que "respira". true = con animación, false = todo quieto.
 local ANIMATED_FX = true
@@ -152,6 +158,55 @@ local function getGuiParent()
 
 	local player = Players.LocalPlayer or Players.PlayerAdded:Wait()
 	return player:WaitForChild("PlayerGui")
+end
+
+-- ============================================================
+-- 	LIMPIEZA DE EJECUCIONES ANTERIORES
+-- ============================================================
+-- Si volvés a ejecutar el script sin cerrar la UI, la ventana vieja
+-- quedaba DEBAJO de la nueva, con su pestaña abierta, su aura y su color
+-- rojo: tocabas la ventana nueva y la vieja seguía igual (parecía que
+-- "no se quitaban" el color ni los anillos). Ahora, cada vez que se
+-- crea una ventana, se destruyen las de cargas anteriores.
+local LOAD_ID = tostring(os.clock()) .. "-" .. tostring(math.random(1, 1000000000))
+local STALE_NAMES = { AzucarLegit = true, AzucarSlideUI = true, AzucarHackerUI = true }
+
+local function cleanupOldWindows(guiParent)
+	-- 1) Ventanas registradas por cargas anteriores (esto también les
+	--    desconecta los eventos globales).
+	local registry = rawget(_G, "__AzucarLegitWindows")
+	if typeof(registry) == "table" then
+		for i = #registry, 1, -1 do
+			local w = registry[i]
+			if typeof(w) == "table" and w._loadId ~= LOAD_ID then
+				pcall(function() w:Destroy() end)
+				table.remove(registry, i)
+			end
+		end
+	end
+
+	-- 2) Cualquier ScreenGui viejo con nuestro nombre que sea de otra carga
+	--    (incluye versiones anteriores de la librería, que no se registraban).
+	local places = { guiParent }
+	local plr = Players.LocalPlayer
+	if plr and plr:FindFirstChild("PlayerGui") then
+		table.insert(places, plr.PlayerGui)
+	end
+	pcall(function() table.insert(places, game:GetService("CoreGui")) end)
+	local getHui = rawget(_G, "gethui")
+	if typeof(getHui) == "function" then
+		pcall(function() table.insert(places, getHui()) end)
+	end
+	for _, place in ipairs(places) do
+		pcall(function()
+			for _, child in ipairs(place:GetChildren()) do
+				if child:IsA("ScreenGui") and STALE_NAMES[child.Name]
+					and child:GetAttribute("AzucarLoadId") ~= LOAD_ID then
+					child:Destroy()
+				end
+			end
+		end)
+	end
 end
 
 -- ============================================================
@@ -445,7 +500,10 @@ function UI:CreateWindow(config)
 	})
 	local protectGui = rawget(_G, "protectgui") or rawget(_G, "protect_gui")
 	if typeof(protectGui) == "function" then pcall(protectGui, ScreenGui) end
-	ScreenGui.Parent = getGuiParent()
+	local guiParent = getGuiParent()
+	cleanupOldWindows(guiParent)
+	ScreenGui:SetAttribute("AzucarLoadId", LOAD_ID)
+	ScreenGui.Parent = guiParent
 
 	local Root = new("Frame", {
 		Name = "Root",
@@ -592,6 +650,7 @@ function UI:CreateWindow(config)
 		_tabs        = {},
 		_connections = {},
 		_visible     = true,
+		_loadId      = LOAD_ID,
 		_blur        = blur,
 		_blurSize    = config.BlurSize or BLUR_SIZE,
 	}, UI)
@@ -671,6 +730,15 @@ function UI:CreateWindow(config)
 	end))
 
 	table.insert(UI.Windows, Window)
+
+	-- Registro global: la próxima carga de la librería usa esta lista
+	-- para destruir esta ventana si el script se vuelve a ejecutar.
+	local registry = rawget(_G, "__AzucarLegitWindows")
+	if typeof(registry) ~= "table" then
+		registry = {}
+		rawset(_G, "__AzucarLegitWindows", registry)
+	end
+	table.insert(registry, Window)
 
 	return Window
 end
@@ -791,7 +859,7 @@ function UI:CreateTab(config)
 	-- está abierta; se apaga al cerrarla o al abrir otra.
 	local pillStrokes, pillTargets = {}, {}
 	if PILL_AURA_SIZE_PX > 0 then
-		local RINGS = 10
+		local RINGS = math.max(PILL_AURA_RINGS, 1)
 		local step = PILL_AURA_SIZE_PX / RINGS
 		for k = 0, RINGS - 1 do
 			local grow = k * step
@@ -803,12 +871,12 @@ function UI:CreateTab(config)
 				BorderSizePixel = 0,
 				Parent = Pill,
 			}, { corner(radius + grow) })
-			local fade = (k / (RINGS - 1)) ^ 0.8
+			local fade = RINGS > 1 and (k / (RINGS - 1)) or 0
 			local target = PILL_AURA_TRANSPARENCY + (1 - PILL_AURA_TRANSPARENCY) * fade
 			table.insert(pillTargets, target)
 			table.insert(pillStrokes, new("UIStroke", {
 				Color = Theme.Active,
-				Thickness = step + 1,
+				Thickness = step * 1.6 + 1,
 				Transparency = 1, -- arranca apagada
 				Parent = ring,
 			}))
@@ -820,17 +888,38 @@ function UI:CreateTab(config)
 		end
 	end)
 
+	-- Se guardan los tweens de la aurita para poder CANCELARLOS: así, al
+	-- cerrar la pestaña o abrir otra, ninguna animación vieja que siga
+	-- corriendo puede volver a encender los anillos.
+	local pillTw = {}
+	local function stopPillTweens()
+		for i, tw in pairs(pillTw) do
+			pcall(function() tw:Cancel() end)
+			pillTw[i] = nil
+		end
+	end
+
 	local function setPillAura(on)
+		stopPillTweens()
 		for i, st in ipairs(pillStrokes) do
-			tween(st, { Transparency = on and pillTargets[i] or 1 }, 0.2)
+			if on then
+				local tw = TweenService:Create(st, TweenInfo.new(0.2), { Transparency = pillTargets[i] })
+				pillTw[i] = tw
+				tw:Play()
+			else
+				st.Transparency = 1 -- se apaga al instante, sin dejar rastro
+			end
 		end
 	end
 
 	-- Destello al presionar: arranca más fuerte y se acomoda al nivel tenue.
 	local function pulsePillAura(stayOn)
+		stopPillTweens()
 		for i, st in ipairs(pillStrokes) do
 			st.Transparency = math.max(pillTargets[i] - 0.28, 0)
-			tween(st, { Transparency = stayOn and pillTargets[i] or 1 }, 0.4)
+			local tw = TweenService:Create(st, TweenInfo.new(0.4), { Transparency = stayOn and pillTargets[i] or 1 })
+			pillTw[i] = tw
+			tw:Play()
 		end
 	end
 
@@ -918,7 +1007,7 @@ function UI:CreateTab(config)
 
 	local glowStrokes, glowBase, glowGradients = {}, {}, {}
 	if AURA_SIZE_PX > 0 then
-		local RINGS = 20 -- muchos anillos finos = neblina suave (pocos se ven como "líneas")
+		local RINGS = math.max(AURA_RINGS, 1)
 		local step = AURA_SIZE_PX / RINGS
 		for k = 0, RINGS - 1 do
 			local grow = k * step
@@ -930,26 +1019,16 @@ function UI:CreateTab(config)
 				Parent = Glow,
 			}, { corner(20 + grow) })
 			-- El anillo de adentro es el más fuerte; el de afuera casi invisible.
-			local fade = (k / (RINGS - 1)) ^ 0.8
+			local fade = RINGS > 1 and (k / (RINGS - 1)) or 0
 			local base = AURA_TRANSPARENCY + (1 - AURA_TRANSPARENCY) * fade
 			table.insert(glowBase, base)
 			local st = new("UIStroke", {
 				Color = Theme.Active,
-				Thickness = step + 1.2,
+				Thickness = step * 1.6 + 1, -- se solapan un poco para que no se vean como rayas
 				Transparency = base,
 				Parent = ring,
 			})
 			table.insert(glowStrokes, st)
-			-- Cometa: el aura brilla mucho más donde pasa la "luz" que gira
-			-- alrededor de la tarjeta, y queda tenue en el resto.
-			table.insert(glowGradients, new("UIGradient", {
-				Transparency = NumberSequence.new({
-					NumberSequenceKeypoint.new(0, 0),
-					NumberSequenceKeypoint.new(0.5, 0.78),
-					NumberSequenceKeypoint.new(1, 0),
-				}),
-				Parent = st,
-			}))
 		end
 	end
 
@@ -1170,6 +1249,7 @@ function UI:CreateTab(config)
 	Tab._auraOff = function()
 		setPillAura(false)
 		Shine.Visible = false
+		Glow.Visible = false
 	end
 
 	-- Efectos animados de la tarjeta abierta (los llama el bucle Heartbeat
@@ -1248,6 +1328,7 @@ function UI:CreateTab(config)
 			tween(Arrow, { Rotation = 180 }, 0.15)
 			fitPanel() -- reafirma el ancho cada vez que se abre
 			Panel.Visible = true
+			Glow.Visible = true
 			-- Aparece con fundido (de invisible a su 0.2 normal).
 			Tab._appearAt = os.clock()
 			Panel.GroupTransparency = 1
@@ -1261,6 +1342,7 @@ function UI:CreateTab(config)
 			paintPill()
 			setPillAura(false)
 			Shine.Visible = false
+			Glow.Visible = false
 			tween(Arrow, { Rotation = 0 }, 0.15)
 			Panel.Visible = false
 		end
