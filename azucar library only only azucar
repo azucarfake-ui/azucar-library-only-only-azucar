@@ -1,25 +1,26 @@
 --[[
-	AzucarLegit  v1.3.2
+	AzucarLegit  v1.3.3
 	====================
 	(Antes: AzucarSlideUI / AzucarHackerUI)
 
-	CAMBIOS DE ESTA VERSIÓN (v1.3.2):
-	  1. La tarjeta que se abre al tocar una pestaña y TODAS las filas
-	     de adentro (Botones, Toggles, Sliders, Dropdowns/listas,
-	     Inputs, Keybinds y Stats) son semi-transparentes (0.2). El
-	     valor sale de un solo lugar: Theme.Alpha.
-	  2. La pestaña abierta MANTIENE el rojo hasta que cambies de
-	     pestaña o la cierres. Antes el hover (mouse encima / mouse
-	     afuera) le pisaba el color y volvía a negro aunque la tarjeta
-	     siguiera abierta; ahora el hover respeta si la pestaña está
-	     abierta.
+	CAMBIOS DE ESTA VERSIÓN (v1.3.3):
+	  1. TRANSPARENCIA REAL. La tarjeta que abre cada pestaña ahora es
+	     un CanvasGroup: fondo, botones, toggles, sliders, listas,
+	     inputs, keybinds y stats se dibujan juntos y el conjunto se
+	     ve al 0.2 (Theme.Alpha). Antes cada fila tenía su propia
+	     transparencia encima de un fondo oscuro, y se apilaban: por
+	     eso las filas se veían sólidas.
+	  2. SCROLL EN LA LISTA DE PESTAÑAS, SIN BARRA. Si hay más
+	     pestañas de las que entran en pantalla, bajás/subís con la
+	     rueda del mouse, arrastrando con el mouse o con el dedo.
+	  3. (v1.3.1) La pestaña abierta mantiene el rojo hasta que
+	     cambies de pestaña o la cierres.
 
 	IMPORTANTE: la lógica interna de cada control (CreateButton,
 	CreateToggle, CreateSlider, CreateDropdown, CreateInput,
 	CreateKeybind, CreateLabel, CreateSection, CreateDivider,
-	CreateStat) es EXACTAMENTE la misma de siempre — solo cambió la
-	transparencia de fondo de las filas. Tus
-	Callbacks/Flags funcionan igual.
+	CreateStat) es la misma de siempre. Tus Callbacks/Flags
+	funcionan igual.
 
 	Concepto de pestaña: una línea angosta pegada a la izquierda, con
 	el nombre siempre visible. Al tocarla NO se estira — en vez de
@@ -47,7 +48,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local UI = {}
 
-UI.Version    = "1.3.2"
+UI.Version    = "1.3.3"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -125,9 +126,8 @@ local Theme = {
 	ActiveDim  = Color3.fromRGB(190, 20, 40),
 	Font       = Enum.Font.Code,
 	FontBold   = Enum.Font.Code,
-	-- Transparencia de fondo de la tarjeta y de TODAS las filas de
-	-- adentro (Botón, Toggle, Slider, Dropdown, Input, Keybind, Stat).
-	-- Cambiás este número y cambia todo junto.
+	-- Transparencia de TODA la tarjeta que abre cada pestaña (fondo y
+	-- todos los controles de adentro, juntos). 0 = sólida, 1 = invisible.
 	Alpha      = 0.2,
 }
 UI.Theme = Theme
@@ -429,19 +429,38 @@ function UI:CreateWindow(config)
 	end)
 
 	-- ---------------- Lista de pestañas (las "líneas") ----------------
-	local SlideList = new("Frame", {
+	-- ScrollingFrame SIN barra: si hay más pestañas de las que entran en
+	-- la pantalla, bajás/subís con la rueda del mouse, arrastrando con el
+	-- mouse, o con el dedo en el celular. La barrita está apagada.
+	local SlideList = new("ScrollingFrame", {
 		Name = "SlideList",
 		Size = UDim2.new(0, SIDEBAR_W, 1, -(TOP_Y + HEADER_H + 8 + BOTTOM_MARGIN)),
 		Position = UDim2.new(0, 0, 0, TOP_Y + HEADER_H + 8),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		ClipsDescendants = false,
+		ScrollBarThickness = 0,
+		ScrollBarImageTransparency = 1,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		CanvasSize = UDim2.new(0, 0, 0, 0),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ClipsDescendants = true,
 		Parent = Root,
 	})
 
 	new("UIListLayout", {
 		Padding = UDim.new(0, 8),
 		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = SlideList,
+	})
+
+	-- Un poquito de margen para que el borde (UIStroke) de las pestañas
+	-- no quede cortado por el recorte del scroll, y aire abajo para que
+	-- la última pestaña se pueda subir bien.
+	new("UIPadding", {
+		PaddingTop = UDim.new(0, 2),
+		PaddingRight = UDim.new(0, 2),
+		PaddingBottom = UDim.new(0, 12),
+		PaddingLeft = UDim.new(0, 2),
 		Parent = SlideList,
 	})
 
@@ -486,6 +505,55 @@ function UI:CreateWindow(config)
 		table.insert(Window._connections, conn)
 		return conn
 	end
+
+	-- ---------------- Scroll de la lista de pestañas ----------------
+	-- La rueda del mouse y el dedo (celular) ya scrollean solos. Esto
+	-- agrega el arrastre con el MOUSE (mantener y mover hacia arriba o
+	-- abajo) y marca cuándo un gesto fue arrastre para que, al soltar,
+	-- no cuente como clic sobre la pestaña.
+	local dragKind = nil
+	local dragStartPos = Vector2.new(0, 0)
+	local canvasStartY = 0
+	Window._dragMoved = false
+
+	function Window._beginDrag(input)
+		local kind = input.UserInputType
+		if kind ~= Enum.UserInputType.MouseButton1 and kind ~= Enum.UserInputType.Touch then
+			return
+		end
+		Window._dragMoved = false
+		dragKind = kind
+		dragStartPos = Vector2.new(input.Position.X, input.Position.Y)
+		canvasStartY = SlideList.CanvasPosition.Y
+	end
+
+	track(SlideList.InputBegan:Connect(function(input)
+		Window._beginDrag(input)
+	end))
+
+	track(UserInputService.InputChanged:Connect(function(input)
+		if not dragKind then return end
+		local kind = input.UserInputType
+		if kind ~= Enum.UserInputType.MouseMovement and kind ~= Enum.UserInputType.Touch then
+			return
+		end
+		local dx = input.Position.X - dragStartPos.X
+		local dy = input.Position.Y - dragStartPos.Y
+		if math.abs(dx) + math.abs(dy) > 10 then
+			Window._dragMoved = true
+		end
+		-- Con el dedo scrollea el propio ScrollingFrame; con el mouse lo movemos nosotros.
+		if dragKind == Enum.UserInputType.MouseButton1 and Window._dragMoved then
+			SlideList.CanvasPosition = Vector2.new(0, canvasStartY - dy)
+		end
+	end))
+
+	track(UserInputService.InputEnded:Connect(function(input)
+		local kind = input.UserInputType
+		if kind == Enum.UserInputType.MouseButton1 or kind == Enum.UserInputType.Touch then
+			dragKind = nil
+		end
+	end))
 
 	local toggleKey = config.ToggleKey or Enum.KeyCode.K
 	track(UserInputService.InputBegan:Connect(function(input, gameProcessed)
@@ -589,16 +657,23 @@ function UI:CreateTab(config)
 
 	-- ---------------- La ventana flotante con las lógicas: tarjeta
 	-- redondeada aparte, cerca de las pestañas pero sin pegarse,
-	-- centrada verticalmente, más grande. Semi-transparente (0.2),
-	-- igual que los Botones, Toggles y Sliders de adentro. ----------------
+	-- centrada verticalmente, más grande. Semi-transparente (0.2) toda
+	-- junta: fondo, botones, toggles, sliders, listas, etc. ----------------
 	local PANEL_W, PANEL_H, PANEL_X = self.PANEL_W, self.PANEL_H, self.PANEL_X
 
-	local Panel = new("Frame", {
+	-- CanvasGroup: dibuja la tarjeta ENTERA (fondo + filas + textos) en
+	-- una sola capa y le aplica UNA transparencia al conjunto. Antes el
+	-- fondo de la tarjeta (0.2) y el de cada fila (0.2) se apilaban, y
+	-- como las filas quedaban encima de un fondo oscuro, se veían
+	-- sólidas aunque tuvieran transparencia. Así todo se ve al mismo
+	-- 0.2 contra el juego.
+	local Panel = new("CanvasGroup", {
 		Name = name .. "_Panel",
 		Size = UDim2.new(0, PANEL_W, 0, PANEL_H),
 		Position = UDim2.new(0, PANEL_X, 0.5, -PANEL_H / 2),
-		BackgroundColor3 = Theme.Field,
-		BackgroundTransparency = Theme.Alpha,
+		BackgroundColor3 = Theme.Background,
+		BackgroundTransparency = 0,
+		GroupTransparency = Theme.Alpha,
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
 		Visible = false,
@@ -697,6 +772,10 @@ function UI:CreateTab(config)
 		paintPill()
 	end)
 
+	Pill.InputBegan:Connect(function(input)
+		if self._beginDrag then self._beginDrag(input) end
+	end)
+
 	-- Abre esta tarjeta y cierra la de cualquier otra pestaña que haya
 	-- quedado abierta (solo una ventana de lógicas a la vez). La
 	-- pestaña activa se pone roja y se queda así hasta que cambies de
@@ -730,6 +809,7 @@ function UI:CreateTab(config)
 	end)
 
 	table.insert(self._connections, Pill.MouseButton1Click:Connect(function()
+		if self._dragMoved then return end -- fue un arrastre (scroll), no un clic
 		setOpen(not Tab._isOpen)
 	end))
 
@@ -748,7 +828,7 @@ end
 
 -- ============================================================
 -- 	A PARTIR DE ACÁ: TODO IGUAL A AzucarSlideUI v1.0.0, SIN CAMBIOS
--- 	(salvo la transparencia de fondo de las filas: Theme.Alpha = 0.2).
+-- 	(la transparencia ya no va fila por fila: la maneja la tarjeta entera).
 -- ============================================================
 
 -- ============================================================
@@ -770,7 +850,6 @@ function UI:CreateButton(config)
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		AutoButtonColor = false,
 		BackgroundColor3 = Theme.Field,
-		BackgroundTransparency = Theme.Alpha,
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, 32),
 		LayoutOrder = nextOrder(owner),
@@ -819,7 +898,6 @@ function UI:CreateToggle(config)
 	local Row = new("Frame", {
 		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundColor3 = Theme.Field,
-		BackgroundTransparency = Theme.Alpha,
 		BorderSizePixel = 0,
 		LayoutOrder = nextOrder(owner),
 		Parent = list,
@@ -916,7 +994,6 @@ function UI:CreateSlider(config)
 	local Row = new("Frame", {
 		Size = UDim2.new(1, 0, 0, 46),
 		BackgroundColor3 = Theme.Field,
-		BackgroundTransparency = Theme.Alpha,
 		BorderSizePixel = 0,
 		LayoutOrder = nextOrder(owner),
 		Parent = list,
@@ -1061,7 +1138,6 @@ function UI:CreateDropdown(config)
 	local Row = new("Frame", {
 		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundColor3 = Theme.Field,
-		BackgroundTransparency = Theme.Alpha,
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
 		LayoutOrder = nextOrder(owner),
@@ -1113,7 +1189,6 @@ function UI:CreateDropdown(config)
 		Size = UDim2.new(1, -16, 0, math.min(math.max(#options, 1), 6) * 24 + 8),
 		Position = UDim2.new(0, 8, 0, ROW_H),
 		BackgroundColor3 = Theme.Line,
-		BackgroundTransparency = Theme.Alpha,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 3,
 		ScrollBarImageColor3 = Theme.Border,
@@ -1151,7 +1226,6 @@ function UI:CreateDropdown(config)
 				TextTruncate = Enum.TextTruncate.AtEnd,
 				AutoButtonColor = false,
 				BackgroundColor3 = Theme.Field,
-				BackgroundTransparency = Theme.Alpha,
 				BorderSizePixel = 0,
 				Size = UDim2.new(1, 0, 0, 22),
 				LayoutOrder = index,
@@ -1210,7 +1284,6 @@ function UI:CreateInput(config)
 	local Row = new("Frame", {
 		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundColor3 = Theme.Field,
-		BackgroundTransparency = Theme.Alpha,
 		BorderSizePixel = 0,
 		LayoutOrder = nextOrder(owner),
 		Parent = list,
@@ -1240,7 +1313,6 @@ function UI:CreateInput(config)
 		ClearTextOnFocus = false,
 		ClipsDescendants = true,
 		BackgroundColor3 = Theme.Line,
-		BackgroundTransparency = Theme.Alpha,
 		BorderSizePixel = 0,
 		Position = UDim2.new(0.42, 0, 0.5, -10),
 		Size = UDim2.new(0.55, -10, 0, 20),
@@ -1290,7 +1362,6 @@ function UI:CreateKeybind(config)
 	local Row = new("Frame", {
 		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundColor3 = Theme.Field,
-		BackgroundTransparency = Theme.Alpha,
 		BorderSizePixel = 0,
 		LayoutOrder = nextOrder(owner),
 		Parent = list,
@@ -1317,7 +1388,6 @@ function UI:CreateKeybind(config)
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		AutoButtonColor = false,
 		BackgroundColor3 = Theme.Line,
-		BackgroundTransparency = Theme.Alpha,
 		BorderSizePixel = 0,
 		Size = UDim2.new(0, 60, 0, 20),
 		Position = UDim2.new(1, -68, 0.5, -10),
@@ -1457,7 +1527,6 @@ function UI:CreateStat(config)
 	local holder = new("Frame", {
 		Size = UDim2.new(1, 0, 0, 40),
 		BackgroundColor3 = Theme.Field,
-		BackgroundTransparency = Theme.Alpha,
 		BorderSizePixel = 0,
 		LayoutOrder = nextOrder(owner),
 		Parent = list,
