@@ -1,9 +1,9 @@
 --[[
-	AzucarLegit  v1.3.4
+	AzucarLegit  v1.3.5
 	====================
 	(Antes: AzucarSlideUI / AzucarHackerUI)
 
-	CAMBIOS RECIENTES (hasta v1.3.4):
+	CAMBIOS RECIENTES (hasta v1.3.5):
 	  1. TRANSPARENCIA REAL. La tarjeta que abre cada pestaña ahora es
 	     un CanvasGroup: fondo, botones, toggles, sliders, listas,
 	     inputs, keybinds y stats se dibujan juntos y el conjunto se
@@ -15,9 +15,10 @@
 	     rueda del mouse, arrastrando con el mouse o con el dedo.
 	  3. (v1.3.1) La pestaña abierta mantiene el rojo hasta que
 	     cambies de pestaña o la cierres.
-	  4. TARJETA MUCHO MÁS LARGA hacia la derecha: 800px de ancho
-	     (antes 460). Si la pantalla es más angosta se achica sola
-	     para no salirse. Se cambia con config.PanelWidth.
+	  4. TARJETA QUE OCUPA TODO EL ESPACIO hacia la derecha: llega
+	     hasta 20px del borde de la pantalla y se adapta sola a
+	     cualquier tamaño. Tope opcional: config.PanelMaxWidth.
+	     Margen derecho: config.PanelRightMargin.
 
 	IMPORTANTE: la lógica interna de cada control (CreateButton,
 	CreateToggle, CreateSlider, CreateDropdown, CreateInput,
@@ -51,7 +52,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local UI = {}
 
-UI.Version    = "1.3.4"
+UI.Version    = "1.3.5"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -352,9 +353,17 @@ function UI:CreateWindow(config)
 	-- tarjeta aparte, con esquinas redondas, que aparece cerca de las
 	-- pestañas (ni pegada, ni al otro extremo de la pantalla) y
 	-- centrada verticalmente.
-	-- Ancho MÁXIMO de la tarjeta (crece hacia la derecha). Si la pantalla
-	-- es más angosta, la tarjeta se achica sola para no salirse.
-	local PANEL_W   = config.PanelWidth or 800
+	-- Ancho de la tarjeta: por defecto OCUPA TODO el espacio que hay hacia
+	-- la derecha, hasta PANEL_MARGIN px del borde de la pantalla, y se
+	-- adapta sola a cualquier tamaño de pantalla. Si querés ponerle un
+	-- tope: config.PanelMaxWidth = 900. (config.PanelWidth ya no fija
+	-- el ancho: si tu script lo pasa, se ignora.)
+	local PANEL_MAX_W  = config.PanelMaxWidth
+	local PANEL_MARGIN = config.PanelRightMargin or 20
+	if config.PanelWidth ~= nil then
+		warn("[AzucarLegit] PanelWidth ya no fija el ancho: la tarjeta ocupa todo el espacio "
+			.. "hacia la derecha. Si querés un tope, usá PanelMaxWidth.")
+	end
 	local PANEL_H   = config.PanelHeight or 480
 	local PANEL_GAP = config.PanelGap or 30
 	local PANEL_X   = SIDEBAR_W + PANEL_GAP
@@ -498,7 +507,8 @@ function UI:CreateWindow(config)
 		TOP_Y      = TOP_Y,
 		BOTTOM_MARGIN = BOTTOM_MARGIN,
 		TAB_RADIUS = RADIUS,
-		PANEL_W    = PANEL_W,
+		PANEL_MAX_W  = PANEL_MAX_W,
+		PANEL_MARGIN = PANEL_MARGIN,
 		PANEL_H    = PANEL_H,
 		PANEL_X    = PANEL_X,
 		_tabs        = {},
@@ -664,7 +674,9 @@ function UI:CreateTab(config)
 	-- redondeada aparte, cerca de las pestañas pero sin pegarse,
 	-- centrada verticalmente, más grande. Semi-transparente (0.2) toda
 	-- junta: fondo, botones, toggles, sliders, listas, etc. ----------------
-	local PANEL_W, PANEL_H, PANEL_X = self.PANEL_W, self.PANEL_H, self.PANEL_X
+	local PANEL_H, PANEL_X = self.PANEL_H, self.PANEL_X
+	local PANEL_MAX_W  = self.PANEL_MAX_W or math.huge
+	local PANEL_MARGIN = self.PANEL_MARGIN or 20
 
 	-- CanvasGroup: dibuja la tarjeta ENTERA (fondo + filas + textos) en
 	-- una sola capa y le aplica UNA transparencia al conjunto. Antes el
@@ -674,9 +686,9 @@ function UI:CreateTab(config)
 	-- 0.2 contra el juego.
 	local Panel = new("CanvasGroup", {
 		Name = name .. "_Panel",
-		-- Ancho: todo lo que haya hasta el borde derecho (menos 20px de
-		-- margen), con tope en PANEL_W (ver UISizeConstraint abajo).
-		Size = UDim2.new(1, -(PANEL_X + 20), 0, PANEL_H),
+		-- Ancho: TODO lo que haya hasta el borde derecho de la pantalla
+		-- (menos el margen), con tope opcional en PANEL_MAX_W.
+		Size = UDim2.new(1, -(PANEL_X + PANEL_MARGIN), 0, PANEL_H),
 		Position = UDim2.new(0, PANEL_X, 0.5, -PANEL_H / 2),
 		BackgroundColor3 = Theme.Background,
 		BackgroundTransparency = 0,
@@ -688,7 +700,7 @@ function UI:CreateTab(config)
 	}, {
 		corner(20),
 		stroke(Theme.Border, 1),
-		new("UISizeConstraint", { MaxSize = Vector2.new(PANEL_W, math.huge) }),
+		new("UISizeConstraint", { MaxSize = Vector2.new(PANEL_MAX_W, math.huge) }),
 	})
 
 	local PanelScale = new("UIScale", { Scale = 0.9, Parent = Panel })
