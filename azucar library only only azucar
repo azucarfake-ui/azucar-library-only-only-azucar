@@ -543,7 +543,7 @@ function UI:CreateTab(config)
 		Text = "",
 		AutoButtonColor = false,
 		BackgroundColor3 = Theme.Line,
-		BackgroundTransparency = 0.4,
+		BackgroundTransparency = 0.2,
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, 50),
 		LayoutOrder = #self._tabs + 1,
@@ -578,8 +578,9 @@ function UI:CreateTab(config)
 
 	-- ---------------- La ventana flotante con las lógicas: tarjeta
 	-- redondeada aparte, cerca de las pestañas pero sin pegarse,
-	-- centrada verticalmente, más grande, y también negro
-	-- semi-transparente ----------------
+	-- centrada verticalmente, más grande. Esta sí queda opaca (sólida)
+	-- — la transparencia es solo para las pestañas de la izquierda
+	-- ----------------
 	local PANEL_W, PANEL_H, PANEL_X = self.PANEL_W, self.PANEL_H, self.PANEL_X
 
 	local Panel = new("Frame", {
@@ -587,7 +588,7 @@ function UI:CreateTab(config)
 		Size = UDim2.new(0, PANEL_W, 0, PANEL_H),
 		Position = UDim2.new(0, PANEL_X, 0.5, -PANEL_H / 2),
 		BackgroundColor3 = Theme.Field,
-		BackgroundTransparency = 0.35,
+		BackgroundTransparency = 0,
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
 		Visible = false,
