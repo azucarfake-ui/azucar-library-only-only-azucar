@@ -1,12 +1,13 @@
 --[[
-	AzucarLegit  v1.3.1
+	AzucarLegit  v1.3.2
 	====================
 	(Antes: AzucarSlideUI / AzucarHackerUI)
 
-	CAMBIOS DE ESTA VERSIÓN (v1.3.1):
-	  1. La tarjeta que se abre al tocar una pestaña ahora es
-	     semi-transparente (0.2), igual que los Botones, Toggles y
-	     Sliders de adentro.
+	CAMBIOS DE ESTA VERSIÓN (v1.3.2):
+	  1. La tarjeta que se abre al tocar una pestaña y TODAS las filas
+	     de adentro (Botones, Toggles, Sliders, Dropdowns/listas,
+	     Inputs, Keybinds y Stats) son semi-transparentes (0.2). El
+	     valor sale de un solo lugar: Theme.Alpha.
 	  2. La pestaña abierta MANTIENE el rojo hasta que cambies de
 	     pestaña o la cierres. Antes el hover (mouse encima / mouse
 	     afuera) le pisaba el color y volvía a negro aunque la tarjeta
@@ -17,7 +18,7 @@
 	CreateToggle, CreateSlider, CreateDropdown, CreateInput,
 	CreateKeybind, CreateLabel, CreateSection, CreateDivider,
 	CreateStat) es EXACTAMENTE la misma de siempre — solo cambió la
-	transparencia de fondo de Botón, Toggle y Slider. Tus
+	transparencia de fondo de las filas. Tus
 	Callbacks/Flags funcionan igual.
 
 	Concepto de pestaña: una línea angosta pegada a la izquierda, con
@@ -46,7 +47,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local UI = {}
 
-UI.Version    = "1.3.1"
+UI.Version    = "1.3.2"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -124,6 +125,10 @@ local Theme = {
 	ActiveDim  = Color3.fromRGB(190, 20, 40),
 	Font       = Enum.Font.Code,
 	FontBold   = Enum.Font.Code,
+	-- Transparencia de fondo de la tarjeta y de TODAS las filas de
+	-- adentro (Botón, Toggle, Slider, Dropdown, Input, Keybind, Stat).
+	-- Cambiás este número y cambia todo junto.
+	Alpha      = 0.2,
 }
 UI.Theme = Theme
 
@@ -593,7 +598,7 @@ function UI:CreateTab(config)
 		Size = UDim2.new(0, PANEL_W, 0, PANEL_H),
 		Position = UDim2.new(0, PANEL_X, 0.5, -PANEL_H / 2),
 		BackgroundColor3 = Theme.Field,
-		BackgroundTransparency = 0.2,
+		BackgroundTransparency = Theme.Alpha,
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
 		Visible = false,
@@ -743,7 +748,7 @@ end
 
 -- ============================================================
 -- 	A PARTIR DE ACÁ: TODO IGUAL A AzucarSlideUI v1.0.0, SIN CAMBIOS
--- 	(salvo la transparencia de fondo de Botón, Toggle y Slider: 0.2).
+-- 	(salvo la transparencia de fondo de las filas: Theme.Alpha = 0.2).
 -- ============================================================
 
 -- ============================================================
@@ -765,7 +770,7 @@ function UI:CreateButton(config)
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		AutoButtonColor = false,
 		BackgroundColor3 = Theme.Field,
-		BackgroundTransparency = 0.2,
+		BackgroundTransparency = Theme.Alpha,
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, 32),
 		LayoutOrder = nextOrder(owner),
@@ -814,7 +819,7 @@ function UI:CreateToggle(config)
 	local Row = new("Frame", {
 		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundColor3 = Theme.Field,
-		BackgroundTransparency = 0.2,
+		BackgroundTransparency = Theme.Alpha,
 		BorderSizePixel = 0,
 		LayoutOrder = nextOrder(owner),
 		Parent = list,
@@ -911,7 +916,7 @@ function UI:CreateSlider(config)
 	local Row = new("Frame", {
 		Size = UDim2.new(1, 0, 0, 46),
 		BackgroundColor3 = Theme.Field,
-		BackgroundTransparency = 0.2,
+		BackgroundTransparency = Theme.Alpha,
 		BorderSizePixel = 0,
 		LayoutOrder = nextOrder(owner),
 		Parent = list,
@@ -1056,6 +1061,7 @@ function UI:CreateDropdown(config)
 	local Row = new("Frame", {
 		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundColor3 = Theme.Field,
+		BackgroundTransparency = Theme.Alpha,
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
 		LayoutOrder = nextOrder(owner),
@@ -1107,6 +1113,7 @@ function UI:CreateDropdown(config)
 		Size = UDim2.new(1, -16, 0, math.min(math.max(#options, 1), 6) * 24 + 8),
 		Position = UDim2.new(0, 8, 0, ROW_H),
 		BackgroundColor3 = Theme.Line,
+		BackgroundTransparency = Theme.Alpha,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 3,
 		ScrollBarImageColor3 = Theme.Border,
@@ -1144,6 +1151,7 @@ function UI:CreateDropdown(config)
 				TextTruncate = Enum.TextTruncate.AtEnd,
 				AutoButtonColor = false,
 				BackgroundColor3 = Theme.Field,
+				BackgroundTransparency = Theme.Alpha,
 				BorderSizePixel = 0,
 				Size = UDim2.new(1, 0, 0, 22),
 				LayoutOrder = index,
@@ -1202,6 +1210,7 @@ function UI:CreateInput(config)
 	local Row = new("Frame", {
 		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundColor3 = Theme.Field,
+		BackgroundTransparency = Theme.Alpha,
 		BorderSizePixel = 0,
 		LayoutOrder = nextOrder(owner),
 		Parent = list,
@@ -1231,6 +1240,7 @@ function UI:CreateInput(config)
 		ClearTextOnFocus = false,
 		ClipsDescendants = true,
 		BackgroundColor3 = Theme.Line,
+		BackgroundTransparency = Theme.Alpha,
 		BorderSizePixel = 0,
 		Position = UDim2.new(0.42, 0, 0.5, -10),
 		Size = UDim2.new(0.55, -10, 0, 20),
@@ -1280,6 +1290,7 @@ function UI:CreateKeybind(config)
 	local Row = new("Frame", {
 		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundColor3 = Theme.Field,
+		BackgroundTransparency = Theme.Alpha,
 		BorderSizePixel = 0,
 		LayoutOrder = nextOrder(owner),
 		Parent = list,
@@ -1306,6 +1317,7 @@ function UI:CreateKeybind(config)
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		AutoButtonColor = false,
 		BackgroundColor3 = Theme.Line,
+		BackgroundTransparency = Theme.Alpha,
 		BorderSizePixel = 0,
 		Size = UDim2.new(0, 60, 0, 20),
 		Position = UDim2.new(1, -68, 0.5, -10),
@@ -1445,6 +1457,7 @@ function UI:CreateStat(config)
 	local holder = new("Frame", {
 		Size = UDim2.new(1, 0, 0, 40),
 		BackgroundColor3 = Theme.Field,
+		BackgroundTransparency = Theme.Alpha,
 		BorderSizePixel = 0,
 		LayoutOrder = nextOrder(owner),
 		Parent = list,
