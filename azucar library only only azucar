@@ -1,9 +1,9 @@
 --[[
-	AzucarLegit  v1.7.0
+	AzucarLegit  v1.7.1
 	====================
 	(Antes: AzucarSlideUI / AzucarHackerUI)
 
-	CAMBIOS RECIENTES (hasta v1.7.0):
+	CAMBIOS RECIENTES (hasta v1.7.1):
 	  1. TRANSPARENCIA REAL. La tarjeta que abre cada pestaña ahora es
 	     un CanvasGroup: fondo, botones, toggles, sliders, listas,
 	     inputs, keybinds y stats se dibujan juntos y el conjunto se
@@ -39,6 +39,9 @@
 	     archivo). NIEBLA de verdad alrededor de la tarjeta: halo
 	     continuo sin anillos (AURA_LAYERS), zona más densa que gira y
 	     bocanadas de niebla que salen flotando (FOG_WISPS).
+	 10. CHISPAS MÁS NOTORIAS: más cantidad (SPARKS_COUNT), más grandes
+	     (SPARK_SIZE_PX), con halo que brilla, más rápidas y titilando.
+	     La niebla quedó un poco más chica (AURA_SIZE_PX).
 
 	IMPORTANTE: la lógica interna de cada control (CreateButton,
 	CreateToggle, CreateSlider, CreateDropdown, CreateInput,
@@ -73,7 +76,7 @@ local RunService       = game:GetService("RunService")
 
 local UI = {}
 
-UI.Version    = "1.7.0"
+UI.Version    = "1.7.1"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -92,7 +95,7 @@ local PANEL_WIDTH_PX = 600
 -- NIEBLA ROJA alrededor de la tarjeta: un halo suave que se va apagando hacia
 -- afuera (capas rellenas y semitransparentes apiladas, sin rayas), con una zona
 -- más densa que gira y bocanadas de niebla que salen flotando del borde.
-local AURA_SIZE_PX      = 46    -- cuánto se extiende hacia afuera (0 = sin niebla)
+local AURA_SIZE_PX      = 34    -- cuánto se extiende hacia afuera (0 = sin niebla)
 local AURA_TRANSPARENCY = 0.35  -- densidad en el borde: 0 = muy densa, 1 = invisible
 local AURA_LAYERS       = 22    -- capas del halo (más = más suave)
 local FOG_WISPS         = 9     -- bocanadas de niebla que flotan hacia afuera (0 = ninguna)
@@ -107,7 +110,8 @@ local PILL_AURA_LAYERS       = 8     -- capas de la aurita de cada pestaña
 -- que "respira". true = con animación, false = todo quieto.
 local ANIMATED_FX = true
 -- CHISPAS: puntitos rojos que salen flotando desde el borde de la tarjeta abierta.
-local SPARKS_COUNT = 12         -- 0 = sin chispas
+local SPARKS_COUNT  = 26        -- cantidad de chispas (0 = sin chispas)
+local SPARK_SIZE_PX = 5         -- tamaño medio de cada chispa (más grande = más notorias)
 
 -- LETRA: Creepster en toda la UI. FONT_BOOST le suma tamaño a todos los textos
 -- (Creepster se ve más chica que una letra normal). Para otra letra cambiá
@@ -1110,21 +1114,38 @@ function UI:CreateTab(config)
 	-- hacia afuera y se apagan. Viven dentro de Glow (detrás de la tarjeta).
 	local sparks = {}
 	for i = 1, SPARKS_COUNT do
-		local dot = new("Frame", {
+		local hot = (i % 2 == 0) -- la mitad son "calientes" (casi blancas)
+		-- Halo: un círculo grande y tenue que es el contenedor de la chispa
+		-- (para que cada una "brille"); el núcleo va adentro, encima.
+		local halo = new("Frame", {
 			Name = "Spark",
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Size = UDim2.fromOffset(3, 3),
-			BackgroundColor3 = (i % 3 == 0) and Theme.Active:Lerp(Color3.fromRGB(255, 255, 255), 0.6) or Theme.Active,
+			Size = UDim2.fromOffset(SPARK_SIZE_PX * 3.2, SPARK_SIZE_PX * 3.2),
+			BackgroundColor3 = Theme.Active,
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
 			Parent = Glow,
 		}, { new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
-		table.insert(sparks, { dot = dot, hot = (i % 3 == 0), born = nil, life = 2, x = 0, y = 0, vx = 0, vy = 0, size = 3 })
+		local dot = new("Frame", {
+			Name = "Core",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromScale(1 / 3.2, 1 / 3.2),
+			BackgroundColor3 = hot and Theme.Active:Lerp(Color3.fromRGB(255, 255, 255), 0.65) or Theme.Active,
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			Parent = halo,
+		}, { new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
+		table.insert(sparks, {
+			dot = dot, halo = halo, hot = hot, born = nil, life = 2,
+			x = 0, y = 0, vx = 0, vy = 0, size = SPARK_SIZE_PX, phase = math.random() * 6.28,
+		})
 	end
 	onAccent(function()
 		for _, sp in ipairs(sparks) do
 			if sp.dot.Parent then
-				sp.dot.BackgroundColor3 = sp.hot and Theme.Active:Lerp(Color3.fromRGB(255, 255, 255), 0.6) or Theme.Active
+				sp.dot.BackgroundColor3 = sp.hot and Theme.Active:Lerp(Color3.fromRGB(255, 255, 255), 0.65) or Theme.Active
+				sp.halo.BackgroundColor3 = Theme.Active
 			end
 		end
 	end)
@@ -1142,12 +1163,12 @@ function UI:CreateTab(config)
 		else
 			sp.x, sp.y, nx, ny = W, r - 2 * W - H, 1, 0
 		end
-		local speed = 12 + math.random() * 32
-		local drift = (math.random() - 0.5) * 18
+		local speed = 16 + math.random() * 34
+		local drift = (math.random() - 0.5) * 22
 		sp.vx = nx * speed + (ny ~= 0 and drift or 0)
 		sp.vy = ny * speed + (nx ~= 0 and drift or 0) - 8 -- un poco hacia arriba, como brasas
-		sp.life = 1.6 + math.random() * 1.8
-		sp.size = 2 + math.random() * 2.6
+		sp.life = 1.8 + math.random() * 1.8
+		sp.size = SPARK_SIZE_PX * (0.6 + math.random() * 0.8)
 		sp.born = now - (stagger and math.random() * sp.life or 0)
 	end
 
@@ -1201,11 +1222,11 @@ function UI:CreateTab(config)
 		else
 			w.x, w.y, nx, ny = W, r - 2 * W - H, 1, 0
 		end
-		local speed = 5 + math.random() * 11
+		local speed = 4 + math.random() * 9
 		w.vx = nx * speed + (ny ~= 0 and (math.random() - 0.5) * 8 or 0)
 		w.vy = ny * speed + (nx ~= 0 and (math.random() - 0.5) * 8 or 0) - 3 -- sube apenas, como humo
 		w.life = 3.6 + math.random() * 2.6
-		w.size = 34 + math.random() * 30
+		w.size = 24 + math.random() * 20
 		w.born = now - (stagger and math.random() * w.life or 0)
 	end
 
@@ -1381,9 +1402,13 @@ function UI:CreateTab(config)
 			local age = now - sp.born
 			local t = math.clamp(age / sp.life, 0, 1)
 			local sz = sp.size * (1 - 0.6 * t)
-			sp.dot.Position = UDim2.fromOffset(sp.x + sp.vx * age, sp.y + sp.vy * age)
-			sp.dot.Size = UDim2.fromOffset(sz, sz)
-			sp.dot.BackgroundTransparency = 1 - 0.92 * math.sin(t * math.pi) * appear
+			sp.halo.Position = UDim2.fromOffset(sp.x + sp.vx * age, sp.y + sp.vy * age)
+			sp.halo.Size = UDim2.fromOffset(sz * 3.2, sz * 3.2)
+			-- Aparece, brilla y se apaga; además titila un poco (parpadeo).
+			local twinkle = 0.82 + 0.18 * math.sin(now * 12 + sp.phase)
+			local vis = math.sin(t * math.pi) * appear * twinkle
+			sp.dot.BackgroundTransparency = 1 - vis
+			sp.halo.BackgroundTransparency = 1 - 0.34 * vis
 		end
 
 		-- Bocanadas de niebla.
