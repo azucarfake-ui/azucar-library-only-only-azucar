@@ -1,28 +1,33 @@
 --[[
-	AzucarLegit  v1.3.0
+	AzucarLegit  v1.3.1
 	====================
 	(Antes: AzucarSlideUI / AzucarHackerUI)
+
+	CAMBIOS DE ESTA VERSIÓN (v1.3.1):
+	  1. La tarjeta que se abre al tocar una pestaña ahora es
+	     semi-transparente (0.2), igual que los Botones, Toggles y
+	     Sliders de adentro.
+	  2. La pestaña abierta MANTIENE el rojo hasta que cambies de
+	     pestaña o la cierres. Antes el hover (mouse encima / mouse
+	     afuera) le pisaba el color y volvía a negro aunque la tarjeta
+	     siguiera abierta; ahora el hover respeta si la pestaña está
+	     abierta.
 
 	IMPORTANTE: la lógica interna de cada control (CreateButton,
 	CreateToggle, CreateSlider, CreateDropdown, CreateInput,
 	CreateKeybind, CreateLabel, CreateSection, CreateDivider,
-	CreateStat) es EXACTAMENTE la misma de siempre — no se tocó ni una
-	línea de esa parte. Lo único que cambia acá es la VENTANA y las
-	PESTAÑAS (CreateWindow / CreateTab): cómo se ven y cómo se abren,
-	nada de cómo funcionan tus Callbacks/Flags.
+	CreateStat) es EXACTAMENTE la misma de siempre — solo cambió la
+	transparencia de fondo de Botón, Toggle y Slider. Tus
+	Callbacks/Flags funcionan igual.
 
-	Concepto de pestaña (v1.4): una línea angosta pegada a la
-	izquierda, con el nombre siempre visible. Al tocarla NO se estira
-	— en vez de eso, aparece una tarjeta aparte de esquinas redondas,
-	cerca de las pestañas pero sin pegarse, centrada verticalmente en
-	la pantalla, con las lógicas (sliders/toggles/etc.) adentro. Solo
-	una tarjeta puede estar abierta a la vez; tocar otra pestaña cierra
-	la anterior. Si hay muchas pestañas y una queda fuera de la
-	pantalla, la columna de la izquierda tiene scroll para bajar y
-	encontrarla. Arriba, la hora exacta de tu reloj (la pone tu PC), y
-	la ventana se para por encima de la barra superior de Roblox (más
-	arriba en la pantalla). Tema: negro muy oscuro con rojo vivo como
-	color de acento.
+	Concepto de pestaña: una línea angosta pegada a la izquierda, con
+	el nombre siempre visible. Al tocarla NO se estira — en vez de
+	eso, aparece una tarjeta aparte de esquinas redondas, cerca de las
+	pestañas pero sin pegarse, centrada verticalmente en la pantalla,
+	con las lógicas (sliders/toggles/etc.) adentro. Solo una tarjeta
+	puede estar abierta a la vez; tocar otra pestaña cierra la
+	anterior. Arriba, la hora exacta de tu reloj (la pone tu PC).
+	Tema: negro muy oscuro con rojo vivo como color de acento.
 
 	Uso (idéntico a antes):
 
@@ -41,7 +46,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local UI = {}
 
-UI.Version    = "1.3.0"
+UI.Version    = "1.3.1"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -571,13 +576,16 @@ function UI:CreateTab(config)
 		Parent = Pill,
 	})
 
-	hoverField(Pill, Theme.Line)
+	-- (El hover de la pestaña se conecta MÁS ABAJO, después de crear
+	-- `Tab`, para que pueda respetar si la pestaña está abierta. Antes
+	-- se usaba hoverField(Pill, Theme.Line) acá, y ese hover le pisaba
+	-- el rojo a la pestaña abierta cada vez que el mouse entraba o
+	-- salía.)
 
 	-- ---------------- La ventana flotante con las lógicas: tarjeta
 	-- redondeada aparte, cerca de las pestañas pero sin pegarse,
-	-- centrada verticalmente, más grande. Esta sí queda opaca (sólida)
-	-- — la transparencia es solo para las pestañas de la izquierda
-	-- ----------------
+	-- centrada verticalmente, más grande. Semi-transparente (0.2),
+	-- igual que los Botones, Toggles y Sliders de adentro. ----------------
 	local PANEL_W, PANEL_H, PANEL_X = self.PANEL_W, self.PANEL_H, self.PANEL_X
 
 	local Panel = new("Frame", {
@@ -585,7 +593,7 @@ function UI:CreateTab(config)
 		Size = UDim2.new(0, PANEL_W, 0, PANEL_H),
 		Position = UDim2.new(0, PANEL_X, 0.5, -PANEL_H / 2),
 		BackgroundColor3 = Theme.Field,
-		BackgroundTransparency = 0,
+		BackgroundTransparency = 0.2,
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
 		Visible = false,
@@ -655,33 +663,59 @@ function UI:CreateTab(config)
 		_rowCount = 0,
 	}, UI)
 
+	-- ---------------- Color de la pestaña (rojo persistente) ----------------
+	-- UNA sola función decide cómo se ve la línea según su estado:
+	--   · abierta  → rojo, y se queda rojo pase lo que pase con el mouse
+	--   · cerrada  → negro (o un poco más claro si el mouse está encima)
+	-- Se usa tween sobre las MISMAS propiedades, así un tween de hover
+	-- que todavía esté corriendo nunca le pisa el rojo al terminar.
+	local hovering = false
+
+	local function paintPill()
+		if Tab._isOpen then
+			tween(Pill, { BackgroundColor3 = Theme.Active, BackgroundTransparency = 0.35 }, 0.15)
+		else
+			tween(Pill, {
+				BackgroundColor3 = hovering and Theme.LineOpen or Theme.Line,
+				BackgroundTransparency = 0.2,
+			}, 0.15)
+		end
+	end
+	Tab._paint = paintPill
+
+	Pill.MouseEnter:Connect(function()
+		hovering = true
+		paintPill()
+	end)
+	Pill.MouseLeave:Connect(function()
+		hovering = false
+		paintPill()
+	end)
+
 	-- Abre esta tarjeta y cierra la de cualquier otra pestaña que haya
 	-- quedado abierta (solo una ventana de lógicas a la vez). La
-	-- pestaña activa se pone totalmente roja (semi-transparente) y
-	-- las demás vuelven a negro semi-transparente.
+	-- pestaña activa se pone roja y se queda así hasta que cambies de
+	-- pestaña o la cierres; las demás vuelven a negro.
 	local function setOpen(open)
 		if open then
 			for _, other in ipairs(self._tabs) do
 				if other ~= Tab and other._isOpen then
 					other._isOpen = false
 					other.Panel.Visible = false
-					other.Pill.BackgroundColor3 = Theme.Line
-					other.Pill.BackgroundTransparency = 0.2
+					if other._paint then other._paint() end
 					tween(other.Arrow, { Rotation = 0 }, 0.15)
 				end
 			end
 
 			Tab._isOpen = true
-			Pill.BackgroundColor3 = Theme.Active
-			Pill.BackgroundTransparency = 0.35
+			paintPill()
 			tween(Arrow, { Rotation = 180 }, 0.15)
 			Panel.Visible = true
 			PanelScale.Scale = 0.9
 			tween(PanelScale, { Scale = 1 }, 0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 		else
 			Tab._isOpen = false
-			Pill.BackgroundColor3 = Theme.Line
-			Pill.BackgroundTransparency = 0.2
+			paintPill()
 			tween(Arrow, { Rotation = 0 }, 0.15)
 			Panel.Visible = false
 		end
@@ -708,7 +742,8 @@ function UI:CreateTab(config)
 end
 
 -- ============================================================
--- 	A PARTIR DE ACÁ: TODO IGUAL A AzucarSlideUI v1.0.0, SIN CAMBIOS.
+-- 	A PARTIR DE ACÁ: TODO IGUAL A AzucarSlideUI v1.0.0, SIN CAMBIOS
+-- 	(salvo la transparencia de fondo de Botón, Toggle y Slider: 0.2).
 -- ============================================================
 
 -- ============================================================
@@ -730,7 +765,7 @@ function UI:CreateButton(config)
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		AutoButtonColor = false,
 		BackgroundColor3 = Theme.Field,
-		BackgroundTransparency = 0.4,
+		BackgroundTransparency = 0.2,
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, 32),
 		LayoutOrder = nextOrder(owner),
@@ -779,7 +814,7 @@ function UI:CreateToggle(config)
 	local Row = new("Frame", {
 		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundColor3 = Theme.Field,
-		BackgroundTransparency = 0.4,
+		BackgroundTransparency = 0.2,
 		BorderSizePixel = 0,
 		LayoutOrder = nextOrder(owner),
 		Parent = list,
@@ -876,7 +911,7 @@ function UI:CreateSlider(config)
 	local Row = new("Frame", {
 		Size = UDim2.new(1, 0, 0, 46),
 		BackgroundColor3 = Theme.Field,
-		BackgroundTransparency = 0.4,
+		BackgroundTransparency = 0.2,
 		BorderSizePixel = 0,
 		LayoutOrder = nextOrder(owner),
 		Parent = list,
