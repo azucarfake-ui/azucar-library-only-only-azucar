@@ -6,22 +6,23 @@
 	IMPORTANTE: la lógica interna de cada control (CreateButton,
 	CreateToggle, CreateSlider, CreateDropdown, CreateInput,
 	CreateKeybind, CreateLabel, CreateSection, CreateDivider,
-	CreateStat) es EXACTAMENTE la misma que en AzucarSlideUI v1.0.0 —
-	no se tocó ni una línea de esa parte. Lo único que cambia acá es la
-	VENTANA y las PESTAÑAS (CreateWindow / CreateTab): cómo se ven y
-	cómo se abren, nada de cómo funcionan tus Callbacks/Flags.
+	CreateStat) es EXACTAMENTE la misma de siempre — no se tocó ni una
+	línea de esa parte. Lo único que cambia acá es la VENTANA y las
+	PESTAÑAS (CreateWindow / CreateTab): cómo se ven y cómo se abren,
+	nada de cómo funcionan tus Callbacks/Flags.
 
-	Concepto de pestaña: una línea-píldora angosta pegada a la
-	izquierda. Al tocarla pasa en DOS tiempos:
-		1) la línea se ALARGA hacia la derecha hasta ocupar todo el
-		   panel.
-		2) recién ahí, lo que se alargó se DESLIZA hacia abajo
-		   mostrando sus controles.
-	Las demás líneas se CORREN hacia abajo para no quedar tapadas ni
-	superpuestas. Si hay muchas y una queda fuera de la pantalla, hay
-	scroll para bajar y encontrarla. Arriba, la hora exacta de tu reloj
-	(la pone tu PC), y la ventana se para por encima de la barra
-	superior de Roblox (más arriba en la pantalla).
+	Concepto de pestaña (v1.4): una línea angosta pegada a la
+	izquierda, con el nombre siempre visible. Al tocarla NO se estira
+	— en vez de eso, aparece una tarjeta aparte de esquinas redondas,
+	cerca de las pestañas pero sin pegarse, centrada verticalmente en
+	la pantalla, con las lógicas (sliders/toggles/etc.) adentro. Solo
+	una tarjeta puede estar abierta a la vez; tocar otra pestaña cierra
+	la anterior. Si hay muchas pestañas y una queda fuera de la
+	pantalla, la columna de la izquierda tiene scroll para bajar y
+	encontrarla. Arriba, la hora exacta de tu reloj (la pone tu PC), y
+	la ventana se para por encima de la barra superior de Roblox (más
+	arriba en la pantalla). Tema: negro muy oscuro con rojo vivo como
+	color de acento.
 
 	Uso (idéntico a antes):
 
@@ -106,23 +107,23 @@ end
 -- 	TEMA  (idéntico a AzucarSlideUI v1.0.0)
 -- ============================================================
 local Theme = {
-	Background = Color3.fromRGB(14, 14, 17),
-	Header     = Color3.fromRGB(19, 19, 23),
-	Line       = Color3.fromRGB(17, 17, 20),
-	LineOpen   = Color3.fromRGB(26, 26, 31),
-	Field      = Color3.fromRGB(30, 30, 36),
-	Border     = Color3.fromRGB(44, 44, 51),
-	Text       = Color3.fromRGB(238, 238, 242),
-	TextDim    = Color3.fromRGB(140, 140, 150),
-	Active     = Color3.fromRGB(226, 52, 52),
-	ActiveDim  = Color3.fromRGB(152, 32, 32),
+	Background = Color3.fromRGB(5, 5, 7),
+	Header     = Color3.fromRGB(9, 9, 11),
+	Line       = Color3.fromRGB(12, 12, 14),
+	LineOpen   = Color3.fromRGB(20, 20, 24),
+	Field      = Color3.fromRGB(11, 11, 13),
+	Border     = Color3.fromRGB(28, 28, 32),
+	Text       = Color3.fromRGB(240, 240, 245),
+	TextDim    = Color3.fromRGB(130, 130, 140),
+	Active     = Color3.fromRGB(255, 35, 55),
+	ActiveDim  = Color3.fromRGB(190, 20, 40),
 	Font       = Enum.Font.Code,
 	FontBold   = Enum.Font.Code,
 }
 UI.Theme = Theme
 
 local Palettes = {
-	Rojo   = { Active = Color3.fromRGB(226, 52, 52),  ActiveDim = Color3.fromRGB(152, 32, 32) },
+	Rojo   = { Active = Color3.fromRGB(255, 35, 55),  ActiveDim = Color3.fromRGB(190, 20, 40) },
 	Azul   = { Active = Color3.fromRGB(48, 132, 232),  ActiveDim = Color3.fromRGB(28, 84, 160) },
 	Verde  = { Active = Color3.fromRGB(52, 199, 105),  ActiveDim = Color3.fromRGB(30, 132, 70) },
 	Blanco = { Active = Color3.fromRGB(226, 226, 232), ActiveDim = Color3.fromRGB(150, 150, 158) },
@@ -327,12 +328,21 @@ end
 function UI:CreateWindow(config)
 	config = config or {}
 
-	local title  = config.Title or config.Name or "Azúcar Hub"
-	local LIST_W = config.Width or 460 -- más ancho por defecto: el salto línea→panel se siente mucho más largo
-	local HEADER_H = 40
-	local TOP_Y = config.TopOffset or 0
+	local title      = config.Title or config.Name or "Azúcar Hub"
+	local SIDEBAR_W  = config.Width or config.SidebarWidth or 150
+	local HEADER_H   = 46
+	local TOP_Y      = config.TopOffset or 0
 	local BOTTOM_MARGIN = config.BottomMargin or 0
-	local TAB_RADIUS = 14
+	local RADIUS     = 14
+
+	-- La ventana con las lógicas ya NO es la línea estirada: es una
+	-- tarjeta aparte, con esquinas redondas, que aparece cerca de las
+	-- pestañas (ni pegada, ni al otro extremo de la pantalla) y
+	-- centrada verticalmente.
+	local PANEL_W   = config.PanelWidth or 360
+	local PANEL_H   = config.PanelHeight or 380
+	local PANEL_GAP = config.PanelGap or 30
+	local PANEL_X   = SIDEBAR_W + PANEL_GAP
 
 	-- Por defecto la ventana se para POR ENCIMA de la barra superior de
 	-- Roblox (más arriba en la pantalla). Si en algún juego te tapa
@@ -360,37 +370,26 @@ function UI:CreateWindow(config)
 		Parent = ScreenGui,
 	})
 
-	-- ---------------- Cabecera: título + reloj ----------------
+	-- ---------------- Cabecera: título + reloj (apilados, angosta) ----------------
 	local Header = new("Frame", {
 		Name = "Header",
-		Size = UDim2.new(0, LIST_W, 0, HEADER_H),
+		Size = UDim2.new(0, SIDEBAR_W, 0, HEADER_H),
 		Position = UDim2.new(0, 0, 0, TOP_Y),
 		BackgroundColor3 = Theme.Header,
 		BorderSizePixel = 0,
 		Parent = Root,
-	}, { corner(TAB_RADIUS), stroke(Theme.Border, 1) })
-
-	local AccentBar = new("Frame", {
-		Size = UDim2.new(0, 3, 0, 20),
-		Position = UDim2.new(0, 10, 0.5, -10),
-		BackgroundColor3 = Theme.Active,
-		BorderSizePixel = 0,
-		Parent = Header,
-	}, { corner(2) })
-	onAccent(function()
-		if AccentBar.Parent then AccentBar.BackgroundColor3 = Theme.Active end
-	end)
+	}, { corner(RADIUS), stroke(Theme.Border, 1) })
 
 	local TitleLabel = new("TextLabel", {
 		Text = title,
 		Font = Theme.FontBold,
-		TextSize = 14,
+		TextSize = 13,
 		TextColor3 = Theme.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 18, 0, 0),
-		Size = UDim2.new(0.5, -18, 1, 0),
+		Position = UDim2.new(0, 12, 0, 4),
+		Size = UDim2.new(1, -20, 0, 18),
 		Parent = Header,
 	})
 
@@ -400,12 +399,12 @@ function UI:CreateWindow(config)
 		Name = "Clock",
 		Text = os.date("%H:%M:%S"),
 		Font = Theme.FontBold,
-		TextSize = 14,
+		TextSize = 13,
 		TextColor3 = Theme.Active,
-		TextXAlignment = Enum.TextXAlignment.Right,
+		TextXAlignment = Enum.TextXAlignment.Left,
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0.5, 0, 0, 0),
-		Size = UDim2.new(0.5, -12, 1, 0),
+		Position = UDim2.new(0, 12, 0, 22),
+		Size = UDim2.new(1, -20, 0, 18),
 		Parent = Header,
 	})
 	onAccent(function()
@@ -422,7 +421,7 @@ function UI:CreateWindow(config)
 	-- ---------------- Lista de pestañas (las "líneas") ----------------
 	local SlideList = new("ScrollingFrame", {
 		Name = "SlideList",
-		Size = UDim2.new(0, LIST_W, 1, -(TOP_Y + HEADER_H + 8 + BOTTOM_MARGIN)),
+		Size = UDim2.new(0, SIDEBAR_W, 1, -(TOP_Y + HEADER_H + 8 + BOTTOM_MARGIN)),
 		Position = UDim2.new(0, 0, 0, TOP_Y + HEADER_H + 8),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
@@ -447,11 +446,12 @@ function UI:CreateWindow(config)
 		TextColor3 = Theme.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
+		TextWrapped = true,
 		BackgroundColor3 = Theme.Line,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 60),
+		Size = UDim2.new(1, 0, 0, 70),
 		Parent = SlideList,
-	}, { corner(TAB_RADIUS), stroke(Theme.Border, 1), pad(10) })
+	}, { corner(RADIUS), stroke(Theme.Border, 1), pad(10) })
 
 	local Window = setmetatable({
 		ScreenGui  = ScreenGui,
@@ -461,11 +461,15 @@ function UI:CreateWindow(config)
 		ClockLabel = ClockLabel,
 		SlideList  = SlideList,
 		EmptyHint  = EmptyHint,
-		LIST_W     = LIST_W,
+		SIDEBAR_W  = SIDEBAR_W,
+		LIST_W     = SIDEBAR_W, -- alias por compatibilidad
 		HEADER_H   = HEADER_H,
 		TOP_Y      = TOP_Y,
 		BOTTOM_MARGIN = BOTTOM_MARGIN,
-		TAB_RADIUS = TAB_RADIUS,
+		TAB_RADIUS = RADIUS,
+		PANEL_W    = PANEL_W,
+		PANEL_H    = PANEL_H,
+		PANEL_X    = PANEL_X,
 		_tabs        = {},
 		_connections = {},
 		_visible     = true,
@@ -531,48 +535,27 @@ function UI:CreateTab(config)
 		self.EmptyHint = nil
 	end
 
-	-- Envoltorio: línea + cuerpo desplegable, uno debajo del otro.
-	-- Item mide con AutomaticSize.Y (su alto real = línea + cuerpo
-	-- abierto), así el UIListLayout de SlideList corre a las demás
-	-- pestañas hacia abajo en vivo mientras se anima — nunca se pisan.
-	local Item = new("Frame", {
+	-- ---------------- La "línea": ahora ancha y fija, el nombre se ve
+	-- siempre completo (antes quedaba recortado y solo se veía la
+	-- flechita) ----------------
+	local Pill = new("TextButton", {
 		Name = name,
-		Size = UDim2.new(1, 0, 0, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundTransparency = 1,
-		LayoutOrder = #self._tabs + 1,
-		Parent = self.SlideList,
-	}, {
-		new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }),
-	})
-
-	local LineHeight = 42
-
-	-- Ancho "cerrado": una línea angosta y fija, pegada a la izquierda
-	-- (ya NO depende del largo del texto) — así el salto a "abierto"
-	-- se siente mucho más brusco y notorio.
-	local collapsedWidth = config.CollapsedWidth or 46
-
-	local HeaderRow = new("TextButton", {
-		Name = "Line",
 		Text = "",
 		AutoButtonColor = false,
 		BackgroundColor3 = Theme.Line,
 		BorderSizePixel = 0,
-		ClipsDescendants = true,
-		Size = UDim2.new(0, collapsedWidth, 0, LineHeight),
-		LayoutOrder = 1,
-		Parent = Item,
+		Size = UDim2.new(1, 0, 0, 40),
+		LayoutOrder = #self._tabs + 1,
+		Parent = self.SlideList,
 	}, { corner(radius), stroke(Theme.Border, 1) })
 
 	local Mark = new("Frame", {
 		Size = UDim2.new(0, 3, 0, 20),
-		Position = UDim2.new(0, 10, 0.5, -10),
+		Position = UDim2.new(0, 8, 0.5, -10),
 		BackgroundColor3 = Theme.Active,
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		ZIndex = 3,
-		Parent = HeaderRow,
+		Parent = Pill,
 	}, { corner(2) })
 	onAccent(function()
 		if Mark.Parent then Mark.BackgroundColor3 = Theme.Active end
@@ -586,138 +569,143 @@ function UI:CreateTab(config)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 22, 0, 0),
-		Size = UDim2.new(1, -48, 1, 0),
-		ZIndex = 3,
-		Parent = HeaderRow,
+		Position = UDim2.new(0, 18, 0, 0),
+		Size = UDim2.new(1, -26, 1, 0),
+		Parent = Pill,
 	})
 
-	-- Flechita: apunta hacia abajo cuando está desplegada.
-	local Arrow = new("TextLabel", {
-		Text = "v",
-		Font = Theme.FontBold,
-		TextSize = 12,
-		TextColor3 = Theme.TextDim,
-		Rotation = -90,
-		BackgroundTransparency = 1,
-		Position = UDim2.new(1, -28, 0, 0),
-		Size = UDim2.new(0, 18, 1, 0),
-		ZIndex = 3,
-		Parent = HeaderRow,
-	})
+	hoverField(Pill, Theme.Line)
 
-	-- Cuerpo desplegable: arranca en 0 de alto y recortado, así no se ve
-	-- nada de su contenido hasta que se abre la línea.
-	local Body = new("Frame", {
-		Name = "Body",
-		Size = UDim2.new(1, 0, 0, 0),
-		BackgroundColor3 = Theme.Line,
+	-- ---------------- La ventana flotante con las lógicas: tarjeta
+	-- redondeada aparte, cerca de las pestañas pero sin pegarse, y
+	-- centrada verticalmente en la pantalla ----------------
+	local PANEL_W, PANEL_H, PANEL_X = self.PANEL_W, self.PANEL_H, self.PANEL_X
+
+	local Panel = new("Frame", {
+		Name = name .. "_Panel",
+		Size = UDim2.new(0, PANEL_W, 0, PANEL_H),
+		Position = UDim2.new(0, PANEL_X, 0.5, -PANEL_H / 2),
+		BackgroundColor3 = Theme.Field,
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
-		LayoutOrder = 2,
-		Parent = Item,
-	}, { corner(radius) })
+		Visible = false,
+		Parent = self.Root,
+	}, { corner(20), stroke(Theme.Border, 1) })
+
+	local PanelScale = new("UIScale", { Scale = 0.9, Parent = Panel })
+
+	local PanelHeader = new("Frame", {
+		Size = UDim2.new(1, 0, 0, 42),
+		BackgroundTransparency = 1,
+		Parent = Panel,
+	})
+
+	new("TextLabel", {
+		Text = name,
+		Font = Theme.FontBold,
+		TextSize = 15,
+		TextColor3 = Theme.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 16, 0, 0),
+		Size = UDim2.new(1, -56, 1, 0),
+		Parent = PanelHeader,
+	})
+
+	local CloseBtn = new("TextButton", {
+		Text = "×",
+		Font = Theme.FontBold,
+		TextSize = 18,
+		TextColor3 = Theme.TextDim,
+		AutoButtonColor = false,
+		BackgroundTransparency = 1,
+		Position = UDim2.new(1, -38, 0, 0),
+		Size = UDim2.new(0, 26, 1, 0),
+		Parent = PanelHeader,
+	})
+	CloseBtn.MouseEnter:Connect(function() tween(CloseBtn, { TextColor3 = Theme.Active }) end)
+	CloseBtn.MouseLeave:Connect(function() tween(CloseBtn, { TextColor3 = Theme.TextDim }) end)
+
+	new("Frame", {
+		Position = UDim2.new(0, 14, 0, 42),
+		Size = UDim2.new(1, -28, 0, 1),
+		BackgroundColor3 = Theme.Border,
+		BorderSizePixel = 0,
+		Parent = Panel,
+	})
+
+	local PanelScroll = new("ScrollingFrame", {
+		Position = UDim2.new(0, 0, 0, 48),
+		Size = UDim2.new(1, 0, 1, -48),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 3,
+		ScrollBarImageColor3 = Theme.Active,
+		CanvasSize = UDim2.new(0, 0, 0, 0),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		Parent = Panel,
+	})
 
 	local List = new("Frame", {
 		Name = "List",
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
-		Parent = Body,
+		Parent = PanelScroll,
 	}, {
-		new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }),
-		pad(0, 8, 10, 12, 10),
+		new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
+		pad(0, 10, 14, 14, 14),
 	})
 
 	local Tab = setmetatable({
-		Window    = self,
-		HeaderRow = HeaderRow,
-		Body      = Body,
-		List      = List,
-		Mark      = Mark,
-		Arrow     = Arrow,
-		Name      = name,
-		_isOpen   = false,
+		Window  = self,
+		Pill    = Pill,
+		Mark    = Mark,
+		Panel   = Panel,
+		List    = List,
+		Name    = name,
+		_isOpen = false,
 		_rowCount = 0,
 	}, UI)
 
-	hoverField(HeaderRow, Theme.Line)
-
-	onAccent(function()
-		if Mark.Parent and Tab._isOpen then
-			Mark.BackgroundColor3 = Theme.Active
-		end
-	end)
-
-	-- Animación en DOS tiempos, nunca junta:
-	--   1) La línea se ALARGA hacia la derecha (píldora angosta → todo
-	--      el ancho del panel, LIST_W). El salto es grande a propósito
-	--      (collapsedWidth chico y fijo vs. LIST_W completo) para que
-	--      se sienta como "se estira mucho".
-	--   2) Recién cuando ESO termina, el contenido se DESLIZA hacia
-	--      abajo mostrando los controles (la UI con las lógicas).
-	-- Cerrar es al revés: primero se recoge el contenido, y cuando
-	-- termina, la línea se encoge de nuevo a píldora.
-	local ANIM_TIME = 0.22
-
-	local function applyOpenVisual(open)
-		Tab._isOpen = open
-		Mark.BackgroundTransparency = open and 0 or 1
-		HeaderRow.BackgroundColor3 = open and Theme.LineOpen or Theme.Line
-		tween(Arrow, { Rotation = open and 0 or -90 }, ANIM_TIME)
-
-		if open then
-			-- Estirón marcado hacia la derecha (EasingStyle.Quint da una
-			-- sensación de "lanzazo" más larga que un Quad normal).
-			local widen = TweenService:Create(
-				HeaderRow,
-				TweenInfo.new(ANIM_TIME, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-				{ Size = UDim2.new(1, 0, 0, LineHeight) }
-			)
-			widen.Completed:Connect(function()
-				if not Tab._isOpen then return end
-				local targetHeight = List.AbsoluteSize.Y + 4
-				tween(Body, { Size = UDim2.new(1, 0, 0, targetHeight) }, ANIM_TIME + 0.08)
-			end)
-			widen:Play()
-		else
-			local collapseBody = TweenService:Create(
-				Body,
-				TweenInfo.new(ANIM_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
-				{ Size = UDim2.new(1, 0, 0, 0) }
-			)
-			collapseBody.Completed:Connect(function()
-				if Tab._isOpen then return end
-				tween(HeaderRow, { Size = UDim2.new(0, collapsedWidth, 0, LineHeight) }, ANIM_TIME)
-			end)
-			collapseBody:Play()
-		end
-	end
-
-	-- Expuesto para que setOpen de OTRA pestaña pueda cerrar esta sin
-	-- disparar de nuevo la lógica de "cerrar a las demás" (evita recursión).
-	function Tab:_setOpenInternal(open)
-		applyOpenVisual(open)
-	end
-
+	-- Abre esta tarjeta y cierra la de cualquier otra pestaña que haya
+	-- quedado abierta (solo una ventana de lógicas a la vez).
 	local function setOpen(open)
 		if open then
 			for _, other in ipairs(self._tabs) do
 				if other ~= Tab and other._isOpen then
-					other:_setOpenInternal(false)
+					other._isOpen = false
+					other.Panel.Visible = false
+					other.Pill.BackgroundColor3 = Theme.Line
+					other.Mark.BackgroundTransparency = 1
 				end
 			end
+
+			Tab._isOpen = true
+			Pill.BackgroundColor3 = Theme.LineOpen
+			Mark.BackgroundTransparency = 0
+			Panel.Visible = true
+			PanelScale.Scale = 0.9
+			tween(PanelScale, { Scale = 1 }, 0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+		else
+			Tab._isOpen = false
+			Pill.BackgroundColor3 = Theme.Line
+			Mark.BackgroundTransparency = 1
+			Panel.Visible = false
 		end
-		applyOpenVisual(open)
 	end
 
-	table.insert(self._connections, HeaderRow.MouseButton1Click:Connect(function()
+	table.insert(self._connections, Pill.MouseButton1Click:Connect(function()
 		setOpen(not Tab._isOpen)
+	end))
+	table.insert(self._connections, CloseBtn.MouseButton1Click:Connect(function()
+		setOpen(false)
 	end))
 
 	table.insert(self._tabs, Tab)
 
-	-- La primera pestaña que se crea arranca ya desplegada, para que no
+	-- La primera pestaña que se crea arranca ya abierta, para que no
 	-- entres a un panel completamente vacío la primera vez.
 	if #self._tabs == 1 then
 		task.defer(function()
