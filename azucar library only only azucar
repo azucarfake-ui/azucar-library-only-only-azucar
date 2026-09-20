@@ -328,7 +328,7 @@ function UI:CreateWindow(config)
 	config = config or {}
 
 	local title  = config.Title or config.Name or "Azúcar Hub"
-	local LIST_W = config.Width or 340
+	local LIST_W = config.Width or 460 -- más ancho por defecto: el salto línea→panel se siente mucho más largo
 	local HEADER_H = 40
 	local TOP_Y = config.TopOffset or 0
 	local BOTTOM_MARGIN = config.BottomMargin or 0
@@ -548,9 +548,10 @@ function UI:CreateTab(config)
 
 	local LineHeight = 42
 
-	-- Ancho "cerrado": píldora angosta que apenas envuelve el texto,
-	-- pegada a la izquierda — todavía no ocupa todo el panel.
-	local collapsedWidth = math.clamp(#name * 8 + 58, 96, self.LIST_W)
+	-- Ancho "cerrado": una línea angosta y fija, pegada a la izquierda
+	-- (ya NO depende del largo del texto) — así el salto a "abierto"
+	-- se siente mucho más brusco y notorio.
+	local collapsedWidth = config.CollapsedWidth or 46
 
 	local HeaderRow = new("TextButton", {
 		Name = "Line",
@@ -649,12 +650,15 @@ function UI:CreateTab(config)
 	end)
 
 	-- Animación en DOS tiempos, nunca junta:
-	--   1) La línea se ALARGA hacia la derecha (píldora → panel entero).
+	--   1) La línea se ALARGA hacia la derecha (píldora angosta → todo
+	--      el ancho del panel, LIST_W). El salto es grande a propósito
+	--      (collapsedWidth chico y fijo vs. LIST_W completo) para que
+	--      se sienta como "se estira mucho".
 	--   2) Recién cuando ESO termina, el contenido se DESLIZA hacia
-	--      abajo mostrando los controles.
+	--      abajo mostrando los controles (la UI con las lógicas).
 	-- Cerrar es al revés: primero se recoge el contenido, y cuando
 	-- termina, la línea se encoge de nuevo a píldora.
-	local ANIM_TIME = 0.16
+	local ANIM_TIME = 0.22
 
 	local function applyOpenVisual(open)
 		Tab._isOpen = open
@@ -663,9 +667,11 @@ function UI:CreateTab(config)
 		tween(Arrow, { Rotation = open and 0 or -90 }, ANIM_TIME)
 
 		if open then
+			-- Estirón marcado hacia la derecha (EasingStyle.Quint da una
+			-- sensación de "lanzazo" más larga que un Quad normal).
 			local widen = TweenService:Create(
 				HeaderRow,
-				TweenInfo.new(ANIM_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+				TweenInfo.new(ANIM_TIME, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
 				{ Size = UDim2.new(1, 0, 0, LineHeight) }
 			)
 			widen.Completed:Connect(function()
