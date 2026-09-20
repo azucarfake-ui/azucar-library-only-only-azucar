@@ -1,16 +1,35 @@
 --[[
-	AzucarLegit  v1.1.0
+	AzucarLegit  v1.2.0
 	====================
 	(Antes: AzucarSlideUI / AzucarHackerUI)
 
-	Concepto: pestañas como LÍNEAS separadas pegadas a la izquierda, con
-	bordes redondeados. Al tocar una, esa línea se ALARGA hacia abajo y
-	despliega sus controles (toggles, sliders, dropdowns...) — y las
-	demás líneas se CORREN hacia abajo para no quedar tapadas ni
+	Concepto: pestañas como LÍNEAS-píldora angostas pegadas a la
+	izquierda, con bordes redondeados. Al tocar una pasa en DOS tiempos:
+		1) la línea se ALARGA hacia la derecha hasta ocupar todo el
+		   panel.
+		2) recién ahí, lo que se alargó se DESLIZA hacia abajo
+		   mostrando sus controles (toggles, sliders, dropdowns...).
+	Las demás líneas se CORREN hacia abajo para no quedar tapadas ni
 	superpuestas (nunca se pisan entre sí). Si hay muchas pestañas y una
 	queda fuera de la pantalla, hay un scroll angosto para bajar y
 	encontrarla. Arriba, la hora exacta de tu reloj (la pone tu propia
-	PC, así que ya es la de tu país).
+	PC, así que ya es la de tu país), y por defecto la ventana entera se
+	para bien arriba, por encima de la barra superior de Roblox.
+
+	NOVEDAD DE ESTA VERSIÓN (v1.2.0):
+
+	- Antes cada línea ya arrancaba con el ancho completo del panel y
+	  solo se desplegaba hacia abajo. Ahora arranca como una píldora
+	  angosta (solo el ancho del texto) y la apertura tiene dos pasos
+	  bien diferenciados: primero se estira hacia la derecha, y cuando
+	  ESE movimiento termina, recién ahí baja el contenido. Al cerrar es
+	  al revés: primero sube/se recoge el contenido, y cuando termina,
+	  la línea se encoge de nuevo a píldora.
+	- La ventana ahora se para por defecto por ENCIMA de la barra
+	  superior de Roblox (más arriba en la pantalla). Si alguna vez
+	  tapa algo que no querés tapar, pasá
+	  UI:CreateWindow({ IgnoreGuiInset = false }) para volver a
+	  respetarla.
 
 	QUÉ CAMBIÓ RESPECTO A LA VERSIÓN ANTERIOR (AzucarSlideUI):
 
@@ -74,7 +93,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local UI = {}
 
-UI.Version    = "1.1.0"
+UI.Version    = "1.2.0"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -372,16 +391,25 @@ function UI:CreateWindow(config)
 
 	local title  = config.Title or config.Name or "Azúcar Hub"
 	local LIST_W = config.Width or 340
-	local HEADER_H = 44
+	local HEADER_H = 34
 	local TOP_Y = config.TopOffset or 0
 	local BOTTOM_MARGIN = config.BottomMargin or 0
+
+	-- Por defecto la UI se para POR ENCIMA de la barra superior de
+	-- Roblox (más arriba posible en la pantalla). Si alguna vez la
+	-- tapa algo que no querés tapar, pasá config.IgnoreGuiInset = false
+	-- para volver a respetar esa barra.
+	local ignoreInset = true
+	if config.IgnoreGuiInset == false then
+		ignoreInset = false
+	end
 
 	local ScreenGui = new("ScreenGui", {
 		Name = "AzucarLegit",
 		ResetOnSpawn = false,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		DisplayOrder = 999,
-		IgnoreGuiInset = false,
+		IgnoreGuiInset = ignoreInset,
 	})
 	local protectGui = rawget(_G, "protectgui") or rawget(_G, "protect_gui")
 	if typeof(protectGui) == "function" then pcall(protectGui, ScreenGui) end
@@ -459,8 +487,8 @@ function UI:CreateWindow(config)
 	-- franja cuadrada partida en pedazos.
 	local SlideList = new("ScrollingFrame", {
 		Name = "SlideList",
-		Size = UDim2.new(0, LIST_W, 1, -(TOP_Y + HEADER_H + 8 + BOTTOM_MARGIN)),
-		Position = UDim2.new(0, 0, 0, TOP_Y + HEADER_H + 8),
+		Size = UDim2.new(0, LIST_W, 1, -(TOP_Y + HEADER_H + 4 + BOTTOM_MARGIN)),
+		Position = UDim2.new(0, 0, 0, TOP_Y + HEADER_H + 4),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 3,
@@ -586,6 +614,10 @@ function UI:CreateTab(config)
 
 	local LineHeight = 42
 
+	-- Ancho "cerrado": una píldora angosta que apenas envuelve el texto,
+	-- pegada a la izquierda — NO ocupa todo el panel todavía.
+	local collapsedWidth = math.clamp(#name * 8 + 58, 96, LIST_W)
+
 	local HeaderRow = new("TextButton", {
 		Name = "Line",
 		Text = "",
@@ -593,7 +625,7 @@ function UI:CreateTab(config)
 		BackgroundColor3 = Theme.Line,
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
-		Size = UDim2.new(1, 0, 0, LineHeight),
+		Size = UDim2.new(0, collapsedWidth, 0, LineHeight),
 		LayoutOrder = 1,
 		Parent = Item,
 	}, { corner(), stroke(Theme.Border, 1) })
@@ -604,6 +636,7 @@ function UI:CreateTab(config)
 		BackgroundColor3 = Theme.Active,
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
+		ZIndex = 3,
 		Parent = HeaderRow,
 	}, { corner("soft") })
 	onAccent(function()
@@ -620,6 +653,7 @@ function UI:CreateTab(config)
 		BackgroundTransparency = 1,
 		Position = UDim2.new(0, 22, 0, 0),
 		Size = UDim2.new(1, -48, 1, 0),
+		ZIndex = 3,
 		Parent = HeaderRow,
 	})
 
@@ -633,6 +667,7 @@ function UI:CreateTab(config)
 		BackgroundTransparency = 1,
 		Position = UDim2.new(1, -28, 0, 0),
 		Size = UDim2.new(0, 18, 1, 0),
+		ZIndex = 3,
 		Parent = HeaderRow,
 	})
 
@@ -682,18 +717,54 @@ function UI:CreateTab(config)
 		end
 	end)
 
+	-- Animación en DOS tiempos, nunca junta:
+	--   1) La línea se ALARGA hacia la derecha (de píldora angosta a
+	--      todo el ancho del panel).
+	--   2) Recién cuando ESO termina, lo que se alargó se DESLIZA hacia
+	--      abajo mostrando los controles.
+	-- Al cerrar es al revés: primero sube/se recoge el contenido de
+	-- abajo, y cuando termina, la línea se encoge de nuevo a píldora.
+	local ANIM_TIME = 0.16
+
 	local function applyOpenVisual(open)
 		Tab._isOpen = open
 		Mark.BackgroundTransparency = open and 0 or 1
 		HeaderRow.BackgroundColor3 = open and Theme.LineOpen or Theme.Line
-		tween(Arrow, { Rotation = open and 0 or -90 }, 0.18)
+		tween(Arrow, { Rotation = open and 0 or -90 }, ANIM_TIME)
 
 		local targetHeight = 0
 		if open then
 			-- +4 de aire entre la línea y el primer control.
 			targetHeight = List.AbsoluteSize.Y + 4
 		end
-		tween(Body, { Size = UDim2.new(1, 0, 0, targetHeight) }, 0.24)
+
+		if open then
+			-- Paso 1: alargar hacia la derecha.
+			local widen = TweenService:Create(
+				HeaderRow,
+				TweenInfo.new(ANIM_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+				{ Size = UDim2.new(1, 0, 0, LineHeight) }
+			)
+			widen.Completed:Connect(function()
+				-- Si mientras se alargaba ya la cerraron de nuevo, no
+				-- sigas desplegando hacia abajo.
+				if not Tab._isOpen then return end
+				tween(Body, { Size = UDim2.new(1, 0, 0, targetHeight) }, ANIM_TIME + 0.08)
+			end)
+			widen:Play()
+		else
+			-- Paso 1: recoger lo de abajo (deslizar hacia arriba).
+			local collapseBody = TweenService:Create(
+				Body,
+				TweenInfo.new(ANIM_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+				{ Size = UDim2.new(1, 0, 0, 0) }
+			)
+			collapseBody.Completed:Connect(function()
+				if Tab._isOpen then return end
+				tween(HeaderRow, { Size = UDim2.new(0, collapsedWidth, 0, LineHeight) }, ANIM_TIME)
+			end)
+			collapseBody:Play()
+		end
 	end
 
 	-- Expuesto para que setOpen de OTRA pestaña pueda cerrar esta sin
