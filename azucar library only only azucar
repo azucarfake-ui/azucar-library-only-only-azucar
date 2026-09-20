@@ -329,7 +329,7 @@ function UI:CreateWindow(config)
 	config = config or {}
 
 	local title      = config.Title or config.Name or "Azúcar Hub"
-	local SIDEBAR_W  = config.Width or config.SidebarWidth or 150
+	local SIDEBAR_W  = config.Width or config.SidebarWidth or 175
 	local HEADER_H   = 46
 	local TOP_Y      = config.TopOffset or 0
 	local BOTTOM_MARGIN = config.BottomMargin or 0
@@ -339,8 +339,8 @@ function UI:CreateWindow(config)
 	-- tarjeta aparte, con esquinas redondas, que aparece cerca de las
 	-- pestañas (ni pegada, ni al otro extremo de la pantalla) y
 	-- centrada verticalmente.
-	local PANEL_W   = config.PanelWidth or 360
-	local PANEL_H   = config.PanelHeight or 380
+	local PANEL_W   = config.PanelWidth or 460
+	local PANEL_H   = config.PanelHeight or 480
 	local PANEL_GAP = config.PanelGap or 30
 	local PANEL_X   = SIDEBAR_W + PANEL_GAP
 
@@ -535,50 +535,51 @@ function UI:CreateTab(config)
 		self.EmptyHint = nil
 	end
 
-	-- ---------------- La "línea": ahora ancha y fija, el nombre se ve
-	-- siempre completo (antes quedaba recortado y solo se veía la
-	-- flechita) ----------------
+	-- ---------------- La "línea": negro semi-transparente, con
+	-- flechita (">" que se da vuelta a "<" al abrir) y el nombre
+	-- siempre visible. Un poco más gordita y larga que antes. ----------------
 	local Pill = new("TextButton", {
 		Name = name,
 		Text = "",
 		AutoButtonColor = false,
 		BackgroundColor3 = Theme.Line,
+		BackgroundTransparency = 0.4,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 40),
+		Size = UDim2.new(1, 0, 0, 50),
 		LayoutOrder = #self._tabs + 1,
 		Parent = self.SlideList,
 	}, { corner(radius), stroke(Theme.Border, 1) })
 
-	local Mark = new("Frame", {
-		Size = UDim2.new(0, 3, 0, 20),
-		Position = UDim2.new(0, 8, 0.5, -10),
-		BackgroundColor3 = Theme.Active,
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		Parent = Pill,
-	}, { corner(2) })
-	onAccent(function()
-		if Mark.Parent then Mark.BackgroundColor3 = Theme.Active end
-	end)
-
 	local NameLabel = new("TextLabel", {
 		Text = name,
 		Font = Theme.FontBold,
-		TextSize = 13,
+		TextSize = 14,
 		TextColor3 = Theme.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 18, 0, 0),
-		Size = UDim2.new(1, -26, 1, 0),
+		Position = UDim2.new(0, 14, 0, 0),
+		Size = UDim2.new(1, -46, 1, 0),
+		Parent = Pill,
+	})
+
+	local Arrow = new("TextLabel", {
+		Text = ">",
+		Font = Theme.FontBold,
+		TextSize = 16,
+		TextColor3 = Theme.TextDim,
+		BackgroundTransparency = 1,
+		Position = UDim2.new(1, -28, 0, 0),
+		Size = UDim2.new(0, 20, 1, 0),
 		Parent = Pill,
 	})
 
 	hoverField(Pill, Theme.Line)
 
 	-- ---------------- La ventana flotante con las lógicas: tarjeta
-	-- redondeada aparte, cerca de las pestañas pero sin pegarse, y
-	-- centrada verticalmente en la pantalla ----------------
+	-- redondeada aparte, cerca de las pestañas pero sin pegarse,
+	-- centrada verticalmente, más grande, y también negro
+	-- semi-transparente ----------------
 	local PANEL_W, PANEL_H, PANEL_X = self.PANEL_W, self.PANEL_H, self.PANEL_X
 
 	local Panel = new("Frame", {
@@ -586,6 +587,7 @@ function UI:CreateTab(config)
 		Size = UDim2.new(0, PANEL_W, 0, PANEL_H),
 		Position = UDim2.new(0, PANEL_X, 0.5, -PANEL_H / 2),
 		BackgroundColor3 = Theme.Field,
+		BackgroundTransparency = 0.35,
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
 		Visible = false,
@@ -609,23 +611,9 @@ function UI:CreateTab(config)
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		BackgroundTransparency = 1,
 		Position = UDim2.new(0, 16, 0, 0),
-		Size = UDim2.new(1, -56, 1, 0),
+		Size = UDim2.new(1, -24, 1, 0),
 		Parent = PanelHeader,
 	})
-
-	local CloseBtn = new("TextButton", {
-		Text = "×",
-		Font = Theme.FontBold,
-		TextSize = 18,
-		TextColor3 = Theme.TextDim,
-		AutoButtonColor = false,
-		BackgroundTransparency = 1,
-		Position = UDim2.new(1, -38, 0, 0),
-		Size = UDim2.new(0, 26, 1, 0),
-		Parent = PanelHeader,
-	})
-	CloseBtn.MouseEnter:Connect(function() tween(CloseBtn, { TextColor3 = Theme.Active }) end)
-	CloseBtn.MouseLeave:Connect(function() tween(CloseBtn, { TextColor3 = Theme.TextDim }) end)
 
 	new("Frame", {
 		Position = UDim2.new(0, 14, 0, 42),
@@ -661,7 +649,7 @@ function UI:CreateTab(config)
 	local Tab = setmetatable({
 		Window  = self,
 		Pill    = Pill,
-		Mark    = Mark,
+		Arrow   = Arrow,
 		Panel   = Panel,
 		List    = List,
 		Name    = name,
@@ -670,7 +658,9 @@ function UI:CreateTab(config)
 	}, UI)
 
 	-- Abre esta tarjeta y cierra la de cualquier otra pestaña que haya
-	-- quedado abierta (solo una ventana de lógicas a la vez).
+	-- quedado abierta (solo una ventana de lógicas a la vez). La
+	-- pestaña activa se pone totalmente roja (semi-transparente) y
+	-- las demás vuelven a negro semi-transparente.
 	local function setOpen(open)
 		if open then
 			for _, other in ipairs(self._tabs) do
@@ -678,29 +668,29 @@ function UI:CreateTab(config)
 					other._isOpen = false
 					other.Panel.Visible = false
 					other.Pill.BackgroundColor3 = Theme.Line
-					other.Mark.BackgroundTransparency = 1
+					tween(other.Arrow, { Rotation = 0 }, 0.15)
 				end
 			end
 
 			Tab._isOpen = true
-			Pill.BackgroundColor3 = Theme.LineOpen
-			Mark.BackgroundTransparency = 0
+			Pill.BackgroundColor3 = Theme.Active
+			tween(Arrow, { Rotation = 180 }, 0.15)
 			Panel.Visible = true
 			PanelScale.Scale = 0.9
 			tween(PanelScale, { Scale = 1 }, 0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 		else
 			Tab._isOpen = false
 			Pill.BackgroundColor3 = Theme.Line
-			Mark.BackgroundTransparency = 1
+			tween(Arrow, { Rotation = 0 }, 0.15)
 			Panel.Visible = false
 		end
 	end
+	onAccent(function()
+		if Pill.Parent and Tab._isOpen then Pill.BackgroundColor3 = Theme.Active end
+	end)
 
 	table.insert(self._connections, Pill.MouseButton1Click:Connect(function()
 		setOpen(not Tab._isOpen)
-	end))
-	table.insert(self._connections, CloseBtn.MouseButton1Click:Connect(function()
-		setOpen(false)
 	end))
 
 	table.insert(self._tabs, Tab)
