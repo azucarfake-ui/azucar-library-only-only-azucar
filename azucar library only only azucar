@@ -1,9 +1,9 @@
 --[[
-	AzucarLegit  v1.6.1
+	AzucarLegit  v1.7.0
 	====================
 	(Antes: AzucarSlideUI / AzucarHackerUI)
 
-	CAMBIOS RECIENTES (hasta v1.6.1):
+	CAMBIOS RECIENTES (hasta v1.7.0):
 	  1. TRANSPARENCIA REAL. La tarjeta que abre cada pestaña ahora es
 	     un CanvasGroup: fondo, botones, toggles, sliders, listas,
 	     inputs, keybinds y stats se dibujan juntos y el conjunto se
@@ -28,14 +28,17 @@
 	     destella; la perilla del slider crece al arrastrarla.
 	     ANIMATED_FX = false los deja todos quietos.
 	  7. EFECTOS MÁS LLAMATIVOS: cometa blanco-rojo que gira por el
-	     borde y el aura (neblina más suave, 20 anillos); chispas
+	     borde y el aura; chispas
 	     rojas que salen flotando; brillo que recorre el título;
 	     franja de luz que barre la pestaña abierta; barrita roja que
 	     se enciende al pasar el mouse por botones y toggles.
-	  8. MENOS ANILLOS: el aura de la tarjeta usa 5 anillos y la de
-	     las pestañas 3 (AURA_RINGS / PILL_AURA_RINGS). Y si volvés a
-	     ejecutar el script, la ventana vieja se destruye sola (antes
-	     quedaba debajo, con su pestaña abierta y su aura encendidas).
+	  8. Si volvés a ejecutar el script, la ventana vieja se destruye
+	     sola (antes quedaba debajo, con su pestaña abierta y su aura
+	     encendidas).
+	  9. LETRA CREEPSTER en toda la UI (UI_FONT y FONT_BOOST arriba del
+	     archivo). NIEBLA de verdad alrededor de la tarjeta: halo
+	     continuo sin anillos (AURA_LAYERS), zona más densa que gira y
+	     bocanadas de niebla que salen flotando (FOG_WISPS).
 
 	IMPORTANTE: la lógica interna de cada control (CreateButton,
 	CreateToggle, CreateSlider, CreateDropdown, CreateInput,
@@ -70,7 +73,7 @@ local RunService       = game:GetService("RunService")
 
 local UI = {}
 
-UI.Version    = "1.6.1"
+UI.Version    = "1.7.0"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -86,22 +89,31 @@ local PANEL_WIDTH_PX = 600
 -- ============================================================
 -- 	AURA ROJA Y DESENFOQUE — CAMBIÁ ESTOS NÚMEROS
 -- ============================================================
--- AURA: neblina roja difuminada alrededor de la tarjeta.
-local AURA_SIZE_PX      = 30    -- cuánto se extiende hacia afuera (0 = sin aura)
-local AURA_TRANSPARENCY = 0.45  -- en el borde: 0 = muy fuerte, 1 = invisible
-local AURA_RINGS        = 5     -- cuántos anillos forman el aura (menos = menos anillos)
+-- NIEBLA ROJA alrededor de la tarjeta: un halo suave que se va apagando hacia
+-- afuera (capas rellenas y semitransparentes apiladas, sin rayas), con una zona
+-- más densa que gira y bocanadas de niebla que salen flotando del borde.
+local AURA_SIZE_PX      = 46    -- cuánto se extiende hacia afuera (0 = sin niebla)
+local AURA_TRANSPARENCY = 0.35  -- densidad en el borde: 0 = muy densa, 1 = invisible
+local AURA_LAYERS       = 22    -- capas del halo (más = más suave)
+local FOG_WISPS         = 9     -- bocanadas de niebla que flotan hacia afuera (0 = ninguna)
 -- DESENFOQUE: mientras hay una pestaña abierta, el juego de atrás se ve
 -- borroso (se apaga solo al cerrarla o al ocultar la UI con K).
 local BLUR_SIZE = 16            -- 0 = sin desenfoque, 24 = fuerte
 -- AURITA DE LAS PESTAÑAS: halo chico y suave que se enciende al presionarlas.
-local PILL_AURA_SIZE_PX      = 8     -- cuánto se extiende (0 = sin aurita)
-local PILL_AURA_TRANSPARENCY = 0.62  -- 0 = fuerte, 1 = invisible (más alto = más sutil)
-local PILL_AURA_RINGS        = 3     -- anillos de la aurita de cada pestaña
+local PILL_AURA_SIZE_PX      = 10    -- cuánto se extiende (0 = sin aurita)
+local PILL_AURA_TRANSPARENCY = 0.55  -- 0 = fuerte, 1 = invisible (más alto = más sutil)
+local PILL_AURA_LAYERS       = 8     -- capas de la aurita de cada pestaña
 -- EFECTOS ANIMADOS: luz roja que da vueltas por el borde de la tarjeta y aura
 -- que "respira". true = con animación, false = todo quieto.
 local ANIMATED_FX = true
 -- CHISPAS: puntitos rojos que salen flotando desde el borde de la tarjeta abierta.
-local SPARKS_COUNT = 18         -- 0 = sin chispas
+local SPARKS_COUNT = 12         -- 0 = sin chispas
+
+-- LETRA: Creepster en toda la UI. FONT_BOOST le suma tamaño a todos los textos
+-- (Creepster se ve más chica que una letra normal). Para otra letra cambiá
+-- Enum.Font.Creepster por Enum.Font.Code, Enum.Font.GothamBold, etc.
+local UI_FONT    = Enum.Font.Creepster
+local FONT_BOOST = 2
 
 -- ============================================================
 -- 	RED DE SEGURIDAD: un Create... inexistente no mata el script
@@ -223,8 +235,8 @@ local Theme = {
 	TextDim    = Color3.fromRGB(130, 130, 140),
 	Active     = Color3.fromRGB(255, 35, 55),
 	ActiveDim  = Color3.fromRGB(190, 20, 40),
-	Font       = Enum.Font.Code,
-	FontBold   = Enum.Font.Code,
+	Font       = UI_FONT,
+	FontBold   = UI_FONT,
 	-- Transparencia de TODA la tarjeta que abre cada pestaña (fondo y
 	-- todos los controles de adentro, juntos). 0 = sólida, 1 = invisible.
 	Alpha      = 0.2,
@@ -525,7 +537,7 @@ function UI:CreateWindow(config)
 	local TitleLabel = new("TextLabel", {
 		Text = title,
 		Font = Theme.FontBold,
-		TextSize = 13,
+		TextSize = 13 + FONT_BOOST,
 		TextColor3 = Theme.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
@@ -541,7 +553,7 @@ function UI:CreateWindow(config)
 		Name = "Clock",
 		Text = os.date("%H:%M:%S"),
 		Font = Theme.FontBold,
-		TextSize = 13,
+		TextSize = 13 + FONT_BOOST,
 		TextColor3 = Theme.Active,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		BackgroundTransparency = 1,
@@ -602,7 +614,7 @@ function UI:CreateWindow(config)
 		Name = "EmptyHint",
 		Text = "Sin pestañas todavía.\nUsá Window:CreateTab({ Name = \"...\" }).",
 		Font = Theme.Font,
-		TextSize = 12,
+		TextSize = 12 + FONT_BOOST,
 		TextColor3 = Theme.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
@@ -810,6 +822,18 @@ function UI:CreateTab(config)
 	-- ---------------- La "línea": negro semi-transparente, con
 	-- flechita (">" que se da vuelta a "<" al abrir) y el nombre
 	-- siempre visible. Un poco más gordita y larga que antes. ----------------
+	-- La pestaña vive dentro de un envoltorio invisible: la lista la
+	-- ordena a él, y así la aurita puede dibujarse DETRÁS de la pestaña
+	-- (como hermana de ella) sin tapar el texto.
+	local Wrap = new("Frame", {
+		Name = name .. "_Wrap",
+		Size = UDim2.new(1, 0, 0, 50),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		LayoutOrder = #self._tabs + 1,
+		Parent = self.SlideList,
+	})
+
 	local Pill = new("TextButton", {
 		Name = name,
 		Text = "",
@@ -817,15 +841,15 @@ function UI:CreateTab(config)
 		BackgroundColor3 = Theme.Line,
 		BackgroundTransparency = 0.2,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 50),
-		LayoutOrder = #self._tabs + 1,
-		Parent = self.SlideList,
+		Size = UDim2.new(1, 0, 1, 0),
+		ZIndex = 1,
+		Parent = Wrap,
 	}, { corner(radius), stroke(Theme.Border, 1) })
 
 	local NameLabel = new("TextLabel", {
 		Text = name,
 		Font = Theme.FontBold,
-		TextSize = 14,
+		TextSize = 14 + FONT_BOOST,
 		TextColor3 = Theme.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
@@ -838,7 +862,7 @@ function UI:CreateTab(config)
 	local Arrow = new("TextLabel", {
 		Text = ">",
 		Font = Theme.FontBold,
-		TextSize = 16,
+		TextSize = 16 + FONT_BOOST,
 		TextColor3 = Theme.TextDim,
 		BackgroundTransparency = 1,
 		Position = UDim2.new(1, -28, 0, 0),
@@ -857,40 +881,39 @@ function UI:CreateTab(config)
 	-- transparentes) pero más chico y más sutil. Se enciende con un
 	-- destello corto al presionar y se queda tenue mientras la pestaña
 	-- está abierta; se apaga al cerrarla o al abrir otra.
-	local pillStrokes, pillTargets = {}, {}
+	local pillLayers = {}
+	local PILL_N = math.max(PILL_AURA_LAYERS, 1)
 	if PILL_AURA_SIZE_PX > 0 then
-		local RINGS = math.max(PILL_AURA_RINGS, 1)
-		local step = PILL_AURA_SIZE_PX / RINGS
-		for k = 0, RINGS - 1 do
+		local step = PILL_AURA_SIZE_PX / PILL_N
+		for k = 1, PILL_N do
 			local grow = k * step
-			local ring = new("Frame", {
+			table.insert(pillLayers, new("Frame", {
 				Name = "Aura",
 				Size = UDim2.new(1, grow * 2, 1, grow * 2),
 				Position = UDim2.new(0, -grow, 0, -grow),
-				BackgroundTransparency = 1,
+				BackgroundColor3 = Theme.Active,
+				BackgroundTransparency = 1, -- arranca apagada
 				BorderSizePixel = 0,
-				Parent = Pill,
-			}, { corner(radius + grow) })
-			local fade = RINGS > 1 and (k / (RINGS - 1)) or 0
-			local target = PILL_AURA_TRANSPARENCY + (1 - PILL_AURA_TRANSPARENCY) * fade
-			table.insert(pillTargets, target)
-			table.insert(pillStrokes, new("UIStroke", {
-				Color = Theme.Active,
-				Thickness = step * 1.6 + 1,
-				Transparency = 1, -- arranca apagada
-				Parent = ring,
-			}))
+				ZIndex = 0, -- detrás de la pestaña
+				Parent = Wrap,
+			}, { corner(radius + grow) }))
 		end
 	end
 	onAccent(function()
-		for _, st in ipairs(pillStrokes) do
-			if st.Parent then st.Color = Theme.Active end
+		for _, l in ipairs(pillLayers) do
+			if l.Parent then l.BackgroundColor3 = Theme.Active end
 		end
 	end)
 
+	-- Transparencia TOTAL en el borde -> transparencia de cada capa
+	-- (las capas se apilan, por eso se reparte con una raíz).
+	local function pillLayerT(total)
+		return math.clamp(total, 0, 1) ^ (1 / PILL_N)
+	end
+
 	-- Se guardan los tweens de la aurita para poder CANCELARLOS: así, al
 	-- cerrar la pestaña o abrir otra, ninguna animación vieja que siga
-	-- corriendo puede volver a encender los anillos.
+	-- corriendo puede volver a encenderla.
 	local pillTw = {}
 	local function stopPillTweens()
 		for i, tw in pairs(pillTw) do
@@ -901,23 +924,25 @@ function UI:CreateTab(config)
 
 	local function setPillAura(on)
 		stopPillTweens()
-		for i, st in ipairs(pillStrokes) do
+		for i, l in ipairs(pillLayers) do
 			if on then
-				local tw = TweenService:Create(st, TweenInfo.new(0.2), { Transparency = pillTargets[i] })
+				local tw = TweenService:Create(l, TweenInfo.new(0.25), { BackgroundTransparency = pillLayerT(PILL_AURA_TRANSPARENCY) })
 				pillTw[i] = tw
 				tw:Play()
 			else
-				st.Transparency = 1 -- se apaga al instante, sin dejar rastro
+				l.BackgroundTransparency = 1 -- se apaga al instante, sin dejar rastro
 			end
 		end
 	end
 
-	-- Destello al presionar: arranca más fuerte y se acomoda al nivel tenue.
+	-- Destello al presionar: arranca más densa y se acomoda al nivel tenue.
 	local function pulsePillAura(stayOn)
 		stopPillTweens()
-		for i, st in ipairs(pillStrokes) do
-			st.Transparency = math.max(pillTargets[i] - 0.28, 0)
-			local tw = TweenService:Create(st, TweenInfo.new(0.4), { Transparency = stayOn and pillTargets[i] or 1 })
+		for i, l in ipairs(pillLayers) do
+			l.BackgroundTransparency = pillLayerT(math.max(PILL_AURA_TRANSPARENCY - 0.3, 0.05))
+			local tw = TweenService:Create(l, TweenInfo.new(0.45), {
+				BackgroundTransparency = stayOn and pillLayerT(PILL_AURA_TRANSPARENCY) or 1,
+			})
 			pillTw[i] = tw
 			tw:Play()
 		end
@@ -980,13 +1005,10 @@ function UI:CreateTab(config)
 		new("UISizeConstraint", { MaxSize = Vector2.new(PANEL_MAX_W, math.huge) }),
 	})
 
-	-- ---------------- AURA ROJA (neblina difuminada) ----------------
-	-- Roblox no tiene "glow" nativo, así que se arma con varios anillos
-	-- redondeados, cada uno un poquito más grande y más transparente que
-	-- el anterior: el conjunto se ve como un halo rojo que se va
-	-- apagando hacia afuera. Vive DETRÁS de la tarjeta (ZIndex 0), es
-	-- un hermano de ella (no hijo, porque la tarjeta recorta lo que se
-	-- sale) y copia su tamaño, su aparición y su animación.
+	-- ---------------- NIEBLA ROJA alrededor de la tarjeta ----------------
+	-- Vive DETRÁS de la tarjeta (ZIndex 0), como hermana de ella (no
+	-- hija, porque la tarjeta recorta lo que se sale), y copia su
+	-- tamaño, su aparición y su animación.
 	local PanelStroke = Panel:FindFirstChildOfClass("UIStroke")
 	if PanelStroke then
 		PanelStroke.Color = Theme.Active
@@ -1005,30 +1027,46 @@ function UI:CreateTab(config)
 	})
 	local GlowScale = new("UIScale", { Scale = 0.9, Parent = Glow })
 
-	local glowStrokes, glowBase, glowGradients = {}, {}, {}
+	-- NIEBLA: capas RELLENAS, redondeadas y muy transparentes, apiladas de
+	-- la más chica (pegada a la tarjeta) a la más grande. Donde se
+	-- solapan muchas capas la niebla es densa y hacia afuera va quedando
+	-- menos: sale un degradado continuo, sin anillos ni rayas. Cada capa
+	-- lleva un UIGradient que gira, así hay una zona más densa que da
+	-- vueltas alrededor de la tarjeta, como niebla que se arremolina.
+	local glowLayers, glowGradients = {}, {}
 	if AURA_SIZE_PX > 0 then
-		local RINGS = math.max(AURA_RINGS, 1)
-		local step = AURA_SIZE_PX / RINGS
-		for k = 0, RINGS - 1 do
+		local N = math.max(AURA_LAYERS, 1)
+		local step = AURA_SIZE_PX / N
+		for k = 1, N do
 			local grow = k * step
-			local ring = new("Frame", {
+			local layer = new("Frame", {
 				Size = UDim2.new(1, grow * 2, 1, grow * 2),
 				Position = UDim2.new(0, -grow, 0, -grow),
-				BackgroundTransparency = 1,
+				BackgroundColor3 = Theme.Active,
+				BackgroundTransparency = 1, -- arranca apagada; la enciende Tab._fx
 				BorderSizePixel = 0,
 				Parent = Glow,
 			}, { corner(20 + grow) })
-			-- El anillo de adentro es el más fuerte; el de afuera casi invisible.
-			local fade = RINGS > 1 and (k / (RINGS - 1)) or 0
-			local base = AURA_TRANSPARENCY + (1 - AURA_TRANSPARENCY) * fade
-			table.insert(glowBase, base)
-			local st = new("UIStroke", {
-				Color = Theme.Active,
-				Thickness = step * 1.6 + 1, -- se solapan un poco para que no se vean como rayas
-				Transparency = base,
-				Parent = ring,
-			})
-			table.insert(glowStrokes, st)
+			table.insert(glowLayers, layer)
+			table.insert(glowGradients, new("UIGradient", {
+				Transparency = NumberSequence.new({
+					NumberSequenceKeypoint.new(0, 0),
+					NumberSequenceKeypoint.new(0.5, 0.72),
+					NumberSequenceKeypoint.new(1, 0),
+				}),
+				Parent = layer,
+			}))
+		end
+	end
+
+	-- Enciende/apaga toda la niebla de una vez. `strength`: 0 = apagada, 1 = normal.
+	local function applyGlow(strength)
+		local count = #glowLayers
+		if count == 0 then return end
+		local total = 1 - (1 - AURA_TRANSPARENCY) * strength -- transparencia total en el borde
+		local perLayer = math.clamp(total, 0, 1) ^ (1 / count)
+		for _, layer in ipairs(glowLayers) do
+			layer.BackgroundTransparency = perLayer
 		end
 	end
 
@@ -1113,12 +1151,70 @@ function UI:CreateTab(config)
 		sp.born = now - (stagger and math.random() * sp.life or 0)
 	end
 
+	-- ---------------- BOCANADAS DE NIEBLA ----------------
+	-- Manchas de niebla (cada una son 4 círculos apilados muy
+	-- transparentes: el centro queda más denso y el borde se desvanece)
+	-- que nacen en el borde de la tarjeta, se agrandan y se van flotando
+	-- hacia afuera mientras se disuelven.
+	local wisps = {}
+	for _ = 1, FOG_WISPS do
+		local root = new("Frame", {
+			Name = "Wisp",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Size = UDim2.fromOffset(40, 40),
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			Parent = Glow,
+		})
+		local blobs = {}
+		for j, frac in ipairs({ 1, 0.75, 0.5, 0.28 }) do
+			blobs[j] = new("Frame", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromScale(frac, frac),
+				BackgroundColor3 = Theme.Active,
+				BackgroundTransparency = 1,
+				BorderSizePixel = 0,
+				Parent = root,
+			}, { new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
+		end
+		table.insert(wisps, { root = root, blobs = blobs, born = nil, life = 4, x = 0, y = 0, vx = 0, vy = 0, size = 40 })
+	end
+	onAccent(function()
+		for _, w in ipairs(wisps) do
+			for _, b in ipairs(w.blobs) do
+				if b.Parent then b.BackgroundColor3 = Theme.Active end
+			end
+		end
+	end)
+
+	local function respawnWisp(w, now, stagger)
+		local W, H = Panel.Size.X.Offset, PANEL_H
+		local r = math.random() * (2 * W + 2 * H)
+		local nx, ny
+		if r < W then
+			w.x, w.y, nx, ny = r, 0, 0, -1
+		elseif r < 2 * W then
+			w.x, w.y, nx, ny = r - W, H, 0, 1
+		elseif r < 2 * W + H then
+			w.x, w.y, nx, ny = 0, r - 2 * W, -1, 0
+		else
+			w.x, w.y, nx, ny = W, r - 2 * W - H, 1, 0
+		end
+		local speed = 5 + math.random() * 11
+		w.vx = nx * speed + (ny ~= 0 and (math.random() - 0.5) * 8 or 0)
+		w.vy = ny * speed + (nx ~= 0 and (math.random() - 0.5) * 8 or 0) - 3 -- sube apenas, como humo
+		w.life = 3.6 + math.random() * 2.6
+		w.size = 34 + math.random() * 30
+		w.born = now - (stagger and math.random() * w.life or 0)
+	end
+
 	Panel:GetPropertyChangedSignal("Visible"):Connect(function()
 		Glow.Visible = Panel.Visible
 	end)
 	onAccent(function()
 		if not Glow.Parent then return end
-		for _, st in ipairs(glowStrokes) do st.Color = Theme.Active end
+		for _, layer in ipairs(glowLayers) do layer.BackgroundColor3 = Theme.Active end
 		if PanelStroke then PanelStroke.Color = Theme.Active end
 	end)
 
@@ -1154,7 +1250,7 @@ function UI:CreateTab(config)
 	local PanelTitleLabel = new("TextLabel", {
 		Text = name,
 		Font = Theme.FontBold,
-		TextSize = 15,
+		TextSize = 15 + FONT_BOOST,
 		TextColor3 = Theme.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
@@ -1256,15 +1352,15 @@ function UI:CreateTab(config)
 	-- de la ventana): el aura "respira" y la luz del borde gira.
 	Tab._appearAt = 0
 	Tab._fx = function(now)
-		if not ANIMATED_FX then return end
 		local appear = math.clamp((now - Tab._appearAt) / 0.35, 0, 1)
 
-		-- Aura que "respira".
-		local pulse = 0.5 + 0.5 * math.sin(now * 2.2)
-		local strength = (0.55 + 0.45 * pulse) * appear
-		for i, st in ipairs(glowStrokes) do
-			st.Transparency = 1 - (1 - glowBase[i]) * strength
+		-- Niebla: respira (un poco más o menos densa). Sin animación queda fija.
+		local strength = appear
+		if ANIMATED_FX then
+			strength = (0.6 + 0.4 * (0.5 + 0.5 * math.sin(now * 1.6))) * appear
 		end
+		applyGlow(strength)
+		if not ANIMATED_FX then return end
 
 		-- Luz cometa que gira por el borde y por el aura.
 		local rot = (now * 75) % 360
@@ -1288,6 +1384,24 @@ function UI:CreateTab(config)
 			sp.dot.Position = UDim2.fromOffset(sp.x + sp.vx * age, sp.y + sp.vy * age)
 			sp.dot.Size = UDim2.fromOffset(sz, sz)
 			sp.dot.BackgroundTransparency = 1 - 0.92 * math.sin(t * math.pi) * appear
+		end
+
+		-- Bocanadas de niebla.
+		for _, w in ipairs(wisps) do
+			if w.born == nil then
+				respawnWisp(w, now, true)
+			elseif now - w.born >= w.life then
+				respawnWisp(w, now, false)
+			end
+			local age = now - w.born
+			local t = math.clamp(age / w.life, 0, 1)
+			local sz = w.size * (0.7 + 0.9 * t) -- se agranda como el humo
+			w.root.Position = UDim2.fromOffset(w.x + w.vx * age, w.y + w.vy * age)
+			w.root.Size = UDim2.fromOffset(sz, sz)
+			local a = math.sin(t * math.pi) * 0.10 * appear -- densidad de cada círculo
+			for _, b in ipairs(w.blobs) do
+				b.BackgroundTransparency = 1 - a
+			end
 		end
 	end
 
@@ -1325,6 +1439,7 @@ function UI:CreateTab(config)
 			pulsePillAura(true)
 			Shine.Visible = true
 			for _, sp in ipairs(sparks) do sp.born = nil end -- las chispas arrancan de nuevo
+			for _, w in ipairs(wisps) do w.born = nil end -- y la niebla también
 			tween(Arrow, { Rotation = 180 }, 0.15)
 			fitPanel() -- reafirma el ancho cada vez que se abre
 			Panel.Visible = true
@@ -1389,7 +1504,7 @@ function UI:CreateButton(config)
 	local Btn = new("TextButton", {
 		Text = text,
 		Font = Theme.FontBold,
-		TextSize = 12,
+		TextSize = 12 + FONT_BOOST,
 		TextColor3 = Theme.Text,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		AutoButtonColor = false,
@@ -1454,7 +1569,7 @@ function UI:CreateToggle(config)
 	new("TextLabel", {
 		Text = config.Text or config.Name or "Opción",
 		Font = Theme.Font,
-		TextSize = 12,
+		TextSize = 12 + FONT_BOOST,
 		TextColor3 = Theme.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
@@ -1563,7 +1678,7 @@ function UI:CreateSlider(config)
 	new("TextLabel", {
 		Text = config.Text or config.Name or "Valor",
 		Font = Theme.Font,
-		TextSize = 12,
+		TextSize = 12 + FONT_BOOST,
 		TextColor3 = Theme.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
@@ -1575,7 +1690,7 @@ function UI:CreateSlider(config)
 	local ValueLabel = new("TextLabel", {
 		Text = show(value),
 		Font = Theme.FontBold,
-		TextSize = 12,
+		TextSize = 12 + FONT_BOOST,
 		TextColor3 = Theme.Active,
 		TextXAlignment = Enum.TextXAlignment.Right,
 		BackgroundTransparency = 1,
@@ -1714,7 +1829,7 @@ function UI:CreateDropdown(config)
 	new("TextLabel", {
 		Text = config.Text or config.Name or "Opciones",
 		Font = Theme.Font,
-		TextSize = 12,
+		TextSize = 12 + FONT_BOOST,
 		TextColor3 = Theme.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
@@ -1727,7 +1842,7 @@ function UI:CreateDropdown(config)
 	local SelectedLabel = new("TextLabel", {
 		Text = selected ~= nil and display(selected) or "-",
 		Font = Theme.FontBold,
-		TextSize = 12,
+		TextSize = 12 + FONT_BOOST,
 		TextColor3 = Theme.Active,
 		TextXAlignment = Enum.TextXAlignment.Right,
 		TextTruncate = Enum.TextTruncate.AtEnd,
@@ -1743,7 +1858,7 @@ function UI:CreateDropdown(config)
 	local Arrow = new("TextLabel", {
 		Text = "+",
 		Font = Theme.FontBold,
-		TextSize = 13,
+		TextSize = 13 + FONT_BOOST,
 		TextColor3 = Theme.TextDim,
 		BackgroundTransparency = 1,
 		Position = UDim2.new(1, -20, 0, 0),
@@ -1787,7 +1902,7 @@ function UI:CreateDropdown(config)
 			local OptionBtn = new("TextButton", {
 				Text = display(optionValue),
 				Font = Theme.Font,
-				TextSize = 11,
+				TextSize = 11 + FONT_BOOST,
 				TextColor3 = Theme.Text,
 				TextXAlignment = Enum.TextXAlignment.Left,
 				TextTruncate = Enum.TextTruncate.AtEnd,
@@ -1859,7 +1974,7 @@ function UI:CreateInput(config)
 	new("TextLabel", {
 		Text = config.Text or config.Name or "Texto",
 		Font = Theme.Font,
-		TextSize = 12,
+		TextSize = 12 + FONT_BOOST,
 		TextColor3 = Theme.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
@@ -1873,7 +1988,7 @@ function UI:CreateInput(config)
 		Text = tostring(config.Default or config.CurrentValue or ""),
 		PlaceholderText = config.PlaceholderText or config.Placeholder or "...",
 		Font = Theme.Font,
-		TextSize = 11,
+		TextSize = 11 + FONT_BOOST,
 		TextColor3 = Theme.Text,
 		PlaceholderColor3 = Theme.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -1937,7 +2052,7 @@ function UI:CreateKeybind(config)
 	new("TextLabel", {
 		Text = config.Text or config.Name or "Tecla",
 		Font = Theme.Font,
-		TextSize = 12,
+		TextSize = 12 + FONT_BOOST,
 		TextColor3 = Theme.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
@@ -1950,7 +2065,7 @@ function UI:CreateKeybind(config)
 	local KeyButton = new("TextButton", {
 		Text = currentKey.Name,
 		Font = Theme.FontBold,
-		TextSize = 11,
+		TextSize = 11 + FONT_BOOST,
 		TextColor3 = Theme.Text,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		AutoButtonColor = false,
@@ -2010,7 +2125,7 @@ function UI:CreateLabel(config)
 	local label = new("TextLabel", {
 		Text = tostring(text),
 		Font = Theme.Font,
-		TextSize = 12,
+		TextSize = 12 + FONT_BOOST,
 		TextColor3 = Theme.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextWrapped = true,
@@ -2042,7 +2157,7 @@ function UI:CreateSection(config)
 	local label = new("TextLabel", {
 		Text = string.upper(tostring(text)),
 		Font = Theme.FontBold,
-		TextSize = 11,
+		TextSize = 11 + FONT_BOOST,
 		TextColor3 = Theme.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		BackgroundTransparency = 1,
@@ -2102,7 +2217,7 @@ function UI:CreateStat(config)
 	local ValueLabel = new("TextLabel", {
 		Text = tostring(config.Value or "0"),
 		Font = Theme.FontBold,
-		TextSize = 18,
+		TextSize = 18 + FONT_BOOST,
 		TextColor3 = Theme.Active,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		BackgroundTransparency = 1,
@@ -2116,7 +2231,7 @@ function UI:CreateStat(config)
 	new("TextLabel", {
 		Text = config.Label or config.Text or config.Name or "",
 		Font = Theme.Font,
-		TextSize = 11,
+		TextSize = 11 + FONT_BOOST,
 		TextColor3 = Theme.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		BackgroundTransparency = 1,
