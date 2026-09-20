@@ -1,9 +1,9 @@
 --[[
-	AzucarLegit  v1.3.7
+	AzucarLegit  v1.3.8
 	====================
 	(Antes: AzucarSlideUI / AzucarHackerUI)
 
-	CAMBIOS RECIENTES (hasta v1.3.7):
+	CAMBIOS RECIENTES (hasta v1.3.8):
 	  1. TRANSPARENCIA REAL. La tarjeta que abre cada pestaña ahora es
 	     un CanvasGroup: fondo, botones, toggles, sliders, listas,
 	     inputs, keybinds y stats se dibujan juntos y el conjunto se
@@ -16,7 +16,7 @@
 	  3. (v1.3.1) La pestaña abierta mantiene el rojo hasta que
 	     cambies de pestaña o la cierres.
 	  4. TARJETA ANCHA que crece hacia la derecha hasta un tope de
-	     580px (config.PanelMaxWidth) y se achica sola en pantallas
+	     1100px (config.PanelMaxWidth) y se achica sola en pantallas
 	     angostas. Margen derecho: config.PanelRightMargin.
 
 	IMPORTANTE: la lógica interna de cada control (CreateButton,
@@ -51,7 +51,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local UI = {}
 
-UI.Version    = "1.3.7"
+UI.Version    = "1.3.8"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -354,11 +354,11 @@ function UI:CreateWindow(config)
 	-- centrada verticalmente.
 	-- Ancho de la tarjeta: ocupa el espacio que hay hacia la derecha
 	-- (hasta PANEL_MARGIN px del borde de la pantalla) pero con un TOPE
-	-- de 580px, y se achica sola si la pantalla es más angosta. El tope
-	-- se cambia con config.PanelMaxWidth (ej. 500, 700, o math.huge
+	-- de 1100px, y se achica sola si la pantalla es más angosta. El tope
+	-- se cambia con config.PanelMaxWidth (ej. 900, 1300, o math.huge
 	-- para que ocupe todo). config.PanelWidth ya no fija el ancho: si
 	-- tu script lo pasa, se ignora.
-	local PANEL_MAX_W  = config.PanelMaxWidth or 580
+	local PANEL_MAX_W  = config.PanelMaxWidth or 1100
 	local PANEL_MARGIN = config.PanelRightMargin or 20
 	if config.PanelWidth ~= nil then
 		warn("[AzucarLegit] PanelWidth ya no fija el ancho: la tarjeta ocupa todo el espacio "
@@ -579,6 +579,11 @@ function UI:CreateWindow(config)
 	end))
 
 	table.insert(UI.Windows, Window)
+
+	-- Para confirmar en la consola (F9) qué versión se está ejecutando.
+	print(string.format("[AzucarLegit] v%s cargada | tarjeta: tope %s px, margen derecho %d px",
+		UI.Version, tostring(PANEL_MAX_W), PANEL_MARGIN))
+
 	return Window
 end
 
@@ -702,6 +707,22 @@ function UI:CreateTab(config)
 		stroke(Theme.Border, 1),
 		new("UISizeConstraint", { MaxSize = Vector2.new(PANEL_MAX_W, math.huge) }),
 	})
+
+	-- El ancho se calcula EXPLÍCITAMENTE en píxeles y se recalcula si
+	-- cambia el tamaño de la pantalla: lo que quede libre a la derecha
+	-- (menos el margen), sin pasarse del tope PANEL_MAX_W.
+	local function fitPanel()
+		local screenW = self.Root.AbsoluteSize.X
+		if screenW <= 0 then
+			local cam = workspace.CurrentCamera
+			screenW = cam and cam.ViewportSize.X or 1280
+		end
+		local avail = screenW - (PANEL_X + PANEL_MARGIN)
+		local w = math.max(math.min(avail, PANEL_MAX_W), 240)
+		Panel.Size = UDim2.new(0, w, 0, PANEL_H)
+	end
+	fitPanel()
+	self.Root:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitPanel)
 
 	local PanelScale = new("UIScale", { Scale = 0.9, Parent = Panel })
 
