@@ -616,7 +616,7 @@ function UI:CreateTab(config)
 
 	-- Ancho "cerrado": una píldora angosta que apenas envuelve el texto,
 	-- pegada a la izquierda — NO ocupa todo el panel todavía.
-	local collapsedWidth = math.clamp(#name * 8 + 58, 96, LIST_W)
+	local collapsedWidth = math.clamp(#name * 8 + 58, 96, self.LIST_W)
 
 	local HeaderRow = new("TextButton", {
 		Name = "Line",
