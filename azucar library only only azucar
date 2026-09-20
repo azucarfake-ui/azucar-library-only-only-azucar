@@ -1,37 +1,45 @@
 --[[
-	AzucarUI  v1.0.0
+	AzucarUI  v1.1.0
 	================
 	Librería de interfaz ORIGINAL para Roblox (Luau), pensada para correr
 	en un LocalScript normal (StarterPlayerScripts, StarterGui, o un
 	Plugin de Studio). No usa ninguna API de executor (nada de gethui,
 	protectgui, writefile, etc.) — solo servicios estándar de Roblox.
 
-	DISEÑO:
-	-------
-	El sidebar izquierdo es un ACORDEÓN vertical, no dos columnas fijas.
-	Cada pestaña es una "línea" delgada. Al presionarla:
-		1. La línea se resalta con el color de acento.
-		2. Debajo de ELLA MISMA (empujando las demás hacia abajo) se abre
-		   un panel que contiene los controles de esa pestaña (toggles,
-		   sliders, botones, etc.).
+	DISEÑO (v1.1):
+	--------------
+	Cada pestaña del sidebar tiene una posición FIJA — nunca se mueve,
+	sin importar qué otra pestaña esté abierta o cerrada. Al presionar
+	una pestaña:
+		1. Su línea se resalta con el color de acento.
+		2. Se despliega un panel hacia ABAJO, como una capa flotante que
+		   queda POR ENCIMA de las pestañas siguientes (no las empuja,
+		   no las reordena, no cambia su posición para nada).
 	Si hay muchas pestañas y algunas quedan fuera de la pantalla, el
-	sidebar entero es un ScrollingFrame: arrastrás hacia abajo (o hacés
-	scroll) y las encontrás, exactamente como pediste.
+	sidebar entero es un ScrollingFrame con scroll normal.
 
 	Arriba hay una cabecera con el título y un RELOJ EN VIVO que muestra
 	la hora local del dispositivo del jugador (se actualiza cada
-	segundo con os.date, que ya usa la hora del sistema/país del
-	usuario automáticamente).
+	segundo con os.date). Esto SOLO funciona corriendo dentro de Roblox
+	real (Studio o el juego) — un visor/previsualizador genérico de
+	imágenes o HTML no puede ejecutar Luau.
+
+	CAMBIOS INTERNOS relevantes v1.0 → v1.1:
+	- Ventana, Pestaña y Controles ahora usan METATABLAS SEPARADAS
+	  (antes compartían una sola, lo que hacía que llamar a un método
+	  desde el objeto equivocado fallara silenciosamente y solo la
+	  primera pestaña terminara funcionando bien).
+	- El contenido desplegable de cada pestaña ya NO participa del
+	  layout que ordena las líneas del sidebar: es un overlay aparte,
+	  posicionado a mano justo debajo de su propia línea.
 
 	USO BÁSICO:
 	-----------
 		local AzucarUI = require(path.to.AzucarUI)
 
-		local Window = AzucarUI:CreateWindow({
-			Title = "Mi Hub",
-		})
+		local Window = AzucarUI:CreateWindow({ Title = "Mi Hub" })
 
-		local Combate = Window:CreateTab({ Name = "Combate" })
+		local Combate = Window:CreateTab({ Text = "Combate" })
 
 		Combate:CreateToggle({
 			Text = "Activar cosa",
@@ -43,27 +51,29 @@
 		})
 
 		Combate:CreateSlider({
-			Text = "Velocidad",
-			Min = 0, Max = 100, Default = 16, Increment = 1,
-			Callback = function(value)
-				print("Slider:", value)
-			end,
+			Text = "Velocidad", Min = 0, Max = 100, Default = 16,
+			Callback = function(value) print("Slider:", value) end,
 		})
 
 		Window:SetAccentColor("Azul") -- "Rojo" | "Azul" | "Verde" | "Blanco"
 ]]
 
-local TweenService      = game:GetService("TweenService")
-local Players           = game:GetService("Players")
-local UserInputService  = game:GetService("UserInputService")
+local TweenService     = game:GetService("TweenService")
+local Players          = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
 
 local AzucarUI = {}
-AzucarUI.__index = AzucarUI
-
-AzucarUI.Version    = "1.0.0"
+AzucarUI.Version    = "1.1.0"
 AzucarUI.Windows    = {}
 AzucarUI.Flags      = {}
 AzucarUI.FlagValues = {}
+
+-- Metatablas SEPARADAS: esto es lo que evita que un método de Ventana
+-- se cuele en una Pestaña (o viceversa) y rompa todo silenciosamente.
+local WindowMT = { __index = {} }
+local TabMT    = { __index = {} }
+local Win      = WindowMT.__index
+local Tab      = TabMT.__index
 
 -- ============================================================
 -- 	TEMA
@@ -73,8 +83,8 @@ local Theme = {
 	Header    = Color3.fromRGB(22, 22, 27),
 	Line      = Color3.fromRGB(27, 27, 33),
 	LineHover = Color3.fromRGB(34, 34, 41),
-	Content   = Color3.fromRGB(23, 23, 28),
-	Row       = Color3.fromRGB(28, 28, 34),
+	Content   = Color3.fromRGB(25, 25, 31),
+	Row       = Color3.fromRGB(30, 30, 37),
 	Border    = Color3.fromRGB(45, 45, 53),
 	Text      = Color3.fromRGB(235, 235, 240),
 	TextDim   = Color3.fromRGB(140, 140, 150),
@@ -97,7 +107,6 @@ local function onAccent(fn)
 	fn()
 	return fn
 end
-
 local function repaintAccent()
 	for _, fn in ipairs(accentListeners) do
 		pcall(fn)
@@ -135,12 +144,15 @@ local function pad(all, top, right, bottom, left)
 	})
 end
 
-local function tween(inst, props, time, style)
-	return TweenService:Create(inst, TweenInfo.new(time or 0.2, style or Enum.EasingStyle.Quad), props)
+local function tween(inst, props, time)
+	return TweenService:Create(inst, TweenInfo.new(time or 0.18, Enum.EasingStyle.Quad), props)
 end
 
 -- Callbacks en hilos independientes: nunca se congelan entre sí ni
--- congelan la interfaz.
+-- congelan la interfaz. Cada control (Toggle/Slider/Botón/Dropdown) es
+-- una tabla PLANA con sus propios Set/Get/Stop asignados directamente
+-- — no dependen de ninguna metatabla compartida, así que no pueden
+-- chocar con los métodos de Ventana ni de Pestaña.
 local function safeCall(controller, fn, ...)
 	if typeof(fn) ~= "function" then return end
 	local args = table.pack(...)
@@ -181,17 +193,20 @@ end
 function AzucarUI:CreateWindow(config)
 	config = config or {}
 
-	local title      = config.Title or "Azucar UI"
-	local SIDEBAR_W  = config.SidebarWidth or 240
-	local HEADER_H   = 40
+	local title     = config.Title or "Azucar UI"
+	local SIDEBAR_W = config.SidebarWidth or 240
+	local HEADER_H  = 40
 
-	local player = Players.LocalPlayer
+	local player    = Players.LocalPlayer
 	local playerGui = player:WaitForChild("PlayerGui")
 
 	local ScreenGui = new("ScreenGui", {
 		Name = "AzucarUI",
 		ResetOnSpawn = false,
-		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		-- Global (no Sibling): así el panel desplegable de una pestaña
+		-- puede dibujarse POR ENCIMA de las pestañas que están debajo
+		-- suyo aunque viva dentro de su propio Holder.
+		ZIndexBehavior = Enum.ZIndexBehavior.Global,
 		Parent = playerGui,
 	})
 
@@ -210,11 +225,10 @@ function AzucarUI:CreateWindow(config)
 		Size = UDim2.new(1, 0, 0, HEADER_H),
 		BackgroundColor3 = Theme.Header,
 		BorderSizePixel = 0,
+		ZIndex = 1,
 		Parent = Shell,
 	}, { corner(8) })
 
-	-- Tapa la esquina inferior redondeada del header para que quede
-	-- recto contra el sidebar.
 	new("Frame", {
 		Size = UDim2.new(1, 0, 0, 8),
 		Position = UDim2.new(0, 0, 1, -8),
@@ -232,7 +246,7 @@ function AzucarUI:CreateWindow(config)
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		BackgroundTransparency = 1,
 		Position = UDim2.new(0, 12, 0, 0),
-		Size = UDim2.new(0.5, 0, 1, 0),
+		Size = UDim2.new(0.55, 0, 1, 0),
 		Parent = Header,
 	})
 
@@ -244,8 +258,8 @@ function AzucarUI:CreateWindow(config)
 		TextColor3 = Theme.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Right,
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0.5, 0, 0, 0),
-		Size = UDim2.new(0.5, -12, 1, 0),
+		Position = UDim2.new(0.45, 0, 0, 0),
+		Size = UDim2.new(0.55, -12, 1, 0),
 		Parent = Header,
 	})
 
@@ -257,43 +271,47 @@ function AzucarUI:CreateWindow(config)
 		ZIndex = 2,
 		Parent = Header,
 	})
-	onAccent(function()
-		AccentUnderline.BackgroundColor3 = Theme.Active
-	end)
+	onAccent(function() AccentUnderline.BackgroundColor3 = Theme.Active end)
 
-	-- ---------------- Sidebar con scroll (acordeón) ----------------
+	-- ---------------- Sidebar con scroll ----------------
 	local Sidebar = new("ScrollingFrame", {
 		Name = "Sidebar",
 		Size = UDim2.new(1, 0, 1, -HEADER_H),
 		Position = UDim2.new(0, 0, 0, HEADER_H),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
+		ClipsDescendants = false, -- deja que el contenido desplegado se vea aunque "sobresalga"
 		ScrollBarThickness = 3,
 		ScrollBarImageColor3 = Theme.Border,
 		CanvasSize = UDim2.new(0, 0, 0, 0),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ZIndex = 1,
 		Parent = Shell,
 	}, {
+		-- Este UIListLayout SOLO ordena los "Holder" (uno por pestaña),
+		-- que tienen altura FIJA. El contenido desplegable vive adentro
+		-- de cada Holder pero no cambia su tamaño, así que abrir una
+		-- pestaña nunca reordena ni empuja a las demás.
 		new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }),
 		pad(0, 8, 6, 8, 6),
 	})
 
 	local Window = setmetatable({
-		ScreenGui   = ScreenGui,
-		Shell       = Shell,
-		Header      = Header,
-		Sidebar     = Sidebar,
-		_tabs       = {},
+		ScreenGui    = ScreenGui,
+		Shell        = Shell,
+		Header       = Header,
+		Sidebar      = Sidebar,
+		_tabs        = {},
 		_connections = {},
 		_tabCount    = 0,
-	}, AzucarUI)
+	}, WindowMT)
 
 	local function track(conn)
 		table.insert(Window._connections, conn)
 		return conn
 	end
 
-	-- Reloj en vivo: se actualiza cada segundo mientras el label exista.
+	-- Reloj en vivo (hora del dispositivo del jugador).
 	task.spawn(function()
 		while ClockLabel.Parent do
 			ClockLabel.Text = os.date("%H:%M:%S")
@@ -334,7 +352,7 @@ function AzucarUI:CreateWindow(config)
 	return Window
 end
 
-function AzucarUI:SetAccentColor(paletteName)
+function Win:SetAccentColor(paletteName)
 	local palette = Palettes[paletteName]
 	if not palette then
 		warn("[AzucarUI] Paleta desconocida: " .. tostring(paletteName))
@@ -345,7 +363,7 @@ function AzucarUI:SetAccentColor(paletteName)
 	repaintAccent()
 end
 
-function AzucarUI:Destroy()
+function Win:Destroy()
 	for _, conn in ipairs(self._connections or {}) do
 		pcall(function() conn:Disconnect() end)
 	end
@@ -361,37 +379,37 @@ function AzucarUI:Destroy()
 end
 
 -- ============================================================
--- 	CREATE TAB — la "línea" que se despliega hacia abajo
+-- 	CREATE TAB — posición fija, despliega como capa flotante
 -- ============================================================
-function AzucarUI:CreateTab(config)
+local LINE_H = 36
+
+function Win:CreateTab(config)
 	config = config or {}
 	local name = config.Text or config.Name or ("Pestaña " .. (self._tabCount + 1))
 	self._tabCount += 1
 
-	-- Contenedor de la pestaña completa: línea + panel desplegable,
-	-- ambos apilados verticalmente dentro del mismo sidebar. Al vivir
-	-- juntos en un solo Frame, cuando el panel se abre empuja
-	-- automáticamente a las pestañas de abajo (efecto acordeón).
+	-- Holder: tamaño FIJO (nunca AutomaticSize). Es lo único que el
+	-- UIListLayout del sidebar usa para ordenar — como su altura no
+	-- cambia jamás, ninguna pestaña se mueve nunca, la abras o no.
 	local Holder = new("Frame", {
 		Name = name,
-		Size = UDim2.new(1, 0, 0, 34),
-		AutomaticSize = Enum.AutomaticSize.Y,
+		Size = UDim2.new(1, 0, 0, LINE_H),
 		BackgroundTransparency = 1,
+		ClipsDescendants = false,
 		LayoutOrder = self._tabCount,
+		ZIndex = 1,
 		Parent = self.Sidebar,
-	}, {
-		new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
 
-	-- ---------------- La línea (barra delgada) ----------------
+	-- ---------------- La línea ----------------
 	local Line = new("TextButton", {
 		Name = "Line",
 		Text = "",
 		AutoButtonColor = false,
-		Size = UDim2.new(1, 0, 0, 34),
+		Size = UDim2.new(1, 0, 0, LINE_H),
 		BackgroundColor3 = Theme.Line,
 		BorderSizePixel = 0,
-		LayoutOrder = 1,
+		ZIndex = 2,
 		Parent = Holder,
 	}, { corner(5) })
 
@@ -401,6 +419,7 @@ function AzucarUI:CreateTab(config)
 		BackgroundColor3 = Theme.Active,
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
+		ZIndex = 3,
 		Parent = Line,
 	}, { corner(2) })
 	onAccent(function() AccentMark.BackgroundColor3 = Theme.Active end)
@@ -415,91 +434,102 @@ function AzucarUI:CreateTab(config)
 		BackgroundTransparency = 1,
 		Position = UDim2.new(0, 18, 0, 0),
 		Size = UDim2.new(1, -34, 1, 0),
+		ZIndex = 3,
 		Parent = Line,
 	})
 
 	local Arrow = new("TextLabel", {
-		Text = "▾",
+		Text = "+",
 		Font = Theme.FontBold,
-		TextSize = 12,
+		TextSize = 14,
 		TextColor3 = Theme.TextDim,
 		BackgroundTransparency = 1,
 		Position = UDim2.new(1, -22, 0, 0),
 		Size = UDim2.new(0, 16, 1, 0),
+		ZIndex = 3,
 		Parent = Line,
 	})
 
-	-- ---------------- El panel desplegable ----------------
+	-- ---------------- El panel desplegable (OVERLAY) ----------------
+	-- Vive DENTRO del Holder pero anclado con posición absoluta justo
+	-- debajo de la línea, con más ZIndex y ZIndexBehavior Global en el
+	-- ScreenGui: por eso puede "sobresalir" del Holder (que mide solo
+	-- LINE_H) y dibujarse por encima de las pestañas siguientes sin
+	-- moverlas ni un píxel.
 	local Content = new("Frame", {
 		Name = "Content",
+		Position = UDim2.new(0, 0, 0, LINE_H + 2),
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		ClipsDescendants = true,
 		BackgroundColor3 = Theme.Content,
 		BorderSizePixel = 0,
 		Visible = false,
-		LayoutOrder = 2,
+		ZIndex = 10,
 		Parent = Holder,
 	}, {
 		corner(5),
+		stroke(Theme.Border, 1),
 		new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }),
 		pad(0, 6, 6, 6, 6),
 	})
 
-	local Tab = setmetatable({
-		Window   = self,
-		Holder   = Holder,
-		Line     = Line,
-		Content  = Content,
-		Name     = name,
-		Expanded = false,
+	local TabObj = setmetatable({
+		Window    = self,
+		Holder    = Holder,
+		Line      = Line,
+		Content   = Content,
+		Name      = name,
+		Expanded  = false,
 		_rowCount = 0,
-	}, AzucarUI)
+	}, TabMT)
 
 	local function setExpanded(expanded)
-		Tab.Expanded = expanded
+		TabObj.Expanded = expanded
 		Content.Visible = expanded
-		Arrow.Text = expanded and "▴" or "▾"
+		Arrow.Text = expanded and "-" or "+"
 		Arrow.TextColor3 = expanded and Theme.Active or Theme.TextDim
 		NameLabel.TextColor3 = expanded and Theme.Text or Theme.TextDim
-		tween(AccentMark, { BackgroundTransparency = expanded and 0 or 1 }, 0.15):Play()
+		tween(Line, { BackgroundColor3 = expanded and Theme.LineHover or Theme.Line }, 0.12):Play()
+		tween(AccentMark, { BackgroundTransparency = expanded and 0 or 1 }, 0.12):Play()
 	end
 
 	Line.MouseEnter:Connect(function()
-		if not Tab.Expanded then
-			tween(Line, { BackgroundColor3 = Theme.LineHover }, 0.12):Play()
+		if not TabObj.Expanded then
+			tween(Line, { BackgroundColor3 = Theme.LineHover }, 0.1):Play()
 		end
 	end)
 	Line.MouseLeave:Connect(function()
-		if not Tab.Expanded then
-			tween(Line, { BackgroundColor3 = Theme.Line }, 0.12):Play()
+		if not TabObj.Expanded then
+			tween(Line, { BackgroundColor3 = Theme.Line }, 0.1):Play()
 		end
 	end)
 
 	table.insert(self._connections, Line.MouseButton1Click:Connect(function()
-		setExpanded(not Tab.Expanded)
+		setExpanded(not TabObj.Expanded)
 	end))
 
-	table.insert(self._tabs, Tab)
-	return Tab
+	table.insert(self._tabs, TabObj)
+	return TabObj
 end
 
 -- Fila base compartida por todos los controles dentro de una pestaña.
-local function baseRow(tab, height)
-	tab._rowCount = tab._rowCount + 1
+local function baseRow(tabObj, height)
+	tabObj._rowCount = tabObj._rowCount + 1
 	return new("Frame", {
 		Size = UDim2.new(1, 0, 0, height or 30),
 		BackgroundColor3 = Theme.Row,
 		BorderSizePixel = 0,
-		LayoutOrder = tab._rowCount,
-		Parent = tab.Content,
+		LayoutOrder = tabObj._rowCount,
+		ZIndex = 11,
+		Parent = tabObj.Content,
 	}, { corner(4), pad(0, 0, 8, 0, 8) })
 end
 
 -- ============================================================
--- 	LABEL / SECTION
+-- 	LABEL
 -- ============================================================
-function AzucarUI:CreateLabel(text)
+function Tab:CreateLabel(text)
 	local Row = baseRow(self, 26)
 	new("TextLabel", {
 		Text = tostring(text),
@@ -510,15 +540,16 @@ function AzucarUI:CreateLabel(text)
 		TextWrapped = true,
 		BackgroundTransparency = 1,
 		Size = UDim2.new(1, 0, 1, 0),
+		ZIndex = 12,
 		Parent = Row,
 	})
-	return setmetatable({ Instance = Row }, AzucarUI)
+	return { Instance = Row }
 end
 
 -- ============================================================
 -- 	BOTÓN
 -- ============================================================
-function AzucarUI:CreateButton(config)
+function Tab:CreateButton(config)
 	config = config or {}
 	local callback = config.Callback or function() end
 	local Row = baseRow(self, 32)
@@ -531,10 +562,11 @@ function AzucarUI:CreateButton(config)
 		AutoButtonColor = false,
 		BackgroundTransparency = 1,
 		Size = UDim2.new(1, 0, 1, 0),
+		ZIndex = 12,
 		Parent = Row,
 	})
 
-	local Button = setmetatable({ Callback = callback, _threads = {} }, AzucarUI)
+	local Button = { Callback = callback, _threads = {} }
 
 	Btn.MouseButton1Click:Connect(function()
 		tween(Row, { BackgroundColor3 = Theme.ActiveDim }, 0.1):Play()
@@ -544,13 +576,15 @@ function AzucarUI:CreateButton(config)
 		safeCall(Button, Button.Callback)
 	end)
 
+	function Button:Stop() stopAllThreads(self) end
+
 	return Button
 end
 
 -- ============================================================
 -- 	TOGGLE
 -- ============================================================
-function AzucarUI:CreateToggle(config)
+function Tab:CreateToggle(config)
 	config = config or {}
 	local callback = config.Callback or function() end
 	local state = not not (config.Default or false)
@@ -566,6 +600,7 @@ function AzucarUI:CreateToggle(config)
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		BackgroundTransparency = 1,
 		Size = UDim2.new(1, -34, 1, 0),
+		ZIndex = 12,
 		Parent = Row,
 	})
 
@@ -574,10 +609,11 @@ function AzucarUI:CreateToggle(config)
 		Position = UDim2.new(1, -16, 0.5, -8),
 		BackgroundColor3 = state and Theme.Active or Theme.LineHover,
 		BorderSizePixel = 0,
+		ZIndex = 12,
 		Parent = Row,
 	}, { corner(4), stroke(Theme.Border, 1) })
 
-	local Toggle = setmetatable({ Box = Box, Value = state, Callback = callback, _threads = {} }, AzucarUI)
+	local Toggle = { Value = state, Callback = callback, _threads = {} }
 
 	onAccent(function()
 		if Toggle.Value then Box.BackgroundColor3 = Theme.Active end
@@ -590,11 +626,10 @@ function AzucarUI:CreateToggle(config)
 		setFlagValue(config.Flag, newState)
 		return safeCall(self, self.Callback, newState)
 	end
-
 	function Toggle:Get() return self.Value end
 	function Toggle:Stop() stopAllThreads(self) end
 
-	local Click = new("TextButton", { Text = "", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Parent = Row })
+	local Click = new("TextButton", { Text = "", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), ZIndex = 13, Parent = Row })
 	Click.MouseButton1Click:Connect(function()
 		Toggle:Set(not Toggle.Value)
 	end)
@@ -606,7 +641,7 @@ end
 -- ============================================================
 -- 	SLIDER
 -- ============================================================
-function AzucarUI:CreateSlider(config)
+function Tab:CreateSlider(config)
 	config = config or {}
 	local callback = config.Callback or function() end
 
@@ -632,6 +667,7 @@ function AzucarUI:CreateSlider(config)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		BackgroundTransparency = 1,
 		Size = UDim2.new(1, -50, 0, 16),
+		ZIndex = 12,
 		Parent = Row,
 	})
 
@@ -644,6 +680,7 @@ function AzucarUI:CreateSlider(config)
 		BackgroundTransparency = 1,
 		Position = UDim2.new(1, -50, 0, 0),
 		Size = UDim2.new(0, 50, 0, 16),
+		ZIndex = 12,
 		Parent = Row,
 	})
 	onAccent(function() ValueLabel.TextColor3 = Theme.Active end)
@@ -653,6 +690,7 @@ function AzucarUI:CreateSlider(config)
 		Position = UDim2.new(0, 0, 0, 24),
 		BackgroundColor3 = Theme.LineHover,
 		BorderSizePixel = 0,
+		ZIndex = 12,
 		Parent = Row,
 	}, { corner(2) })
 
@@ -662,11 +700,12 @@ function AzucarUI:CreateSlider(config)
 		Size = UDim2.new(ratio(value), 0, 1, 0),
 		BackgroundColor3 = Theme.Active,
 		BorderSizePixel = 0,
+		ZIndex = 12,
 		Parent = Track,
 	}, { corner(2) })
 	onAccent(function() Fill.BackgroundColor3 = Theme.Active end)
 
-	local Slider = setmetatable({ Value = value, Min = min, Max = max, Callback = callback, _threads = {} }, AzucarUI)
+	local Slider = { Value = value, Min = min, Max = max, Callback = callback, _threads = {} }
 
 	local function repaint(v)
 		Fill.Size = UDim2.new(ratio(v), 0, 1, 0)
@@ -680,7 +719,6 @@ function AzucarUI:CreateSlider(config)
 		setFlagValue(config.Flag, newValue)
 		return safeCall(self, self.Callback, newValue)
 	end
-
 	function Slider:Get() return self.Value end
 	function Slider:Stop() stopAllThreads(self) end
 
@@ -717,14 +755,14 @@ end
 -- ============================================================
 -- 	DROPDOWN
 -- ============================================================
-function AzucarUI:CreateDropdown(config)
+function Tab:CreateDropdown(config)
 	config = config or {}
 	local callback = config.Callback or function() end
 	local options = config.Options or {}
 	local selected = config.Default or options[1]
 
 	local Row = baseRow(self, 30)
-	Row.ClipsDescendants = true
+	Row.ClipsDescendants = false
 
 	new("TextLabel", {
 		Text = config.Text or "Opciones",
@@ -734,6 +772,7 @@ function AzucarUI:CreateDropdown(config)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		BackgroundTransparency = 1,
 		Size = UDim2.new(0.5, 0, 0, 30),
+		ZIndex = 12,
 		Parent = Row,
 	})
 
@@ -747,6 +786,7 @@ function AzucarUI:CreateDropdown(config)
 		BackgroundTransparency = 1,
 		Position = UDim2.new(0.5, 0, 0, 0),
 		Size = UDim2.new(0.5, 0, 0, 30),
+		ZIndex = 12,
 		Parent = Row,
 	})
 	onAccent(function() SelectedLabel.TextColor3 = Theme.Active end)
@@ -756,12 +796,13 @@ function AzucarUI:CreateDropdown(config)
 		Size = UDim2.new(1, 0, 0, #options * 22),
 		BackgroundTransparency = 1,
 		Visible = false,
+		ZIndex = 13,
 		Parent = Row,
 	}, {
 		new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
 
-	local Dropdown = setmetatable({ Value = selected, Options = options, Callback = callback, _threads = {} }, AzucarUI)
+	local Dropdown = { Value = selected, Options = options, Callback = callback, _threads = {} }
 
 	local function buildOptions()
 		for _, c in ipairs(List:GetChildren()) do
@@ -779,6 +820,7 @@ function AzucarUI:CreateDropdown(config)
 				BorderSizePixel = 0,
 				Size = UDim2.new(1, 0, 0, 20),
 				LayoutOrder = i,
+				ZIndex = 13,
 				Parent = List,
 			}, { corner(3), pad(0, 0, 6, 0, 6) })
 
@@ -796,13 +838,12 @@ function AzucarUI:CreateDropdown(config)
 		setFlagValue(config.Flag, option)
 		return safeCall(self, self.Callback, option)
 	end
-
 	function Dropdown:Get() return self.Value end
 	function Dropdown:Stop() stopAllThreads(self) end
 
 	buildOptions()
 
-	local Click = new("TextButton", { Text = "", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), Parent = Row })
+	local Click = new("TextButton", { Text = "", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), ZIndex = 12, Parent = Row })
 	Click.MouseButton1Click:Connect(function()
 		List.Visible = not List.Visible
 		Row.Size = UDim2.new(1, 0, 0, List.Visible and (30 + #Dropdown.Options * 22 + 4) or 30)
