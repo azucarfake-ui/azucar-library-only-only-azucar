@@ -1,9 +1,9 @@
 --[[
-	AzucarLegit  v1.4.0
+	AzucarLegit  v1.5.0
 	====================
 	(Antes: AzucarSlideUI / AzucarHackerUI)
 
-	CAMBIOS RECIENTES (hasta v1.4.0):
+	CAMBIOS RECIENTES (hasta v1.5.0):
 	  1. TRANSPARENCIA REAL. La tarjeta que abre cada pestaña ahora es
 	     un CanvasGroup: fondo, botones, toggles, sliders, listas,
 	     inputs, keybinds y stats se dibujan juntos y el conjunto se
@@ -22,6 +22,11 @@
 	     DESENFOQUE del juego de fondo mientras haya una pestaña
 	     abierta. Se ajustan con AURA_SIZE_PX, AURA_TRANSPARENCY y
 	     BLUR_SIZE (arriba del archivo). config.Blur = false lo apaga.
+	  6. MÁS EFECTOS: la tarjeta aparece con fundido; luz roja que da
+	     vueltas por su borde; el aura "respira"; aurita chica en la
+	     pestaña al presionarla; el toggle salta y brilla; el botón
+	     destella; la perilla del slider crece al arrastrarla.
+	     ANIMATED_FX = false los deja todos quietos.
 
 	IMPORTANTE: la lógica interna de cada control (CreateButton,
 	CreateToggle, CreateSlider, CreateDropdown, CreateInput,
@@ -52,10 +57,11 @@
 local TweenService     = game:GetService("TweenService")
 local Players          = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
+local RunService       = game:GetService("RunService")
 
 local UI = {}
 
-UI.Version    = "1.4.0"
+UI.Version    = "1.5.0"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -77,6 +83,12 @@ local AURA_TRANSPARENCY = 0.55  -- en el borde: 0 = muy fuerte, 1 = invisible
 -- DESENFOQUE: mientras hay una pestaña abierta, el juego de atrás se ve
 -- borroso (se apaga solo al cerrarla o al ocultar la UI con K).
 local BLUR_SIZE = 16            -- 0 = sin desenfoque, 24 = fuerte
+-- AURITA DE LAS PESTAÑAS: halo chico y suave que se enciende al presionarlas.
+local PILL_AURA_SIZE_PX      = 9     -- cuánto se extiende (0 = sin aurita)
+local PILL_AURA_TRANSPARENCY = 0.72  -- 0 = fuerte, 1 = invisible (más alto = más sutil)
+-- EFECTOS ANIMADOS: luz roja que da vueltas por el borde de la tarjeta y aura
+-- que "respira". true = con animación, false = todo quieto.
+local ANIMATED_FX = true
 
 -- ============================================================
 -- 	RED DE SEGURIDAD: un Create... inexistente no mata el script
@@ -493,10 +505,12 @@ function UI:CreateWindow(config)
 	-- no quede cortado por el recorte del scroll, y aire abajo para que
 	-- la última pestaña se pueda subir bien.
 	new("UIPadding", {
-		PaddingTop = UDim.new(0, 2),
-		PaddingRight = UDim.new(0, 2),
-		PaddingBottom = UDim.new(0, 12),
-		PaddingLeft = UDim.new(0, 2),
+		-- 10px de margen a cada lado: ahí adentro entra la aurita de la
+		-- pestaña sin que el recorte del scroll la corte.
+		PaddingTop = UDim.new(0, 10),
+		PaddingRight = UDim.new(0, 10),
+		PaddingBottom = UDim.new(0, 14),
+		PaddingLeft = UDim.new(0, 10),
 		Parent = SlideList,
 	})
 
@@ -618,8 +632,19 @@ function UI:CreateWindow(config)
 		end
 	end))
 
-	table.insert(UI.Windows, Window)
+	-- Bucle de efectos animados: solo trabaja con la UI visible y solo
+	-- sobre la pestaña que está abierta.
+	track(RunService.Heartbeat:Connect(function()
+		if not Window._visible then return end
+		local now = os.clock()
+		for _, tab in ipairs(Window._tabs) do
+			if tab._isOpen and tab._fx then
+				tab._fx(now)
+			end
+		end
+	end))
 
+	table.insert(UI.Windows, Window)
 
 	return Window
 end
@@ -733,6 +758,56 @@ function UI:CreateTab(config)
 	-- el rojo a la pestaña abierta cada vez que el mouse entraba o
 	-- salía.)
 
+	-- ---------------- AURITA de la pestaña (chica y suave) ----------------
+	-- Mismo truco que el aura de la tarjeta (anillos cada vez más
+	-- transparentes) pero más chico y más sutil. Se enciende con un
+	-- destello corto al presionar y se queda tenue mientras la pestaña
+	-- está abierta; se apaga al cerrarla o al abrir otra.
+	local pillStrokes, pillTargets = {}, {}
+	if PILL_AURA_SIZE_PX > 0 then
+		local RINGS = 6
+		local step = PILL_AURA_SIZE_PX / RINGS
+		for k = 0, RINGS - 1 do
+			local grow = k * step
+			local ring = new("Frame", {
+				Name = "Aura",
+				Size = UDim2.new(1, grow * 2, 1, grow * 2),
+				Position = UDim2.new(0, -grow, 0, -grow),
+				BackgroundTransparency = 1,
+				BorderSizePixel = 0,
+				Parent = Pill,
+			}, { corner(radius + grow) })
+			local fade = (k / (RINGS - 1)) ^ 0.5
+			local target = PILL_AURA_TRANSPARENCY + (1 - PILL_AURA_TRANSPARENCY) * fade
+			table.insert(pillTargets, target)
+			table.insert(pillStrokes, new("UIStroke", {
+				Color = Theme.Active,
+				Thickness = step + 1,
+				Transparency = 1, -- arranca apagada
+				Parent = ring,
+			}))
+		end
+	end
+	onAccent(function()
+		for _, st in ipairs(pillStrokes) do
+			if st.Parent then st.Color = Theme.Active end
+		end
+	end)
+
+	local function setPillAura(on)
+		for i, st in ipairs(pillStrokes) do
+			tween(st, { Transparency = on and pillTargets[i] or 1 }, 0.2)
+		end
+	end
+
+	-- Destello al presionar: arranca más fuerte y se acomoda al nivel tenue.
+	local function pulsePillAura(stayOn)
+		for i, st in ipairs(pillStrokes) do
+			st.Transparency = math.max(pillTargets[i] - 0.28, 0)
+			tween(st, { Transparency = stayOn and pillTargets[i] or 1 }, 0.4)
+		end
+	end
+
 	-- ---------------- La ventana flotante con las lógicas: tarjeta
 	-- redondeada aparte, cerca de las pestañas pero sin pegarse,
 	-- centrada verticalmente, más grande. Semi-transparente (0.2) toda
@@ -792,7 +867,7 @@ function UI:CreateTab(config)
 	})
 	local GlowScale = new("UIScale", { Scale = 0.9, Parent = Glow })
 
-	local glowStrokes = {}
+	local glowStrokes, glowBase = {}, {}
 	if AURA_SIZE_PX > 0 then
 		local RINGS = 10
 		local step = AURA_SIZE_PX / RINGS
@@ -807,13 +882,38 @@ function UI:CreateTab(config)
 			}, { corner(20 + grow) })
 			-- El anillo de adentro es el más fuerte; el de afuera casi invisible.
 			local fade = (k / (RINGS - 1)) ^ 0.5
+			local base = AURA_TRANSPARENCY + (1 - AURA_TRANSPARENCY) * fade
+			table.insert(glowBase, base)
 			table.insert(glowStrokes, new("UIStroke", {
 				Color = Theme.Active,
 				Thickness = step + 1,
-				Transparency = AURA_TRANSPARENCY + (1 - AURA_TRANSPARENCY) * fade,
+				Transparency = base,
 				Parent = ring,
 			}))
 		end
+	end
+
+	-- Borde de la tarjeta con una luz roja que da vueltas: un UIGradient
+	-- sobre el borde (opaco en un extremo, casi transparente en el
+	-- medio) al que se le va girando la rotación (ver Tab._fx).
+	local BorderGradient = nil
+	if PanelStroke then
+		PanelStroke.Thickness = 2
+		PanelStroke.Transparency = 0.1
+		BorderGradient = new("UIGradient", {
+			Color = ColorSequence.new(Theme.Active, Theme.ActiveDim),
+			Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0),
+				NumberSequenceKeypoint.new(0.5, 0.92),
+				NumberSequenceKeypoint.new(1, 0),
+			}),
+			Parent = PanelStroke,
+		})
+		onAccent(function()
+			if BorderGradient.Parent then
+				BorderGradient.Color = ColorSequence.new(Theme.Active, Theme.ActiveDim)
+			end
+		end)
 	end
 
 	Panel:GetPropertyChangedSignal("Visible"):Connect(function()
@@ -928,6 +1028,23 @@ function UI:CreateTab(config)
 		end
 	end
 	Tab._paint = paintPill
+	Tab._auraOff = function() setPillAura(false) end
+
+	-- Efectos animados de la tarjeta abierta (los llama el bucle Heartbeat
+	-- de la ventana): el aura "respira" y la luz del borde gira.
+	Tab._appearAt = 0
+	Tab._fx = function(now)
+		if not ANIMATED_FX then return end
+		local appear = math.clamp((now - Tab._appearAt) / 0.35, 0, 1)
+		local pulse = 0.5 + 0.5 * math.sin(now * 2.2)
+		local strength = (0.62 + 0.38 * pulse) * appear
+		for i, st in ipairs(glowStrokes) do
+			st.Transparency = 1 - (1 - glowBase[i]) * strength
+		end
+		if BorderGradient then
+			BorderGradient.Rotation = (now * 75) % 360
+		end
+	end
 
 	Pill.MouseEnter:Connect(function()
 		hovering = true
@@ -953,15 +1070,21 @@ function UI:CreateTab(config)
 					other._isOpen = false
 					other.Panel.Visible = false
 					if other._paint then other._paint() end
+					if other._auraOff then other._auraOff() end
 					tween(other.Arrow, { Rotation = 0 }, 0.15)
 				end
 			end
 
 			Tab._isOpen = true
 			paintPill()
+			pulsePillAura(true)
 			tween(Arrow, { Rotation = 180 }, 0.15)
 			fitPanel() -- reafirma el ancho cada vez que se abre
 			Panel.Visible = true
+			-- Aparece con fundido (de invisible a su 0.2 normal).
+			Tab._appearAt = os.clock()
+			Panel.GroupTransparency = 1
+			tween(Panel, { GroupTransparency = Theme.Alpha }, 0.28)
 			PanelScale.Scale = 0.9
 			tween(PanelScale, { Scale = 1 }, 0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 			GlowScale.Scale = 0.9
@@ -969,6 +1092,7 @@ function UI:CreateTab(config)
 		else
 			Tab._isOpen = false
 			paintPill()
+			setPillAura(false)
 			tween(Arrow, { Rotation = 0 }, 0.15)
 			Panel.Visible = false
 		end
@@ -1030,6 +1154,9 @@ function UI:CreateButton(config)
 	local Button = setmetatable({ Instance = Btn, Callback = callback, _threads = {} }, UI)
 
 	function Button:Set(...)
+		-- Efecto: destello rojo de fondo que se apaga solo.
+		Btn.BackgroundColor3 = Theme.ActiveDim
+		tween(Btn, { BackgroundColor3 = Theme.LineOpen }, 0.3)
 		Btn.TextColor3 = Theme.Active
 		task.delay(0.15, function()
 			if Btn.Parent then Btn.TextColor3 = Theme.Text end
@@ -1094,11 +1221,21 @@ function UI:CreateToggle(config)
 		Parent = Row,
 	}, { corner(3) })
 
+	-- Efectos: pequeño "salto" al cambiar y un brillo rojo suave cuando está prendido.
+	local BoxPop = new("UIScale", { Scale = 1, Parent = Box })
+	local BoxGlow = new("UIStroke", {
+		Color = Theme.Active,
+		Thickness = 3,
+		Transparency = state and 0.55 or 1,
+		Parent = Box,
+	})
+
 	local Toggle = setmetatable({ Box = Box, Value = state, Callback = callback, _threads = {} }, UI)
 
 	onAccent(function()
 		if Box.Parent then
 			Box.BackgroundColor3 = Toggle.Value and Theme.Active or Theme.Border
+			BoxGlow.Color = Theme.Active
 		end
 	end)
 
@@ -1106,6 +1243,9 @@ function UI:CreateToggle(config)
 		newState = not not newState
 		self.Value = newState
 		tween(Box, { BackgroundColor3 = newState and Theme.Active or Theme.Border })
+		tween(BoxGlow, { Transparency = newState and 0.55 or 1 }, 0.2)
+		BoxPop.Scale = 1.45
+		tween(BoxPop, { Scale = 1 }, 0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 		setFlagValue(config.Flag, newState)
 		return safeCall(self, self.Callback, newState)
 	end
@@ -1224,6 +1364,8 @@ function UI:CreateSlider(config)
 		Parent = Track,
 	}, { corner(5) })
 
+	local KnobPop = new("UIScale", { Scale = 1, Parent = Knob })
+
 	local Slider = setmetatable({
 		Track = Track, Fill = Fill, Knob = Knob, Value = value, Min = min, Max = max,
 		Callback = callback, _threads = {},
@@ -1261,6 +1403,7 @@ function UI:CreateSlider(config)
 	table.insert(window._connections, Track.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			dragging = true
+			tween(KnobPop, { Scale = 1.6 }, 0.12)
 			setFromX(input.Position.X)
 		end
 	end))
@@ -1271,7 +1414,10 @@ function UI:CreateSlider(config)
 	end))
 	table.insert(window._connections, UserInputService.InputEnded:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			dragging = false
+			if dragging then
+				dragging = false
+				tween(KnobPop, { Scale = 1 }, 0.15)
+			end
 		end
 	end))
 
