@@ -1,90 +1,37 @@
 --[[
-	AzucarLegit  v1.2.0
+	AzucarLegit  v1.3.0
 	====================
 	(Antes: AzucarSlideUI / AzucarHackerUI)
 
-	Concepto: pestañas como LÍNEAS-píldora angostas pegadas a la
-	izquierda, con bordes redondeados. Al tocar una pasa en DOS tiempos:
+	IMPORTANTE: la lógica interna de cada control (CreateButton,
+	CreateToggle, CreateSlider, CreateDropdown, CreateInput,
+	CreateKeybind, CreateLabel, CreateSection, CreateDivider,
+	CreateStat) es EXACTAMENTE la misma que en AzucarSlideUI v1.0.0 —
+	no se tocó ni una línea de esa parte. Lo único que cambia acá es la
+	VENTANA y las PESTAÑAS (CreateWindow / CreateTab): cómo se ven y
+	cómo se abren, nada de cómo funcionan tus Callbacks/Flags.
+
+	Concepto de pestaña: una línea-píldora angosta pegada a la
+	izquierda. Al tocarla pasa en DOS tiempos:
 		1) la línea se ALARGA hacia la derecha hasta ocupar todo el
 		   panel.
 		2) recién ahí, lo que se alargó se DESLIZA hacia abajo
-		   mostrando sus controles (toggles, sliders, dropdowns...).
+		   mostrando sus controles.
 	Las demás líneas se CORREN hacia abajo para no quedar tapadas ni
-	superpuestas (nunca se pisan entre sí). Si hay muchas pestañas y una
-	queda fuera de la pantalla, hay un scroll angosto para bajar y
-	encontrarla. Arriba, la hora exacta de tu reloj (la pone tu propia
-	PC, así que ya es la de tu país), y por defecto la ventana entera se
-	para bien arriba, por encima de la barra superior de Roblox.
+	superpuestas. Si hay muchas y una queda fuera de la pantalla, hay
+	scroll para bajar y encontrarla. Arriba, la hora exacta de tu reloj
+	(la pone tu PC), y la ventana se para por encima de la barra
+	superior de Roblox (más arriba en la pantalla).
 
-	NOVEDAD DE ESTA VERSIÓN (v1.2.0):
-
-	- Antes cada línea ya arrancaba con el ancho completo del panel y
-	  solo se desplegaba hacia abajo. Ahora arranca como una píldora
-	  angosta (solo el ancho del texto) y la apertura tiene dos pasos
-	  bien diferenciados: primero se estira hacia la derecha, y cuando
-	  ESE movimiento termina, recién ahí baja el contenido. Al cerrar es
-	  al revés: primero sube/se recoge el contenido, y cuando termina,
-	  la línea se encoge de nuevo a píldora.
-	- La ventana ahora se para por defecto por ENCIMA de la barra
-	  superior de Roblox (más arriba en la pantalla). Si alguna vez
-	  tapa algo que no querés tapar, pasá
-	  UI:CreateWindow({ IgnoreGuiInset = false }) para volver a
-	  respetarla.
-
-	QUÉ CAMBIÓ RESPECTO A LA VERSIÓN ANTERIOR (AzucarSlideUI):
-
-	1. TABS REDONDAS DE VERDAD.
-	   Antes Theme.CornerRadius no existía y corner() devolvía esquinas
-	   en 0 salvo que se pasara un número a mano — la mayoría de las
-	   llamadas no lo hacían, así que todo quedaba cuadrado. Ahora hay
-	   un radio por defecto (Theme.CornerRadius) y CADA línea, cuerpo
-	   desplegable, fila (toggle/slider/dropdown/input/botón) y la
-	   cabecera tienen esquinas redondeadas de fábrica.
-
-	2. LAS PESTAÑAS YA NO SE PISAN AL ABRIRSE.
-	   Antes cada "Item" (línea + su cuerpo desplegable) tenía una
-	   altura FIJA de 40px. Cuando el cuerpo se desplegaba hacia abajo,
-	   crecía por ENCIMA de la siguiente pestaña en vez de empujarla —
-	   se superponían. Ahora Item mide con AutomaticSize (se ajusta solo
-	   a lo que mide adentro: la línea + el cuerpo abierto), así que el
-	   UIListLayout de la lista reacomoda automáticamente TODAS las
-	   pestañas de abajo, cuadro por cuadro, mientras la animación
-	   corre. El resultado: la pestaña activa se alarga y el resto se
-	   corre para abajo, esquivándola, sin superposición posible.
-
-	3. SEPARACIÓN VISUAL ENTRE PESTAÑAS.
-	   Antes el espacio entre líneas era de 2px (casi pegadas, lo cual
-	   se nota mal con esquinas redondeadas). Ahora hay más aire entre
-	   cada una para que se vean como tarjetas independientes.
-
-	4. RENOMBRADA A AzucarLegit.
-	   Nombre del ScreenGui, mensajes de warn() y versión actualizados.
-	   El motor es el mismo que SugarUI/AzucarHackerUI: Callbacks en
-	   hilos independientes (task.spawn + pcall, concurrencia
-	   ilimitada), Flags/FlagValues, y los mismos alias de campo:
-		Text | Name                  → texto de la fila
-		Min/Max | Range = {min, max} → rango del slider
-		Default | CurrentValue       → valor inicial
-		Increment | Step             → salto del slider
-		Callback | Logic = TuTabla   → lógica a ejecutar
-
-	Uso básico (igual que antes):
+	Uso (idéntico a antes):
 
 		local UI = loadstring(game:HttpGet("...AzucarLegit.lua"))()
-
 		local Window = UI:CreateWindow({ Title = "Azúcar Hub" })
-
 		local Combate = Window:CreateTab({ Name = "Combate" })
 		Combate:CreateToggle({ Text = "Auto Farm", Flag = "AutoFarm",
 			Callback = function(state) ... end })
 		Combate:CreateSlider({ Text = "Velocidad", Range = {0, 200}, Default = 16,
 			Callback = function(v) ... end })
-
-		Window:CreateTab({ Name = "Ajustes" })
-
-	Podés ajustar qué tan redondeado se ve todo con
-		UI.Theme.CornerRadius = 14   -- más redondo
-		UI.Theme.CornerRadius = 4    -- más recto
 ]]
 
 local TweenService     = game:GetService("TweenService")
@@ -93,7 +40,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local UI = {}
 
-UI.Version    = "1.2.0"
+UI.Version    = "1.3.0"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -156,13 +103,13 @@ local function getGuiParent()
 end
 
 -- ============================================================
--- 	TEMA
+-- 	TEMA  (idéntico a AzucarSlideUI v1.0.0)
 -- ============================================================
 local Theme = {
 	Background = Color3.fromRGB(14, 14, 17),
 	Header     = Color3.fromRGB(19, 19, 23),
-	Line       = Color3.fromRGB(20, 20, 24),
-	LineOpen   = Color3.fromRGB(27, 27, 33),
+	Line       = Color3.fromRGB(17, 17, 20),
+	LineOpen   = Color3.fromRGB(26, 26, 31),
 	Field      = Color3.fromRGB(30, 30, 36),
 	Border     = Color3.fromRGB(44, 44, 51),
 	Text       = Color3.fromRGB(238, 238, 242),
@@ -171,10 +118,6 @@ local Theme = {
 	ActiveDim  = Color3.fromRGB(152, 32, 32),
 	Font       = Enum.Font.Code,
 	FontBold   = Enum.Font.Code,
-	-- Radio de esquina por defecto para TODA la interfaz. Subilo o
-	-- bajalo desde acá y se actualiza en cada tab/fila/panel.
-	CornerRadius     = 12,
-	CornerRadiusSoft = 8,
 }
 UI.Theme = Theme
 
@@ -229,7 +172,7 @@ function UI:SetAccentColor(paletteName)
 end
 
 -- ============================================================
--- 	HELPERS DE CONSTRUCCIÓN
+-- 	HELPERS DE CONSTRUCCIÓN  (idénticos a AzucarSlideUI v1.0.0)
 -- ============================================================
 local function new(class, props, children)
 	local inst = Instance.new(class)
@@ -242,14 +185,8 @@ local function new(class, props, children)
 	return inst
 end
 
--- Sin argumento usa el radio "fuerte" (pestañas, cuerpos, cabecera).
--- corner("soft") usa el radio chico (filas de controles, campos).
--- corner(N) fuerza un número puntual si alguna vez hace falta.
 local function corner(radius)
-	if radius == "soft" then
-		return new("UICorner", { CornerRadius = UDim.new(0, Theme.CornerRadiusSoft) })
-	end
-	return new("UICorner", { CornerRadius = UDim.new(0, radius or Theme.CornerRadius) })
+	return new("UICorner", { CornerRadius = UDim.new(0, radius or 0) })
 end
 
 local function stroke(color, thickness)
@@ -285,6 +222,7 @@ end
 
 -- ============================================================
 -- 	NÚCLEO: CALLBACKS EN HILOS INDEPENDIENTES (SIN LÍMITE)
+-- 	(idéntico a AzucarSlideUI v1.0.0)
 -- ============================================================
 local function safeCall(controller, fn, ...)
 	fn = fn or function() end
@@ -384,21 +322,21 @@ local function host(self)
 end
 
 -- ============================================================
--- 	CREATE WINDOW
+-- 	CREATE WINDOW  ← ÚNICA parte visual que cambió (ventana/cabecera)
 -- ============================================================
 function UI:CreateWindow(config)
 	config = config or {}
 
 	local title  = config.Title or config.Name or "Azúcar Hub"
 	local LIST_W = config.Width or 340
-	local HEADER_H = 34
+	local HEADER_H = 40
 	local TOP_Y = config.TopOffset or 0
 	local BOTTOM_MARGIN = config.BottomMargin or 0
+	local TAB_RADIUS = 14
 
-	-- Por defecto la UI se para POR ENCIMA de la barra superior de
-	-- Roblox (más arriba posible en la pantalla). Si alguna vez la
-	-- tapa algo que no querés tapar, pasá config.IgnoreGuiInset = false
-	-- para volver a respetar esa barra.
+	-- Por defecto la ventana se para POR ENCIMA de la barra superior de
+	-- Roblox (más arriba en la pantalla). Si en algún juego te tapa
+	-- algo, pasá config.IgnoreGuiInset = false para volver a respetarla.
 	local ignoreInset = true
 	if config.IgnoreGuiInset == false then
 		ignoreInset = false
@@ -430,7 +368,7 @@ function UI:CreateWindow(config)
 		BackgroundColor3 = Theme.Header,
 		BorderSizePixel = 0,
 		Parent = Root,
-	}, { corner(), stroke(Theme.Border, 1) })
+	}, { corner(TAB_RADIUS), stroke(Theme.Border, 1) })
 
 	local AccentBar = new("Frame", {
 		Size = UDim2.new(0, 3, 0, 20),
@@ -438,7 +376,7 @@ function UI:CreateWindow(config)
 		BackgroundColor3 = Theme.Active,
 		BorderSizePixel = 0,
 		Parent = Header,
-	}, { corner("soft") })
+	}, { corner(2) })
 	onAccent(function()
 		if AccentBar.Parent then AccentBar.BackgroundColor3 = Theme.Active end
 	end)
@@ -451,8 +389,8 @@ function UI:CreateWindow(config)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 22, 0, 0),
-		Size = UDim2.new(0.5, -22, 1, 0),
+		Position = UDim2.new(0, 18, 0, 0),
+		Size = UDim2.new(0.5, -18, 1, 0),
 		Parent = Header,
 	})
 
@@ -467,7 +405,7 @@ function UI:CreateWindow(config)
 		TextXAlignment = Enum.TextXAlignment.Right,
 		BackgroundTransparency = 1,
 		Position = UDim2.new(0.5, 0, 0, 0),
-		Size = UDim2.new(0.5, -14, 1, 0),
+		Size = UDim2.new(0.5, -12, 1, 0),
 		Parent = Header,
 	})
 	onAccent(function()
@@ -482,13 +420,10 @@ function UI:CreateWindow(config)
 	end)
 
 	-- ---------------- Lista de pestañas (las "líneas") ----------------
-	-- Separación real entre pestañas (8px) para que, con esquinas
-	-- redondeadas, se vean como tarjetas propias y no como una sola
-	-- franja cuadrada partida en pedazos.
 	local SlideList = new("ScrollingFrame", {
 		Name = "SlideList",
-		Size = UDim2.new(0, LIST_W, 1, -(TOP_Y + HEADER_H + 4 + BOTTOM_MARGIN)),
-		Position = UDim2.new(0, 0, 0, TOP_Y + HEADER_H + 4),
+		Size = UDim2.new(0, LIST_W, 1, -(TOP_Y + HEADER_H + 8 + BOTTOM_MARGIN)),
+		Position = UDim2.new(0, 0, 0, TOP_Y + HEADER_H + 8),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 3,
@@ -516,7 +451,7 @@ function UI:CreateWindow(config)
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, 60),
 		Parent = SlideList,
-	}, { corner(), stroke(Theme.Border, 1), pad(10) })
+	}, { corner(TAB_RADIUS), stroke(Theme.Border, 1), pad(10) })
 
 	local Window = setmetatable({
 		ScreenGui  = ScreenGui,
@@ -530,6 +465,7 @@ function UI:CreateWindow(config)
 		HEADER_H   = HEADER_H,
 		TOP_Y      = TOP_Y,
 		BOTTOM_MARGIN = BOTTOM_MARGIN,
+		TAB_RADIUS = TAB_RADIUS,
 		_tabs        = {},
 		_connections = {},
 		_visible     = true,
@@ -581,12 +517,14 @@ function UI:Destroy()
 end
 
 -- ============================================================
--- 	CREATE TAB — la "línea" redondeada que se alarga hacia abajo
--- 	SIN tocar ni tapar a las demás (las empuja/esquiva).
+-- 	CREATE TAB  ← la OTRA parte visual que cambió (la pestaña en sí).
+-- 	Todo lo de ADENTRO de cada pestaña (los Create... de controles,
+-- 	más abajo en el archivo) es exactamente el original.
 -- ============================================================
 function UI:CreateTab(config)
 	config = config or {}
 	local name = config.Text or config.Name or ("Tab " .. (#self._tabs + 1))
+	local radius = self.TAB_RADIUS or 14
 
 	if self.EmptyHint then
 		self.EmptyHint:Destroy()
@@ -594,13 +532,9 @@ function UI:CreateTab(config)
 	end
 
 	-- Envoltorio: línea + cuerpo desplegable, uno debajo del otro.
-	-- CLAVE del "empuje sin pisarse": Item mide con AutomaticSize.Y, es
-	-- decir, su alto real es SIEMPRE la suma de lo que mide adentro
-	-- (línea fija + cuerpo, que va de 0 a su alto real). Como el
-	-- UIListLayout de SlideList reacomoda a sus hijos según su alto
-	-- ACTUAL, cada frame de la animación hace que Item crezca un
-	-- poquito y arrastra a todas las pestañas de abajo con él — nunca
-	-- se superponen, se van corriendo en vivo.
+	-- Item mide con AutomaticSize.Y (su alto real = línea + cuerpo
+	-- abierto), así el UIListLayout de SlideList corre a las demás
+	-- pestañas hacia abajo en vivo mientras se anima — nunca se pisan.
 	local Item = new("Frame", {
 		Name = name,
 		Size = UDim2.new(1, 0, 0, 0),
@@ -614,8 +548,8 @@ function UI:CreateTab(config)
 
 	local LineHeight = 42
 
-	-- Ancho "cerrado": una píldora angosta que apenas envuelve el texto,
-	-- pegada a la izquierda — NO ocupa todo el panel todavía.
+	-- Ancho "cerrado": píldora angosta que apenas envuelve el texto,
+	-- pegada a la izquierda — todavía no ocupa todo el panel.
 	local collapsedWidth = math.clamp(#name * 8 + 58, 96, self.LIST_W)
 
 	local HeaderRow = new("TextButton", {
@@ -628,7 +562,7 @@ function UI:CreateTab(config)
 		Size = UDim2.new(0, collapsedWidth, 0, LineHeight),
 		LayoutOrder = 1,
 		Parent = Item,
-	}, { corner(), stroke(Theme.Border, 1) })
+	}, { corner(radius), stroke(Theme.Border, 1) })
 
 	local Mark = new("Frame", {
 		Size = UDim2.new(0, 3, 0, 20),
@@ -638,7 +572,7 @@ function UI:CreateTab(config)
 		BorderSizePixel = 0,
 		ZIndex = 3,
 		Parent = HeaderRow,
-	}, { corner("soft") })
+	}, { corner(2) })
 	onAccent(function()
 		if Mark.Parent then Mark.BackgroundColor3 = Theme.Active end
 	end)
@@ -672,10 +606,7 @@ function UI:CreateTab(config)
 	})
 
 	-- Cuerpo desplegable: arranca en 0 de alto y recortado, así no se ve
-	-- nada de su contenido hasta que se abre la línea. Tiene su propio
-	-- espacio antes de la línea (Padding en Item) para que se note como
-	-- una continuación redondeada de la pestaña, no pegado a la línea de
-	-- arriba.
+	-- nada de su contenido hasta que se abre la línea.
 	local Body = new("Frame", {
 		Name = "Body",
 		Size = UDim2.new(1, 0, 0, 0),
@@ -684,7 +615,7 @@ function UI:CreateTab(config)
 		ClipsDescendants = true,
 		LayoutOrder = 2,
 		Parent = Item,
-	}, { corner() })
+	}, { corner(radius) })
 
 	local List = new("Frame", {
 		Name = "List",
@@ -718,12 +649,11 @@ function UI:CreateTab(config)
 	end)
 
 	-- Animación en DOS tiempos, nunca junta:
-	--   1) La línea se ALARGA hacia la derecha (de píldora angosta a
-	--      todo el ancho del panel).
-	--   2) Recién cuando ESO termina, lo que se alargó se DESLIZA hacia
+	--   1) La línea se ALARGA hacia la derecha (píldora → panel entero).
+	--   2) Recién cuando ESO termina, el contenido se DESLIZA hacia
 	--      abajo mostrando los controles.
-	-- Al cerrar es al revés: primero sube/se recoge el contenido de
-	-- abajo, y cuando termina, la línea se encoge de nuevo a píldora.
+	-- Cerrar es al revés: primero se recoge el contenido, y cuando
+	-- termina, la línea se encoge de nuevo a píldora.
 	local ANIM_TIME = 0.16
 
 	local function applyOpenVisual(open)
@@ -732,28 +662,19 @@ function UI:CreateTab(config)
 		HeaderRow.BackgroundColor3 = open and Theme.LineOpen or Theme.Line
 		tween(Arrow, { Rotation = open and 0 or -90 }, ANIM_TIME)
 
-		local targetHeight = 0
 		if open then
-			-- +4 de aire entre la línea y el primer control.
-			targetHeight = List.AbsoluteSize.Y + 4
-		end
-
-		if open then
-			-- Paso 1: alargar hacia la derecha.
 			local widen = TweenService:Create(
 				HeaderRow,
 				TweenInfo.new(ANIM_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
 				{ Size = UDim2.new(1, 0, 0, LineHeight) }
 			)
 			widen.Completed:Connect(function()
-				-- Si mientras se alargaba ya la cerraron de nuevo, no
-				-- sigas desplegando hacia abajo.
 				if not Tab._isOpen then return end
+				local targetHeight = List.AbsoluteSize.Y + 4
 				tween(Body, { Size = UDim2.new(1, 0, 0, targetHeight) }, ANIM_TIME + 0.08)
 			end)
 			widen:Play()
 		else
-			-- Paso 1: recoger lo de abajo (deslizar hacia arriba).
 			local collapseBody = TweenService:Create(
 				Body,
 				TweenInfo.new(ANIM_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
@@ -774,9 +695,6 @@ function UI:CreateTab(config)
 	end
 
 	local function setOpen(open)
-		-- Cerrar cualquier otra línea que estuviera abierta: solo una a
-		-- la vez ("se alarga y esquiva a las demás", no varias abiertas
-		-- juntas empujándose entre sí).
 		if open then
 			for _, other in ipairs(self._tabs) do
 				if other ~= Tab and other._isOpen then
@@ -805,6 +723,10 @@ function UI:CreateTab(config)
 end
 
 -- ============================================================
+-- 	A PARTIR DE ACÁ: TODO IGUAL A AzucarSlideUI v1.0.0, SIN CAMBIOS.
+-- ============================================================
+
+-- ============================================================
 -- 	BOTÓN
 -- ============================================================
 function UI:CreateButton(config)
@@ -824,10 +746,10 @@ function UI:CreateButton(config)
 		AutoButtonColor = false,
 		BackgroundColor3 = Theme.Field,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 34),
+		Size = UDim2.new(1, 0, 0, 32),
 		LayoutOrder = nextOrder(owner),
 		Parent = list,
-	}, { corner("soft") })
+	})
 	hoverField(Btn, Theme.Field)
 
 	local Button = setmetatable({ Instance = Btn, Callback = callback, _threads = {} }, UI)
@@ -869,12 +791,12 @@ function UI:CreateToggle(config)
 	if not list then return setmetatable({}, Stub) end
 
 	local Row = new("Frame", {
-		Size = UDim2.new(1, 0, 0, 34),
+		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundColor3 = Theme.Field,
 		BorderSizePixel = 0,
 		LayoutOrder = nextOrder(owner),
 		Parent = list,
-	}, { corner("soft"), pad(0, 0, 10, 0, 10) })
+	})
 	hoverField(Row, Theme.Field)
 
 	new("TextLabel", {
@@ -895,7 +817,7 @@ function UI:CreateToggle(config)
 		BackgroundColor3 = state and Theme.Active or Theme.Border,
 		BorderSizePixel = 0,
 		Parent = Row,
-	}, { corner("soft") })
+	}, { corner(3) })
 
 	local Toggle = setmetatable({ Box = Box, Value = state, Callback = callback, _threads = {} }, UI)
 
@@ -965,12 +887,12 @@ function UI:CreateSlider(config)
 	if not list then return setmetatable({}, Stub) end
 
 	local Row = new("Frame", {
-		Size = UDim2.new(1, 0, 0, 48),
+		Size = UDim2.new(1, 0, 0, 46),
 		BackgroundColor3 = Theme.Field,
 		BorderSizePixel = 0,
 		LayoutOrder = nextOrder(owner),
 		Parent = list,
-	}, { corner("soft"), pad(0, 8, 10, 8, 10) })
+	}, { pad(0, 6, 10, 6, 10) })
 
 	new("TextLabel", {
 		Text = config.Text or config.Name or "Valor",
@@ -1001,11 +923,11 @@ function UI:CreateSlider(config)
 
 	local Track = new("Frame", {
 		Size = UDim2.new(1, 0, 0, 4),
-		Position = UDim2.new(0, 0, 0, 28),
+		Position = UDim2.new(0, 0, 0, 26),
 		BackgroundColor3 = Theme.Border,
 		BorderSizePixel = 0,
 		Parent = Row,
-	}, { corner("soft") })
+	}, { corner(2) })
 
 	local function ratio(v) return (v - min) / (max - min) end
 
@@ -1014,7 +936,7 @@ function UI:CreateSlider(config)
 		BackgroundColor3 = Theme.Active,
 		BorderSizePixel = 0,
 		Parent = Track,
-	}, { corner("soft") })
+	}, { corner(2) })
 	onAccent(function()
 		if Fill.Parent then Fill.BackgroundColor3 = Theme.Active end
 	end)
@@ -1025,7 +947,7 @@ function UI:CreateSlider(config)
 		BackgroundColor3 = Theme.Text,
 		BorderSizePixel = 0,
 		Parent = Track,
-	}, { corner("soft") })
+	}, { corner(5) })
 
 	local Slider = setmetatable({
 		Track = Track, Fill = Fill, Knob = Knob, Value = value, Min = min, Max = max,
@@ -1083,10 +1005,7 @@ function UI:CreateSlider(config)
 end
 
 -- ============================================================
--- 	DROPDOWN — acordeón adentro del acordeón: al abrirse empuja el
--- 	resto de esa pestaña hacia abajo (List ya mide con AutomaticSize,
--- 	y a su vez Item de la pestaña también, así que el empuje llega
--- 	hasta las OTRAS pestañas de la lista).
+-- 	DROPDOWN
 -- ============================================================
 function UI:CreateDropdown(config)
 	config = config or {}
@@ -1112,13 +1031,13 @@ function UI:CreateDropdown(config)
 	if not list then return setmetatable({}, Stub) end
 
 	local Row = new("Frame", {
-		Size = UDim2.new(1, 0, 0, 34),
+		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundColor3 = Theme.Field,
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
 		LayoutOrder = nextOrder(owner),
 		Parent = list,
-	}, { corner("soft") })
+	})
 
 	new("TextLabel", {
 		Text = config.Text or config.Name or "Opciones",
@@ -1129,7 +1048,7 @@ function UI:CreateDropdown(config)
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		BackgroundTransparency = 1,
 		Position = UDim2.new(0, 10, 0, 0),
-		Size = UDim2.new(0.45, -10, 0, 34),
+		Size = UDim2.new(0.45, -10, 0, 32),
 		Parent = Row,
 	})
 
@@ -1142,7 +1061,7 @@ function UI:CreateDropdown(config)
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		BackgroundTransparency = 1,
 		Position = UDim2.new(0.45, 0, 0, 0),
-		Size = UDim2.new(0.55, -24, 0, 34),
+		Size = UDim2.new(0.55, -24, 0, 32),
 		Parent = Row,
 	})
 	onAccent(function()
@@ -1156,11 +1075,11 @@ function UI:CreateDropdown(config)
 		TextColor3 = Theme.TextDim,
 		BackgroundTransparency = 1,
 		Position = UDim2.new(1, -20, 0, 0),
-		Size = UDim2.new(0, 16, 0, 34),
+		Size = UDim2.new(0, 16, 0, 32),
 		Parent = Row,
 	})
 
-	local ROW_H = 34
+	local ROW_H = 32
 	local ListFrame = new("ScrollingFrame", {
 		Size = UDim2.new(1, -16, 0, math.min(math.max(#options, 1), 6) * 24 + 8),
 		Position = UDim2.new(0, 8, 0, ROW_H),
@@ -1172,7 +1091,7 @@ function UI:CreateDropdown(config)
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		Parent = Row,
 	}, {
-		corner("soft"), stroke(Theme.Border, 1), pad(4),
+		stroke(Theme.Border, 1), pad(4),
 		new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
 
@@ -1206,7 +1125,7 @@ function UI:CreateDropdown(config)
 				Size = UDim2.new(1, 0, 0, 22),
 				LayoutOrder = index,
 				Parent = ListFrame,
-			}, { corner("soft"), pad(0, 0, 6, 0, 6) })
+			}, { corner(3), pad(0, 0, 6, 0, 6) })
 			OptionBtn.MouseEnter:Connect(function() tween(OptionBtn, { BackgroundColor3 = Theme.LineOpen }) end)
 			OptionBtn.MouseLeave:Connect(function() tween(OptionBtn, { BackgroundColor3 = Theme.Field }) end)
 			table.insert(window._connections, OptionBtn.MouseButton1Click:Connect(function()
@@ -1258,12 +1177,12 @@ function UI:CreateInput(config)
 	if not list then return setmetatable({}, Stub) end
 
 	local Row = new("Frame", {
-		Size = UDim2.new(1, 0, 0, 34),
+		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundColor3 = Theme.Field,
 		BorderSizePixel = 0,
 		LayoutOrder = nextOrder(owner),
 		Parent = list,
-	}, { corner("soft") })
+	})
 
 	new("TextLabel", {
 		Text = config.Text or config.Name or "Texto",
@@ -1293,7 +1212,7 @@ function UI:CreateInput(config)
 		Position = UDim2.new(0.42, 0, 0.5, -10),
 		Size = UDim2.new(0.55, -10, 0, 20),
 		Parent = Row,
-	}, { corner("soft"), stroke(Theme.Border, 1), pad(0, 0, 6, 0, 6) })
+	}, { corner(3), stroke(Theme.Border, 1), pad(0, 0, 6, 0, 6) })
 
 	local Input = setmetatable({ Instance = Box, Value = Box.Text, Callback = callback, _threads = {} }, UI)
 
@@ -1336,12 +1255,12 @@ function UI:CreateKeybind(config)
 	if not list then return setmetatable({}, Stub) end
 
 	local Row = new("Frame", {
-		Size = UDim2.new(1, 0, 0, 34),
+		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundColor3 = Theme.Field,
 		BorderSizePixel = 0,
 		LayoutOrder = nextOrder(owner),
 		Parent = list,
-	}, { corner("soft") })
+	})
 
 	new("TextLabel", {
 		Text = config.Text or config.Name or "Tecla",
@@ -1368,7 +1287,7 @@ function UI:CreateKeybind(config)
 		Size = UDim2.new(0, 60, 0, 20),
 		Position = UDim2.new(1, -68, 0.5, -10),
 		Parent = Row,
-	}, { corner("soft"), stroke(Theme.Border, 1) })
+	}, { corner(3), stroke(Theme.Border, 1) })
 
 	local Keybind = setmetatable({ Value = currentKey, Callback = callback, _threads = {} }, UI)
 
@@ -1464,7 +1383,7 @@ function UI:CreateSection(config)
 		BackgroundColor3 = Theme.Active,
 		BorderSizePixel = 0,
 		Parent = holder,
-	}, { corner("soft") })
+	})
 	onAccent(function()
 		if underline.Parent then underline.BackgroundColor3 = Theme.Active end
 	end)
@@ -1501,12 +1420,12 @@ function UI:CreateStat(config)
 	if not list then return setmetatable({}, Stub) end
 
 	local holder = new("Frame", {
-		Size = UDim2.new(1, 0, 0, 44),
+		Size = UDim2.new(1, 0, 0, 40),
 		BackgroundColor3 = Theme.Field,
 		BorderSizePixel = 0,
 		LayoutOrder = nextOrder(owner),
 		Parent = list,
-	}, { corner("soft"), pad(0, 6, 10, 6, 10) })
+	}, { pad(0, 5, 10, 5, 10) })
 
 	local ValueLabel = new("TextLabel", {
 		Text = tostring(config.Value or "0"),
