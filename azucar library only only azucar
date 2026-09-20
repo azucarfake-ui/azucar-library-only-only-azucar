@@ -1,9 +1,9 @@
 --[[
-	AzucarLegit  v1.3.12
+	AzucarLegit  v1.3.13
 	====================
 	(Antes: AzucarSlideUI / AzucarHackerUI)
 
-	CAMBIOS RECIENTES (hasta v1.3.12):
+	CAMBIOS RECIENTES (hasta v1.3.13):
 	  1. TRANSPARENCIA REAL. La tarjeta que abre cada pestaña ahora es
 	     un CanvasGroup: fondo, botones, toggles, sliders, listas,
 	     inputs, keybinds y stats se dibujan juntos y el conjunto se
@@ -51,7 +51,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local UI = {}
 
-UI.Version    = "1.3.12"
+UI.Version    = "1.3.13"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -588,9 +588,6 @@ function UI:CreateWindow(config)
 
 	table.insert(UI.Windows, Window)
 
-	-- Para confirmar en la consola (F9) qué versión se está ejecutando.
-	print(string.format("[AzucarLegit] v%s cargada | tarjeta: tope %s px, margen derecho %d px",
-		UI.Version, tostring(PANEL_MAX_W), PANEL_MARGIN))
 
 	return Window
 end
