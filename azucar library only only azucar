@@ -1,9 +1,9 @@
 --[[
-	AzucarLegit  v1.8.4
+	AzucarLegit  v1.8.5
 	====================
 	(Antes: AzucarSlideUI / AzucarHackerUI)
 
-	CAMBIOS RECIENTES (hasta v1.8.4):
+	CAMBIOS RECIENTES (hasta v1.8.5):
 	  1. TRANSPARENCIA REAL. La tarjeta que abre cada pestaña ahora es
 	     un CanvasGroup: fondo, botones, toggles, sliders, listas,
 	     inputs, keybinds y stats se dibujan juntos y el conjunto se
@@ -60,6 +60,11 @@
 	     Flag por defecto; config.AutoLoadOrder = {"M", "F"} prioriza
 	     primero los Flags que arrancan con esas letras, en ese orden,
 	     y deja el resto alfabético al final.
+	 14. SLIDER: ahora guarda solo al SOLTAR (no en cada pixel del
+	     arrastre), para que el valor final quede bien guardado.
+	 15. IGNORAR CONTROLES: config.AutoSaveIgnore = {"MiniPekka"} hace
+	     que esos Flags nunca se guarden ni se carguen (coincide si el
+	     nombre del Flag CONTIENE la palabra, sin importar mayúsculas).
 
 	IMPORTANTE: la lógica interna de cada control (CreateButton,
 	CreateToggle, CreateSlider, CreateDropdown, CreateInput,
@@ -94,7 +99,7 @@ local RunService       = game:GetService("RunService")
 
 local UI = {}
 
-UI.Version    = "1.8.4"
+UI.Version    = "1.8.5"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -114,6 +119,21 @@ local autoSaveTargets = {}
 -- uno detrás de otro, justo en el peor momento (cuando también se están
 -- disparando de golpe todos esos Callbacks).
 local loadingConfig = false
+
+-- Palabras que un Flag NUNCA debe guardar ni cargar (config.AutoSaveIgnore
+-- en CreateWindow, ej. {"MiniPekka"}). Coincide si el nombre del Flag
+-- CONTIENE la palabra, sin importar mayúsculas/minúsculas — así no
+-- importa si tu Flag es "MiniPekka", "mini_pekka_toggle", etc.
+local autoSaveIgnore = {}
+local function isIgnoredFlag(flag)
+	local lower = tostring(flag):lower()
+	for _, word in ipairs(autoSaveIgnore) do
+		if typeof(word) == "string" and word ~= "" and lower:find(word:lower(), 1, true) then
+			return true
+		end
+	end
+	return false
+end
 
 -- ============================================================
 -- 	LARGO (ANCHO) DE LA TARJETA — CAMBIÁ SOLO ESTE NÚMERO
@@ -473,18 +493,22 @@ end
 
 -- Guarda el valor de una Flag sin reventar si el control no tiene Flag
 -- (tabla[nil] = valor tira error en Lua y mataría el hilo ahí mismo).
-local function setFlagValue(flagName, value)
+-- `skipSave`: para el slider mientras arrastrás (ver CreateSlider). Sin
+-- esto, escribir el archivo en cada pixel de un arrastre podía dejar el
+-- valor guardado a medio camino o corrompido si el ejecutor no llegaba
+-- a terminar una escritura antes de que empezara la siguiente.
+local function setFlagValue(flagName, value, skipSave)
 	if flagName == nil then return end
 	UI.FlagValues[flagName] = value
-	-- Guarda DE INMEDIATO, sin ningún temporizador de por medio. Antes
-	-- había un retraso de 0.6s para no escribir el archivo en cada
-	-- pixel de un arrastre de slider, pero si volvías a ejecutar el
-	-- script antes de que pasara ese medio segundo, muchos ejecutores
-	-- matan esa espera pendiente y el guardado nunca llegaba a pasar.
-	-- Ahora el archivo queda escrito ANTES de que esta función termine.
-	-- (Salvo mientras se está CARGANDO una config: ahí no hace falta
-	-- reescribir el mismo archivo que se acaba de leer.)
-	if not loadingConfig and next(autoSaveTargets) ~= nil then
+	-- Guarda DE INMEDIATO, sin ningún temporizador de por medio (salvo
+	-- que se pida lo contrario con skipSave). Antes había un retraso de
+	-- 0.6s para no escribir el archivo en cada pixel de un arrastre,
+	-- pero si volvías a ejecutar el script antes de ese medio segundo,
+	-- muchos ejecutores matan esa espera pendiente y el guardado nunca
+	-- llegaba a pasar. Ahora el archivo queda escrito ANTES de que esta
+	-- función termine. (Salvo mientras se está CARGANDO una config: ahí
+	-- no hace falta reescribir el mismo archivo que se acaba de leer.)
+	if not skipSave and not loadingConfig and next(autoSaveTargets) ~= nil then
 		for name in pairs(autoSaveTargets) do
 			UI:SaveConfig(name)
 		end
@@ -794,6 +818,13 @@ function UI:CreateWindow(config)
 			end
 		end
 	end))
+
+	-- Palabras a ignorar del todo para guardar/cargar (ver isIgnoredFlag).
+	if typeof(config.AutoSaveIgnore) == "table" then
+		for _, word in ipairs(config.AutoSaveIgnore) do
+			table.insert(autoSaveIgnore, word)
+		end
+	end
 
 	-- ---------------- Guardado/carga de configuración ----------------
 	-- config.AutoSaveConfig = true (usa el nombre "default") o un
@@ -1852,11 +1883,15 @@ function UI:CreateSlider(config)
 		ValueLabel.Text = show(v)
 	end
 
-	function Slider:Set(newValue)
+	-- `whileDragging`: true SOLO durante el arrastre (ver más abajo). En
+	-- ese caso no se guarda en disco todavía; se guarda UNA vez, con el
+	-- valor final, recién cuando soltás. Llamado a mano (Slider:Set(x))
+	-- sigue guardando al toque, como cualquier otro control.
+	function Slider:Set(newValue, whileDragging)
 		newValue = snap(tonumber(newValue) or min)
 		self.Value = newValue
 		repaint(newValue)
-		setFlagValue(config.Flag, newValue)
+		setFlagValue(config.Flag, newValue, whileDragging)
 		return safeCall(self, self.Callback, newValue)
 	end
 	function Slider:Get() return self.Value end
@@ -1865,7 +1900,7 @@ function UI:CreateSlider(config)
 	local dragging = false
 	local function setFromX(xPos)
 		local relative = math.clamp((xPos - Track.AbsolutePosition.X) / math.max(Track.AbsoluteSize.X, 1), 0, 1)
-		Slider:Set(min + relative * (max - min))
+		Slider:Set(min + relative * (max - min), dragging)
 	end
 	local function mouseOverThisTrack()
 		local ok, mousePos = pcall(function() return UserInputService:GetMouseLocation() end)
@@ -1891,6 +1926,9 @@ function UI:CreateSlider(config)
 			if dragging then
 				dragging = false
 				tween(KnobPop, { Scale = 1 }, 0.15)
+				-- Guardado final, ya con el dedo/mouse soltado: acá si
+				-- queda escrito en disco el valor con el que te quedaste.
+				setFlagValue(config.Flag, Slider.Value)
 			end
 		end
 	end))
@@ -2403,11 +2441,13 @@ function UI:SaveConfig(name)
 
 	local data = {}
 	for flag, value in pairs(UI.FlagValues) do
-		local t = typeof(value)
-		if t == "boolean" or t == "number" or t == "string" then
-			data[flag] = value
-		elseif t == "EnumItem" and value.Name then
-			data[flag] = { __keycode = value.Name }
+		if not isIgnoredFlag(flag) then
+			local t = typeof(value)
+			if t == "boolean" or t == "number" or t == "string" then
+				data[flag] = value
+			elseif t == "EnumItem" and value.Name then
+				data[flag] = { __keycode = value.Name }
+			end
 		end
 	end
 
@@ -2485,7 +2525,11 @@ function UI:LoadConfig(name, stagger)
 	end
 
 	local flags = {}
-	for flag in pairs(data) do table.insert(flags, flag) end
+	for flag in pairs(data) do
+		if not isIgnoredFlag(flag) then
+			table.insert(flags, flag)
+		end
+	end
 	table.sort(flags, function(a, b)
 		local pa, pb = priority(a), priority(b)
 		if pa ~= pb then return pa < pb end
