@@ -1,9 +1,9 @@
 --[[
-	AzucarLegit  v1.7.1
+	AzucarLegit  v1.8.0
 	====================
 	(Antes: AzucarSlideUI / AzucarHackerUI)
 
-	CAMBIOS RECIENTES (hasta v1.7.1):
+	CAMBIOS RECIENTES (hasta v1.8.0):
 	  1. TRANSPARENCIA REAL. La tarjeta que abre cada pestaña ahora es
 	     un CanvasGroup: fondo, botones, toggles, sliders, listas,
 	     inputs, keybinds y stats se dibujan juntos y el conjunto se
@@ -42,6 +42,10 @@
 	 10. CHISPAS MÁS NOTORIAS: más cantidad (SPARKS_COUNT), más grandes
 	     (SPARK_SIZE_PX), con halo que brilla, más rápidas y titilando.
 	     La niebla quedó un poco más chica (AURA_SIZE_PX).
+	 11. GUARDAR CONFIGURACIÓN: todo control con Flag se puede guardar y
+	     recuperar. Automático con config.AutoSaveConfig = true (o un
+	     nombre) en CreateWindow; manual con Window:SaveConfig("nombre")
+	     / Window:LoadConfig("nombre") / Window:ListConfigs().
 
 	IMPORTANTE: la lógica interna de cada control (CreateButton,
 	CreateToggle, CreateSlider, CreateDropdown, CreateInput,
@@ -76,10 +80,21 @@ local RunService       = game:GetService("RunService")
 
 local UI = {}
 
-UI.Version    = "1.7.1"
+UI.Version    = "1.8.0"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
+
+-- Carpeta donde se guardan las configs (Toggles/Sliders/Dropdowns/etc.
+-- que activaste, con su Flag). Se puede cambiar antes de usar la
+-- librería: UI.ConfigFolder = "MiHub".
+UI.ConfigFolder = "AzucarLegit"
+
+-- autoSaveTargets: nombres de config que se guardan solos cada vez que
+-- cambia algo. scheduleAutoSave se declara acá (forward) y se define
+-- más abajo, junto a SaveConfig, para no reordenar todo el archivo.
+local autoSaveTargets = {}
+local scheduleAutoSave
 
 -- ============================================================
 -- 	LARGO (ANCHO) DE LA TARJETA — CAMBIÁ SOLO ESTE NÚMERO
@@ -442,6 +457,7 @@ end
 local function setFlagValue(flagName, value)
 	if flagName == nil then return end
 	UI.FlagValues[flagName] = value
+	if scheduleAutoSave then scheduleAutoSave() end
 end
 
 local function nextOrder(owner)
@@ -667,6 +683,7 @@ function UI:CreateWindow(config)
 		_connections = {},
 		_visible     = true,
 		_loadId      = LOAD_ID,
+		_configName  = nil, -- se completa abajo si config.AutoSaveConfig está activo
 		_blur        = blur,
 		_blurSize    = config.BlurSize or BLUR_SIZE,
 	}, UI)
@@ -744,6 +761,24 @@ function UI:CreateWindow(config)
 			end
 		end
 	end))
+
+	-- ---------------- Guardado/carga de configuración ----------------
+	-- config.AutoSaveConfig = true (usa el nombre "default") o un
+	-- nombre propio ("MiConfig"): guarda solo cada vez que tocás algo
+	-- con Flag, y carga esa config apenas termine de armarse toda la UI
+	-- (task.defer: se ejecuta después de que tu script cree todas las
+	-- pestañas y controles). Si preferís guardar/cargar vos mismo a
+	-- mano, no pases esto y usá Window:SaveConfig("nombre") /
+	-- Window:LoadConfig("nombre") cuando quieras.
+	local autoName = config.AutoSaveConfig
+	if autoName == true then autoName = "default" end
+	if typeof(autoName) == "string" and autoName ~= "" then
+		Window._configName = autoName
+		autoSaveTargets[autoName] = true
+		task.defer(function()
+			Window:LoadConfig(autoName)
+		end)
+	end
 
 	table.insert(UI.Windows, Window)
 
@@ -2272,6 +2307,165 @@ function UI:CreateStat(config)
 	end
 	registerFlag(config.Flag, Stat, config.Value)
 	return Stat
+end
+
+-- ============================================================
+-- 	GUARDAR / CARGAR CONFIGURACIÓN (Toggles, Sliders, Dropdowns, etc.)
+-- ============================================================
+-- Cualquier control creado con un Flag (config.Flag = "AutoFarm") queda
+-- registrado en UI.Flags / UI.FlagValues. Estas funciones recorren eso
+-- para guardar y volver a aplicar los valores.
+--
+-- Uso manual:
+--   Window:SaveConfig("MiConfig")
+--   Window:LoadConfig("MiConfig")
+--   Window:ListConfigs() -> { "MiConfig", "default", ... }
+--
+-- Uso automático (recomendado, más simple): pasá
+-- config.AutoSaveConfig = true (o un nombre) en CreateWindow y listo:
+-- se guarda solo cada vez que tocás algo y se recupera solo al volver
+-- a entrar.
+--
+-- Usa las funciones del ejecutor (writefile/readfile/isfile/isfolder/
+-- makefolder/listfiles). Si tu ejecutor no las tiene, avisa por
+-- consola y no rompe nada del resto del script.
+
+local function ensureConfigFolder()
+	if typeof(isfolder) == "function" and typeof(makefolder) == "function" then
+		if not isfolder(UI.ConfigFolder) then
+			pcall(makefolder, UI.ConfigFolder)
+		end
+	end
+end
+
+-- Solo guarda tipos "simples": booleanos, números y strings tal cual, y
+-- los KeyCode como su nombre (ej. "F"), para poder reconstruirlos al
+-- cargar. Cualquier otra cosa rara que hayas metido en una Flag (un
+-- jugador, tu propia tabla) se ignora en vez de romper el guardado del
+-- resto.
+function UI:SaveConfig(name)
+	name = name or "default"
+
+	if typeof(writefile) ~= "function" then
+		warn("[AzucarLegit] Tu ejecutor no tiene writefile — no se puede guardar la config.")
+		return false
+	end
+
+	ensureConfigFolder()
+
+	local data = {}
+	for flag, value in pairs(UI.FlagValues) do
+		local t = typeof(value)
+		if t == "boolean" or t == "number" or t == "string" then
+			data[flag] = value
+		elseif t == "EnumItem" and value.Name then
+			data[flag] = { __keycode = value.Name }
+		end
+	end
+
+	local okJson, encoded = pcall(function()
+		return game:GetService("HttpService"):JSONEncode(data)
+	end)
+	if not okJson then
+		warn("[AzucarLegit] No se pudo convertir la config a JSON.")
+		return false
+	end
+
+	local okWrite, err = pcall(writefile, UI.ConfigFolder .. "/" .. name .. ".json", encoded)
+	if not okWrite then
+		warn("[AzucarLegit] No se pudo guardar la config: " .. tostring(err))
+		return false
+	end
+	return true
+end
+
+-- Recorre la config guardada y llama a controller:Set(valor) por cada
+-- Flag que coincida con un control que exista AHORA MISMO en la UI —
+-- así no importa si guardaste con una versión de tu hub que tenía más
+-- o menos controles que la que tenés cargada hoy.
+function UI:LoadConfig(name)
+	name = name or "default"
+
+	if typeof(readfile) ~= "function" or typeof(isfile) ~= "function" then
+		warn("[AzucarLegit] Tu ejecutor no tiene readfile/isfile — no se puede cargar la config.")
+		return false
+	end
+
+	local path = UI.ConfigFolder .. "/" .. name .. ".json"
+	if not isfile(path) then
+		return false -- primera vez: no hay nada guardado todavía, no es un error
+	end
+
+	local okRead, raw = pcall(readfile, path)
+	if not okRead then
+		warn("[AzucarLegit] No se pudo leer el archivo de config.")
+		return false
+	end
+
+	local okJson, data = pcall(function()
+		return game:GetService("HttpService"):JSONDecode(raw)
+	end)
+	if not okJson or typeof(data) ~= "table" then
+		warn("[AzucarLegit] La config guardada está corrupta o vacía.")
+		return false
+	end
+
+	for flag, value in pairs(data) do
+		local controller = UI.Flags[flag]
+		if controller and typeof(controller.Set) == "function" then
+			if typeof(value) == "table" and value.__keycode then
+				local okKey, keyCode = pcall(function()
+					return Enum.KeyCode[value.__keycode]
+				end)
+				if okKey and keyCode then
+					controller:Set(keyCode)
+				end
+			else
+				pcall(function() controller:Set(value) end)
+			end
+		end
+	end
+	return true
+end
+
+-- Nombres de configs guardadas (sin ".json"), por ejemplo para armar un
+-- Dropdown de "qué config cargar".
+function UI:ListConfigs()
+	if typeof(listfiles) ~= "function" or typeof(isfolder) ~= "function" then
+		return {}
+	end
+	if not isfolder(UI.ConfigFolder) then
+		return {}
+	end
+
+	local names = {}
+	local okList, files = pcall(listfiles, UI.ConfigFolder)
+	if not okList then
+		return names
+	end
+
+	for _, path in ipairs(files) do
+		local fname = path:match("([^/\\]+)%.json$")
+		if fname then
+			table.insert(names, fname)
+		end
+	end
+	return names
+end
+
+-- Guarda con un pequeño retraso (0.6 s) después del último cambio, así
+-- si tocás varios controles seguidos no se escribe un archivo por cada
+-- uno: se junta todo en un solo guardado.
+local autoSaveThread = nil
+scheduleAutoSave = function()
+	if next(autoSaveTargets) == nil then return end
+	if autoSaveThread then return end
+	autoSaveThread = task.delay(0.6, function()
+		autoSaveThread = nil
+		for name in pairs(autoSaveTargets) do
+			UI:SaveConfig(name)
+		end
+	end)
 end
 
 return UI
