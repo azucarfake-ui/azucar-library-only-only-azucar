@@ -1,9 +1,9 @@
 --[[
-	AzucarLegit  v1.8.0
+	AzucarLegit  v1.8.1
 	====================
 	(Antes: AzucarSlideUI / AzucarHackerUI)
 
-	CAMBIOS RECIENTES (hasta v1.8.0):
+	CAMBIOS RECIENTES (hasta v1.8.1):
 	  1. TRANSPARENCIA REAL. La tarjeta que abre cada pestaña ahora es
 	     un CanvasGroup: fondo, botones, toggles, sliders, listas,
 	     inputs, keybinds y stats se dibujan juntos y el conjunto se
@@ -45,7 +45,10 @@
 	 11. GUARDAR CONFIGURACIÓN: todo control con Flag se puede guardar y
 	     recuperar. Automático con config.AutoSaveConfig = true (o un
 	     nombre) en CreateWindow; manual con Window:SaveConfig("nombre")
-	     / Window:LoadConfig("nombre") / Window:ListConfigs().
+	     / Window:LoadConfig("nombre") / Window:ListConfigs(). El
+	     autoguardado escribe el archivo AL INSTANTE (v1.8.1: se sacó
+	     el retraso de 0.6s, que podía perderse si re-ejecutabas el
+	     script muy rápido).
 
 	IMPORTANTE: la lógica interna de cada control (CreateButton,
 	CreateToggle, CreateSlider, CreateDropdown, CreateInput,
@@ -80,7 +83,7 @@ local RunService       = game:GetService("RunService")
 
 local UI = {}
 
-UI.Version    = "1.8.0"
+UI.Version    = "1.8.1"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -91,10 +94,9 @@ UI.FlagValues = {}
 UI.ConfigFolder = "AzucarLegit"
 
 -- autoSaveTargets: nombres de config que se guardan solos cada vez que
--- cambia algo. scheduleAutoSave se declara acá (forward) y se define
--- más abajo, junto a SaveConfig, para no reordenar todo el archivo.
+-- cambia algo (ver setFlagValue, más abajo, y SaveConfig, al final del
+-- archivo).
 local autoSaveTargets = {}
-local scheduleAutoSave
 
 -- ============================================================
 -- 	LARGO (ANCHO) DE LA TARJETA — CAMBIÁ SOLO ESTE NÚMERO
@@ -457,7 +459,17 @@ end
 local function setFlagValue(flagName, value)
 	if flagName == nil then return end
 	UI.FlagValues[flagName] = value
-	if scheduleAutoSave then scheduleAutoSave() end
+	-- Guarda DE INMEDIATO, sin ningún temporizador de por medio. Antes
+	-- había un retraso de 0.6s para no escribir el archivo en cada
+	-- pixel de un arrastre de slider, pero si volvías a ejecutar el
+	-- script antes de que pasara ese medio segundo, muchos ejecutores
+	-- matan esa espera pendiente y el guardado nunca llegaba a pasar.
+	-- Ahora el archivo queda escrito ANTES de que esta función termine.
+	if next(autoSaveTargets) ~= nil then
+		for name in pairs(autoSaveTargets) do
+			UI:SaveConfig(name)
+		end
+	end
 end
 
 local function nextOrder(owner)
@@ -2323,8 +2335,8 @@ end
 --
 -- Uso automático (recomendado, más simple): pasá
 -- config.AutoSaveConfig = true (o un nombre) en CreateWindow y listo:
--- se guarda solo cada vez que tocás algo y se recupera solo al volver
--- a entrar.
+-- se guarda solo, AL INSTANTE, cada vez que tocás algo, y se recupera
+-- solo al volver a entrar.
 --
 -- Usa las funciones del ejecutor (writefile/readfile/isfile/isfolder/
 -- makefolder/listfiles). Si tu ejecutor no las tiene, avisa por
@@ -2451,21 +2463,6 @@ function UI:ListConfigs()
 		end
 	end
 	return names
-end
-
--- Guarda con un pequeño retraso (0.6 s) después del último cambio, así
--- si tocás varios controles seguidos no se escribe un archivo por cada
--- uno: se junta todo en un solo guardado.
-local autoSaveThread = nil
-scheduleAutoSave = function()
-	if next(autoSaveTargets) == nil then return end
-	if autoSaveThread then return end
-	autoSaveThread = task.delay(0.6, function()
-		autoSaveThread = nil
-		for name in pairs(autoSaveTargets) do
-			UI:SaveConfig(name)
-		end
-	end)
 end
 
 return UI
