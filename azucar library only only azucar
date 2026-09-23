@@ -1,9 +1,9 @@
 --[[
-	AzucarLegit  v1.8.1
+	AzucarLegit  v1.8.3
 	====================
 	(Antes: AzucarSlideUI / AzucarHackerUI)
 
-	CAMBIOS RECIENTES (hasta v1.8.1):
+	CAMBIOS RECIENTES (hasta v1.8.3):
 	  1. TRANSPARENCIA REAL. La tarjeta que abre cada pestaña ahora es
 	     un CanvasGroup: fondo, botones, toggles, sliders, listas,
 	     inputs, keybinds y stats se dibujan juntos y el conjunto se
@@ -49,6 +49,15 @@
 	     autoguardado escribe el archivo AL INSTANTE (v1.8.1: se sacó
 	     el retraso de 0.6s, que podía perderse si re-ejecutabas el
 	     script muy rápido).
+	 12. CARGA MÁS PREDECIBLE: cargar la config guardada ya no dispara
+	     un reguardado por cada control aplicado. config.AutoLoadConfig
+	     = false separa "guardar solo" de "cargar solo" (para cargar
+	     vos a mano cuando tu script esté listo); config.AutoLoadDelay
+	     = segundos espera antes de aplicar la config guardada.
+	 13. CARGA DE A UNO: config.AutoLoadStagger = segundos aplica los
+	     controles guardados uno por uno, con esa pausa entre cada
+	     uno, en vez de todos en el mismo instante (orden alfabético
+	     por Flag, ya que el orden de creación no se guarda).
 
 	IMPORTANTE: la lógica interna de cada control (CreateButton,
 	CreateToggle, CreateSlider, CreateDropdown, CreateInput,
@@ -83,7 +92,7 @@ local RunService       = game:GetService("RunService")
 
 local UI = {}
 
-UI.Version    = "1.8.1"
+UI.Version    = "1.8.3"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -97,6 +106,12 @@ UI.ConfigFolder = "AzucarLegit"
 -- cambia algo (ver setFlagValue, más abajo, y SaveConfig, al final del
 -- archivo).
 local autoSaveTargets = {}
+
+-- Mientras LoadConfig está aplicando valores guardados, se pone en true:
+-- así, aplicar 10 controles guardados no dispara 10 guardados de rebote,
+-- uno detrás de otro, justo en el peor momento (cuando también se están
+-- disparando de golpe todos esos Callbacks).
+local loadingConfig = false
 
 -- ============================================================
 -- 	LARGO (ANCHO) DE LA TARJETA — CAMBIÁ SOLO ESTE NÚMERO
@@ -465,7 +480,9 @@ local function setFlagValue(flagName, value)
 	-- script antes de que pasara ese medio segundo, muchos ejecutores
 	-- matan esa espera pendiente y el guardado nunca llegaba a pasar.
 	-- Ahora el archivo queda escrito ANTES de que esta función termine.
-	if next(autoSaveTargets) ~= nil then
+	-- (Salvo mientras se está CARGANDO una config: ahí no hace falta
+	-- reescribir el mismo archivo que se acaba de leer.)
+	if not loadingConfig and next(autoSaveTargets) ~= nil then
 		for name in pairs(autoSaveTargets) do
 			UI:SaveConfig(name)
 		end
@@ -696,6 +713,7 @@ function UI:CreateWindow(config)
 		_visible     = true,
 		_loadId      = LOAD_ID,
 		_configName  = nil, -- se completa abajo si config.AutoSaveConfig está activo
+		_loadStagger = config.AutoLoadStagger or 0, -- pausa entre control y control al cargar
 		_blur        = blur,
 		_blurSize    = config.BlurSize or BLUR_SIZE,
 	}, UI)
@@ -787,9 +805,24 @@ function UI:CreateWindow(config)
 	if typeof(autoName) == "string" and autoName ~= "" then
 		Window._configName = autoName
 		autoSaveTargets[autoName] = true
-		task.defer(function()
-			Window:LoadConfig(autoName)
-		end)
+
+		-- config.AutoLoadConfig = false: solo AUTOGUARDA; la carga la
+		-- hacés vos a mano (Window:LoadConfig("nombre")) cuando tu
+		-- propio script ya esté listo (personaje, remotos, etc.). Útil
+		-- si al cargar todo junto de una alguna lógica arranca a medias
+		-- por depender de algo que todavía no existe.
+		-- config.AutoLoadDelay = segundos: espera antes de aplicar la
+		-- config cargada (por defecto 0). Con AutoLoadConfig en su
+		-- valor por defecto (true), se sigue cargando sola, solo que
+		-- podés darle un respiro antes de que dispare los Callbacks.
+		if config.AutoLoadConfig ~= false then
+			local delay = config.AutoLoadDelay or 0
+			task.spawn(function()
+				task.wait() -- deja que tu script termine de crear pestañas/controles
+				if delay > 0 then task.wait(delay) end
+				Window:LoadConfig(autoName)
+			end)
+		end
 	end
 
 	table.insert(UI.Windows, Window)
@@ -2395,8 +2428,14 @@ end
 -- Flag que coincida con un control que exista AHORA MISMO en la UI —
 -- así no importa si guardaste con una versión de tu hub que tenía más
 -- o menos controles que la que tenés cargada hoy.
-function UI:LoadConfig(name)
+-- `stagger` (segundos): si es mayor a 0, aplica los controles guardados
+-- DE A UNO, con esa pausa entre cada uno, en vez de todos en el mismo
+-- instante. Por defecto usa self._loadStagger (lo que hayas puesto en
+-- config.AutoLoadStagger al crear la ventana); pasalo explícito acá
+-- para pisar eso en una llamada puntual: Window:LoadConfig("x", 0.3).
+function UI:LoadConfig(name, stagger)
 	name = name or "default"
+	if stagger == nil then stagger = self._loadStagger or 0 end
 
 	if typeof(readfile) ~= "function" or typeof(isfile) ~= "function" then
 		warn("[AzucarLegit] Tu ejecutor no tiene readfile/isfile — no se puede cargar la config.")
@@ -2422,20 +2461,45 @@ function UI:LoadConfig(name)
 		return false
 	end
 
-	for flag, value in pairs(data) do
-		local controller = UI.Flags[flag]
-		if controller and typeof(controller.Set) == "function" then
-			if typeof(value) == "table" and value.__keycode then
-				local okKey, keyCode = pcall(function()
-					return Enum.KeyCode[value.__keycode]
-				end)
-				if okKey and keyCode then
-					controller:Set(keyCode)
+	-- Orden estable (alfabético por Flag) para que "de a uno" sea
+	-- predecible entre una carga y la siguiente. La config guardada no
+	-- recuerda en qué orden creaste los controles, así que no puede
+	-- respetar exactamente ese orden.
+	local flags = {}
+	for flag in pairs(data) do table.insert(flags, flag) end
+	table.sort(flags)
+
+	-- Mientras se aplican los valores guardados, ningún :Set() de acá
+	-- adentro vuelve a disparar un guardado (ver setFlagValue). Se
+	-- restaura SIEMPRE, incluso si algo de acá abajo tira error.
+	loadingConfig = true
+	local ok = pcall(function()
+		for i, flag in ipairs(flags) do
+			local value = data[flag]
+			local controller = UI.Flags[flag]
+			if controller and typeof(controller.Set) == "function" then
+				if typeof(value) == "table" and value.__keycode then
+					local okKey, keyCode = pcall(function()
+						return Enum.KeyCode[value.__keycode]
+					end)
+					if okKey and keyCode then
+						controller:Set(keyCode)
+					end
+				else
+					pcall(function() controller:Set(value) end)
 				end
-			else
-				pcall(function() controller:Set(value) end)
+			end
+			-- Pausa DESPUÉS de cada uno, salvo el último (no tiene sentido
+			-- esperar cuando ya no queda nada más por aplicar).
+			if stagger > 0 and i < #flags then
+				task.wait(stagger)
 			end
 		end
+	end)
+	loadingConfig = false
+	if not ok then
+		warn("[AzucarLegit] Ocurrió un error aplicando la config guardada.")
+		return false
 	end
 	return true
 end
