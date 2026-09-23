@@ -1,9 +1,9 @@
 --[[
-	AzucarLegit  v1.8.3
+	AzucarLegit  v1.8.4
 	====================
 	(Antes: AzucarSlideUI / AzucarHackerUI)
 
-	CAMBIOS RECIENTES (hasta v1.8.3):
+	CAMBIOS RECIENTES (hasta v1.8.4):
 	  1. TRANSPARENCIA REAL. La tarjeta que abre cada pestaña ahora es
 	     un CanvasGroup: fondo, botones, toggles, sliders, listas,
 	     inputs, keybinds y stats se dibujan juntos y el conjunto se
@@ -56,8 +56,10 @@
 	     = segundos espera antes de aplicar la config guardada.
 	 13. CARGA DE A UNO: config.AutoLoadStagger = segundos aplica los
 	     controles guardados uno por uno, con esa pausa entre cada
-	     uno, en vez de todos en el mismo instante (orden alfabético
-	     por Flag, ya que el orden de creación no se guarda).
+	     uno, en vez de todos en el mismo instante. Orden alfabético por
+	     Flag por defecto; config.AutoLoadOrder = {"M", "F"} prioriza
+	     primero los Flags que arrancan con esas letras, en ese orden,
+	     y deja el resto alfabético al final.
 
 	IMPORTANTE: la lógica interna de cada control (CreateButton,
 	CreateToggle, CreateSlider, CreateDropdown, CreateInput,
@@ -92,7 +94,7 @@ local RunService       = game:GetService("RunService")
 
 local UI = {}
 
-UI.Version    = "1.8.3"
+UI.Version    = "1.8.4"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -714,6 +716,7 @@ function UI:CreateWindow(config)
 		_loadId      = LOAD_ID,
 		_configName  = nil, -- se completa abajo si config.AutoSaveConfig está activo
 		_loadStagger = config.AutoLoadStagger or 0, -- pausa entre control y control al cargar
+		_loadOrder   = config.AutoLoadOrder, -- ej. {"M", "F"}: esas letras primero, en ese orden
 		_blur        = blur,
 		_blurSize    = config.BlurSize or BLUR_SIZE,
 	}, UI)
@@ -2461,13 +2464,33 @@ function UI:LoadConfig(name, stagger)
 		return false
 	end
 
-	-- Orden estable (alfabético por Flag) para que "de a uno" sea
+	-- Orden: primero los Flags cuya PRIMERA LETRA está en self._loadOrder
+	-- (config.AutoLoadOrder, ej. {"M", "F"} → los que arrancan con M
+	-- primero, después los que arrancan con F), y recién después todo
+	-- lo demás. Dentro de un mismo grupo, alfabético, para que quede
 	-- predecible entre una carga y la siguiente. La config guardada no
-	-- recuerda en qué orden creaste los controles, así que no puede
-	-- respetar exactamente ese orden.
+	-- recuerda en qué orden creaste los controles, así que esto es lo
+	-- más parecido que se puede ofrecer a un orden elegido.
+	local order = self._loadOrder
+	local function priority(flag)
+		if typeof(order) == "table" then
+			local first = flag:sub(1, 1):upper()
+			for i, letter in ipairs(order) do
+				if typeof(letter) == "string" and first == letter:sub(1, 1):upper() then
+					return i
+				end
+			end
+		end
+		return math.huge -- no está en la lista: va al final
+	end
+
 	local flags = {}
 	for flag in pairs(data) do table.insert(flags, flag) end
-	table.sort(flags)
+	table.sort(flags, function(a, b)
+		local pa, pb = priority(a), priority(b)
+		if pa ~= pb then return pa < pb end
+		return a < b
+	end)
 
 	-- Mientras se aplican los valores guardados, ningún :Set() de acá
 	-- adentro vuelve a disparar un guardado (ver setFlagValue). Se
