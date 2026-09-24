@@ -1,30 +1,95 @@
 --[[
-	NovaUI  v1.0.0
-	==============
-	Segunda librería, hecha reusando el MISMO motor de AzucarLegit
-	(Callbacks en hilos independientes, Flags, guardado/carga
-	automática de config, limpieza de ejecuciones viejas) — ese código
-	no cambió en nada. Lo que cambia es SOLO el look:
+	AzucarLegit  v1.8.5
+	====================
+	(Antes: AzucarSlideUI / AzucarHackerUI)
 
-		· Estilo hacker/terminal: negro con verde brillante.
-		· Letra pixelada (PressStart2P; si tu cliente no la tiene,
-		  cae sola a una monoespaciada normal, sin romper nada).
-		· Bordes puntiagudos (sin redondear, CORNER_RADIUS = 0).
-		· En vez de chispas rojas y niebla roja alrededor de la
-		  tarjeta: números verdes cayendo (estilo "lluvia digital")
-		  y un aura verde.
+	CAMBIOS RECIENTES (hasta v1.8.5):
+	  1. TRANSPARENCIA REAL. La tarjeta que abre cada pestaña ahora es
+	     un CanvasGroup: fondo, botones, toggles, sliders, listas,
+	     inputs, keybinds y stats se dibujan juntos y el conjunto se
+	     ve al 0.2 (Theme.Alpha). Antes cada fila tenía su propia
+	     transparencia encima de un fondo oscuro, y se apilaban: por
+	     eso las filas se veían sólidas.
+	  2. SCROLL EN LA LISTA DE PESTAÑAS, SIN BARRA. Si hay más
+	     pestañas de las que entran en pantalla, bajás/subís con la
+	     rueda del mouse, arrastrando con el mouse o con el dedo.
+	  3. (v1.3.1) La pestaña abierta mantiene el rojo hasta que
+	     cambies de pestaña o la cierres.
+	  4. TARJETA ANCHA que crece hacia la derecha hasta un tope de
+	     600px (constante PANEL_WIDTH_PX, arriba del archivo) y se achica sola en pantallas
+	     angostas. Margen derecho: config.PanelRightMargin.
+	  5. AURA ROJA (neblina difuminada) alrededor de la tarjeta y
+	     DESENFOQUE del juego de fondo mientras haya una pestaña
+	     abierta. Se ajustan con AURA_SIZE_PX, AURA_TRANSPARENCY y
+	     BLUR_SIZE (arriba del archivo). config.Blur = false lo apaga.
+	  6. MÁS EFECTOS: la tarjeta aparece con fundido; luz roja que da
+	     vueltas por su borde; el aura "respira"; aurita chica en la
+	     pestaña al presionarla; el toggle salta y brilla; el botón
+	     destella; la perilla del slider crece al arrastrarla.
+	     ANIMATED_FX = false los deja todos quietos.
+	  7. EFECTOS MÁS LLAMATIVOS: cometa blanco-rojo que gira por el
+	     borde y el aura; chispas
+	     rojas que salen flotando; brillo que recorre el título;
+	     franja de luz que barre la pestaña abierta; barrita roja que
+	     se enciende al pasar el mouse por botones y toggles.
+	  8. Si volvés a ejecutar el script, la ventana vieja se destruye
+	     sola (antes quedaba debajo, con su pestaña abierta y su aura
+	     encendidas).
+	  9. LETRA CREEPSTER en toda la UI (UI_FONT y FONT_BOOST arriba del
+	     archivo). NIEBLA de verdad alrededor de la tarjeta: halo
+	     continuo sin anillos (AURA_LAYERS), zona más densa que gira y
+	     bocanadas de niebla que salen flotando (FOG_WISPS).
+	 10. CHISPAS MÁS NOTORIAS: más cantidad (SPARKS_COUNT), más grandes
+	     (SPARK_SIZE_PX), con halo que brilla, más rápidas y titilando.
+	     La niebla quedó un poco más chica (AURA_SIZE_PX).
+	 11. GUARDAR CONFIGURACIÓN: todo control con Flag se puede guardar y
+	     recuperar. Automático con config.AutoSaveConfig = true (o un
+	     nombre) en CreateWindow; manual con Window:SaveConfig("nombre")
+	     / Window:LoadConfig("nombre") / Window:ListConfigs(). El
+	     autoguardado escribe el archivo AL INSTANTE (v1.8.1: se sacó
+	     el retraso de 0.6s, que podía perderse si re-ejecutabas el
+	     script muy rápido).
+	 12. CARGA MÁS PREDECIBLE: cargar la config guardada ya no dispara
+	     un reguardado por cada control aplicado. config.AutoLoadConfig
+	     = false separa "guardar solo" de "cargar solo" (para cargar
+	     vos a mano cuando tu script esté listo); config.AutoLoadDelay
+	     = segundos espera antes de aplicar la config guardada.
+	 13. CARGA DE A UNO: config.AutoLoadStagger = segundos aplica los
+	     controles guardados uno por uno, con esa pausa entre cada
+	     uno, en vez de todos en el mismo instante. Orden alfabético por
+	     Flag por defecto; config.AutoLoadOrder = {"M", "F"} prioriza
+	     primero los Flags que arrancan con esas letras, en ese orden,
+	     y deja el resto alfabético al final.
+	 14. SLIDER: ahora guarda solo al SOLTAR (no en cada pixel del
+	     arrastre), para que el valor final quede bien guardado.
+	 15. IGNORAR CONTROLES: config.AutoSaveIgnore = {"MiniPekka"} hace
+	     que esos Flags nunca se guarden ni se carguen (coincide si el
+	     nombre del Flag CONTIENE la palabra, sin importar mayúsculas).
 
-	La mecánica es la MISMA que la otra librería: pestañas como líneas
-	angostas a la izquierda, y al tocar una se abre una tarjeta aparte
-	con las lógicas adentro.
+	IMPORTANTE: la lógica interna de cada control (CreateButton,
+	CreateToggle, CreateSlider, CreateDropdown, CreateInput,
+	CreateKeybind, CreateLabel, CreateSection, CreateDivider,
+	CreateStat) es la misma de siempre. Tus Callbacks/Flags
+	funcionan igual.
 
-	Uso:
+	Concepto de pestaña: una línea angosta pegada a la izquierda, con
+	el nombre siempre visible. Al tocarla NO se estira — en vez de
+	eso, aparece una tarjeta aparte de esquinas redondas, cerca de las
+	pestañas pero sin pegarse, centrada verticalmente en la pantalla,
+	con las lógicas (sliders/toggles/etc.) adentro. Solo una tarjeta
+	puede estar abierta a la vez; tocar otra pestaña cierra la
+	anterior. Arriba, la hora exacta de tu reloj (la pone tu PC).
+	Tema: negro muy oscuro con rojo vivo como color de acento.
 
-		local UI = loadstring(game:HttpGet("...NovaUI.lua"))()
-		local Window = UI:CreateWindow({ Title = "Nova Hub", AutoSaveConfig = true })
+	Uso (idéntico a antes):
+
+		local UI = loadstring(game:HttpGet("...AzucarLegit.lua"))()
+		local Window = UI:CreateWindow({ Title = "Azúcar Hub" })
 		local Combate = Window:CreateTab({ Name = "Combate" })
 		Combate:CreateToggle({ Text = "Auto Farm", Flag = "AutoFarm",
 			Callback = function(state) ... end })
+		Combate:CreateSlider({ Text = "Velocidad", Range = {0, 200}, Default = 16,
+			Callback = function(v) ... end })
 ]]
 
 local TweenService     = game:GetService("TweenService")
@@ -34,7 +99,7 @@ local RunService       = game:GetService("RunService")
 
 local UI = {}
 
-UI.Version    = "1.0.0"
+UI.Version    = "1.8.5"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -42,7 +107,7 @@ UI.FlagValues = {}
 -- Carpeta donde se guardan las configs (Toggles/Sliders/Dropdowns/etc.
 -- que activaste, con su Flag). Se puede cambiar antes de usar la
 -- librería: UI.ConfigFolder = "MiHub".
-UI.ConfigFolder = "NovaUI"
+UI.ConfigFolder = "AzucarLegit"
 
 -- autoSaveTargets: nombres de config que se guardan solos cada vez que
 -- cambia algo (ver setFlagValue, más abajo, y SaveConfig, al final del
@@ -95,27 +160,18 @@ local BLUR_SIZE = 16            -- 0 = sin desenfoque, 24 = fuerte
 local PILL_AURA_SIZE_PX      = 10    -- cuánto se extiende (0 = sin aurita)
 local PILL_AURA_TRANSPARENCY = 0.55  -- 0 = fuerte, 1 = invisible (más alto = más sutil)
 local PILL_AURA_LAYERS       = 8     -- capas de la aurita de cada pestaña
--- EFECTOS ANIMADOS: luz verde que da vueltas por el borde de la tarjeta y
--- aura que "respira". true = con animación, false = todo quieto.
+-- EFECTOS ANIMADOS: luz roja que da vueltas por el borde de la tarjeta y aura
+-- que "respira". true = con animación, false = todo quieto.
 local ANIMATED_FX = true
--- LLUVIA DIGITAL: números verdes que caen por el borde de la tarjeta,
--- como en las pantallas de hacker de las películas.
-local RAIN_COUNT    = 22        -- cantidad de números cayendo (0 = ninguno)
-local RAIN_SIZE_PX  = 13        -- tamaño de letra de cada número
+-- CHISPAS: puntitos rojos que salen flotando desde el borde de la tarjeta abierta.
+local SPARKS_COUNT  = 26        -- cantidad de chispas (0 = sin chispas)
+local SPARK_SIZE_PX = 5         -- tamaño medio de cada chispa (más grande = más notorias)
 
 -- LETRA: Creepster en toda la UI. FONT_BOOST le suma tamaño a todos los textos
 -- (Creepster se ve más chica que una letra normal). Para otra letra cambiá
 -- Enum.Font.Creepster por Enum.Font.Code, Enum.Font.GothamBold, etc.
--- Letra pixelada. Si tu cliente/ejecutor no tiene PressStart2P (fuentes
--- nuevas no siempre están en todas las versiones), cae sola a Code
--- (monoespaciada) en vez de romper el script.
-local function safeFont(name, fallback)
-	local ok, item = pcall(function() return Enum.Font[name] end)
-	if ok and item then return item end
-	return fallback
-end
-local UI_FONT    = safeFont("PressStart2P", Enum.Font.Code)
-local FONT_BOOST = 1 -- PressStart2P es ancha; con 0 ya se lee bien
+local UI_FONT    = Enum.Font.Creepster
+local FONT_BOOST = 2
 
 -- ============================================================
 -- 	RED DE SEGURIDAD: un Create... inexistente no mata el script
@@ -133,7 +189,7 @@ local function classIndex(_, key)
 		return found
 	end
 	if type(key) == "string" and key:sub(1, 6) == "Create" then
-		warn("[NovaUI] El método '" .. key .. "' no existe en esta librería. "
+		warn("[AzucarLegit] El método '" .. key .. "' no existe en esta librería. "
 			.. "Se ignoró esa línea para no cortar el resto del script.")
 		return function()
 			return setmetatable({}, Stub)
@@ -179,16 +235,16 @@ end
 -- ============================================================
 -- Si volvés a ejecutar el script sin cerrar la UI, la ventana vieja
 -- quedaba DEBAJO de la nueva, con su pestaña abierta, su aura y su color
--- verde: tocabas la ventana nueva y la vieja seguía igual (parecía que
+-- rojo: tocabas la ventana nueva y la vieja seguía igual (parecía que
 -- "no se quitaban" el color ni los anillos). Ahora, cada vez que se
 -- crea una ventana, se destruyen las de cargas anteriores.
 local LOAD_ID = tostring(os.clock()) .. "-" .. tostring(math.random(1, 1000000000))
-local STALE_NAMES = { NovaUI = true }
+local STALE_NAMES = { AzucarLegit = true, AzucarSlideUI = true, AzucarHackerUI = true }
 
 local function cleanupOldWindows(guiParent)
 	-- 1) Ventanas registradas por cargas anteriores (esto también les
 	--    desconecta los eventos globales).
-	local registry = rawget(_G, "__NovaUIWindows")
+	local registry = rawget(_G, "__AzucarLegitWindows")
 	if typeof(registry) == "table" then
 		for i = #registry, 1, -1 do
 			local w = registry[i]
@@ -215,7 +271,7 @@ local function cleanupOldWindows(guiParent)
 		pcall(function()
 			for _, child in ipairs(place:GetChildren()) do
 				if child:IsA("ScreenGui") and STALE_NAMES[child.Name]
-					and child:GetAttribute("NovaLoadId") ~= LOAD_ID then
+					and child:GetAttribute("AzucarLoadId") ~= LOAD_ID then
 					child:Destroy()
 				end
 			end
@@ -224,19 +280,19 @@ local function cleanupOldWindows(guiParent)
 end
 
 -- ============================================================
--- 	TEMA — hacker/verde
+-- 	TEMA  (idéntico a AzucarSlideUI v1.0.0)
 -- ============================================================
 local Theme = {
-	Background = Color3.fromRGB(4, 7, 5),
-	Header     = Color3.fromRGB(7, 11, 8),
-	Line       = Color3.fromRGB(9, 13, 10),
-	LineOpen   = Color3.fromRGB(15, 22, 16),
-	Field      = Color3.fromRGB(8, 12, 9),
-	Border     = Color3.fromRGB(22, 48, 26),
-	Text       = Color3.fromRGB(205, 255, 214),
-	TextDim    = Color3.fromRGB(88, 150, 96),
-	Active     = Color3.fromRGB(60, 255, 110),
-	ActiveDim  = Color3.fromRGB(24, 140, 54),
+	Background = Color3.fromRGB(5, 5, 7),
+	Header     = Color3.fromRGB(9, 9, 11),
+	Line       = Color3.fromRGB(12, 12, 14),
+	LineOpen   = Color3.fromRGB(20, 20, 24),
+	Field      = Color3.fromRGB(11, 11, 13),
+	Border     = Color3.fromRGB(28, 28, 32),
+	Text       = Color3.fromRGB(240, 240, 245),
+	TextDim    = Color3.fromRGB(130, 130, 140),
+	Active     = Color3.fromRGB(255, 35, 55),
+	ActiveDim  = Color3.fromRGB(190, 20, 40),
 	Font       = UI_FONT,
 	FontBold   = UI_FONT,
 	-- Transparencia de TODA la tarjeta que abre cada pestaña (fondo y
@@ -246,13 +302,13 @@ local Theme = {
 UI.Theme = Theme
 
 local Palettes = {
-	Verde  = { Active = Color3.fromRGB(60, 255, 110),  ActiveDim = Color3.fromRGB(24, 140, 54) },
-	Rojo   = { Active = Color3.fromRGB(255, 35, 55),   ActiveDim = Color3.fromRGB(190, 20, 40) },
+	Rojo   = { Active = Color3.fromRGB(255, 35, 55),  ActiveDim = Color3.fromRGB(190, 20, 40) },
 	Azul   = { Active = Color3.fromRGB(48, 132, 232),  ActiveDim = Color3.fromRGB(28, 84, 160) },
+	Verde  = { Active = Color3.fromRGB(52, 199, 105),  ActiveDim = Color3.fromRGB(30, 132, 70) },
 	Blanco = { Active = Color3.fromRGB(226, 226, 232), ActiveDim = Color3.fromRGB(150, 150, 158) },
 }
 UI.Palettes = Palettes
-UI.CurrentPalette = "Verde"
+UI.CurrentPalette = "Rojo"
 
 local accentListeners = {}
 local function onAccent(fn)
@@ -284,7 +340,7 @@ function UI:SetAccentColor(paletteName)
 
 	local palette = Palettes[paletteName]
 	if not palette then
-		warn("[NovaUI] Paleta desconocida: " .. tostring(paletteName))
+		warn("[AzucarLegit] Paleta desconocida: " .. tostring(paletteName))
 		return
 	end
 	UI.CurrentPalette = paletteName
@@ -296,7 +352,7 @@ function UI:SetAccentColor(paletteName)
 end
 
 -- ============================================================
--- 	HELPERS DE CONSTRUCCIÓN
+-- 	HELPERS DE CONSTRUCCIÓN  (idénticos a AzucarSlideUI v1.0.0)
 -- ============================================================
 local function new(class, props, children)
 	local inst = Instance.new(class)
@@ -309,13 +365,8 @@ local function new(class, props, children)
 	return inst
 end
 
--- Bordes puntiagudos: TODAS las esquinas de la UI quedan rectas, sin
--- importar qué radio pida cada llamada a corner(radius). Para volver a
--- esquinas redondeadas alguna vez, alcanza con cambiar este único
--- número (o "and radius or 0" más abajo).
-local CORNER_RADIUS = 0
 local function corner(radius)
-	return new("UICorner", { CornerRadius = UDim.new(0, CORNER_RADIUS) })
+	return new("UICorner", { CornerRadius = UDim.new(0, radius or 0) })
 end
 
 local function stroke(color, thickness)
@@ -342,7 +393,7 @@ end
 local function hoverField(obj, base)
 	base = base or Theme.Field
 
-	-- Efecto: una barrita verde se enciende y crece a la izquierda de la
+	-- Efecto: una barrita roja se enciende y crece a la izquierda de la
 	-- fila mientras el mouse está encima.
 	local mark = new("Frame", {
 		Name = "HoverMark",
@@ -370,7 +421,7 @@ end
 
 -- ============================================================
 -- 	NÚCLEO: CALLBACKS EN HILOS INDEPENDIENTES (SIN LÍMITE)
--- 	(motor reusado, sin cambios)
+-- 	(idéntico a AzucarSlideUI v1.0.0)
 -- ============================================================
 local function safeCall(controller, fn, ...)
 	fn = fn or function() end
@@ -393,7 +444,7 @@ local function safeCall(controller, fn, ...)
 			fn(table.unpack(args, 1, args.n))
 		end)
 		if not ok then
-			warn("[NovaUI] Error en tu callback: " .. tostring(err))
+			warn("[AzucarLegit] Error en tu callback: " .. tostring(err))
 		end
 
 		if controller and controller._threads then
@@ -427,7 +478,7 @@ local function resolveCallback(config)
 			elseif typeof(logic.Set) == "function" then logic.Set(value)
 			elseif typeof(logic.Run) == "function" then logic.Run(value)
 			else
-				warn("[NovaUI] La tabla en Logic no tiene :Toggle/:Enable+Disable/:Set/:Run.")
+				warn("[AzucarLegit] La tabla en Logic no tiene :Toggle/:Enable+Disable/:Set/:Run.")
 			end
 		end
 	end
@@ -479,7 +530,7 @@ local function host(self)
 		return self.List, (self.Window or self), self
 	end
 	if self._tabs and self._tabs[1] then
-		warn("[NovaUI] Creaste un control sobre la ventana en vez de sobre una pestaña. "
+		warn("[AzucarLegit] Creaste un control sobre la ventana en vez de sobre una pestaña. "
 			.. "Se agregó a la primera pestaña para que no se pierda.")
 		return self._tabs[1].List, self, self._tabs[1]
 	end
@@ -512,7 +563,7 @@ function UI:CreateWindow(config)
 	local PANEL_MAX_W  = config.PanelMaxWidth or PANEL_WIDTH_PX
 	local PANEL_MARGIN = config.PanelRightMargin or 20
 	if config.PanelWidth ~= nil then
-		warn("[NovaUI] PanelWidth ya no fija el ancho: la tarjeta ocupa todo el espacio "
+		warn("[AzucarLegit] PanelWidth ya no fija el ancho: la tarjeta ocupa todo el espacio "
 			.. "hacia la derecha. Si querés un tope, usá PanelMaxWidth.")
 	end
 	local PANEL_H   = config.PanelHeight or 480
@@ -528,7 +579,7 @@ function UI:CreateWindow(config)
 	end
 
 	local ScreenGui = new("ScreenGui", {
-		Name = "NovaUI",
+		Name = "AzucarLegit",
 		ResetOnSpawn = false,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		DisplayOrder = 999,
@@ -538,7 +589,7 @@ function UI:CreateWindow(config)
 	if typeof(protectGui) == "function" then pcall(protectGui, ScreenGui) end
 	local guiParent = getGuiParent()
 	cleanupOldWindows(guiParent)
-	ScreenGui:SetAttribute("NovaLoadId", LOAD_ID)
+	ScreenGui:SetAttribute("AzucarLoadId", LOAD_ID)
 	ScreenGui.Parent = guiParent
 
 	local Root = new("Frame", {
@@ -656,10 +707,10 @@ function UI:CreateWindow(config)
 	if config.Blur ~= false and (config.BlurSize or BLUR_SIZE) > 0 then
 		pcall(function()
 			local Lighting = game:GetService("Lighting")
-			local old = Lighting:FindFirstChild("NovaUIBlur")
+			local old = Lighting:FindFirstChild("AzucarLegitBlur")
 			if old then old:Destroy() end
 			blur = Instance.new("BlurEffect")
-			blur.Name = "NovaUIBlur"
+			blur.Name = "AzucarLegitBlur"
 			blur.Size = 0
 			blur.Parent = Lighting
 		end)
@@ -812,10 +863,10 @@ function UI:CreateWindow(config)
 
 	-- Registro global: la próxima carga de la librería usa esta lista
 	-- para destruir esta ventana si el script se vuelve a ejecutar.
-	local registry = rawget(_G, "__NovaUIWindows")
+	local registry = rawget(_G, "__AzucarLegitWindows")
 	if typeof(registry) ~= "table" then
 		registry = {}
-		rawset(_G, "__NovaUIWindows", registry)
+		rawset(_G, "__AzucarLegitWindows", registry)
 	end
 	table.insert(registry, Window)
 
@@ -940,7 +991,7 @@ function UI:CreateTab(config)
 	-- (El hover de la pestaña se conecta MÁS ABAJO, después de crear
 	-- `Tab`, para que pueda respetar si la pestaña está abierta. Antes
 	-- se usaba hoverField(Pill, Theme.Line) acá, y ese hover le pisaba
-	-- el verde a la pestaña abierta cada vez que el mouse entraba o
+	-- el rojo a la pestaña abierta cada vez que el mouse entraba o
 	-- salía.)
 
 	-- ---------------- AURITA de la pestaña (chica y suave) ----------------
@@ -1137,13 +1188,13 @@ function UI:CreateTab(config)
 		end
 	end
 
-	-- Borde de la tarjeta con una luz verde que da vueltas: un UIGradient
+	-- Borde de la tarjeta con una luz roja que da vueltas: un UIGradient
 	-- sobre el borde (opaco en un extremo, casi transparente en el
 	-- medio) al que se le va girando la rotación (ver Tab._fx).
 	local BorderGradient = nil
 	local function borderColors()
-		-- La "cabeza" de la luz es verde casi blanco (caliente) y se va
-		-- enfriando a verde oscuro en la cola.
+		-- La "cabeza" de la luz es rojo casi blanco (caliente) y se va
+		-- enfriando a rojo oscuro en la cola.
 		local hot = Theme.Active:Lerp(Color3.fromRGB(255, 255, 255), 0.7)
 		return ColorSequence.new({
 			ColorSequenceKeypoint.new(0, hot),
@@ -1172,48 +1223,67 @@ function UI:CreateTab(config)
 		end)
 	end
 
-	-- ---------------- LLUVIA DIGITAL ----------------
-	-- Números verdes (0-9) que nacen arriba de la tarjeta y caen hacia
-	-- abajo, cambiando de dígito cada tanto, como una pantalla de
-	-- hacker de película. Viven dentro de Glow (detrás de la tarjeta).
-	local rainDrops = {}
-	for i = 1, RAIN_COUNT do
-		local hot = (i % 4 == 0) -- unos pocos, más blancos (la "cabeza" de la columna)
-		local label = new("TextLabel", {
-			Name = "RainDigit",
+	-- ---------------- CHISPAS ----------------
+	-- Puntitos rojos que nacen en el borde de la tarjeta, salen flotando
+	-- hacia afuera y se apagan. Viven dentro de Glow (detrás de la tarjeta).
+	local sparks = {}
+	for i = 1, SPARKS_COUNT do
+		local hot = (i % 2 == 0) -- la mitad son "calientes" (casi blancas)
+		-- Halo: un círculo grande y tenue que es el contenedor de la chispa
+		-- (para que cada una "brille"); el núcleo va adentro, encima.
+		local halo = new("Frame", {
+			Name = "Spark",
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Size = UDim2.fromOffset(RAIN_SIZE_PX * 1.6, RAIN_SIZE_PX * 1.6),
-			Text = tostring(math.random(0, 9)),
-			Font = Theme.FontBold,
-			TextSize = RAIN_SIZE_PX,
-			TextColor3 = hot and Theme.Active:Lerp(Color3.fromRGB(255, 255, 255), 0.6) or Theme.Active,
+			Size = UDim2.fromOffset(SPARK_SIZE_PX * 3.2, SPARK_SIZE_PX * 3.2),
+			BackgroundColor3 = Theme.Active,
 			BackgroundTransparency = 1,
-			TextTransparency = 1,
+			BorderSizePixel = 0,
 			Parent = Glow,
-		})
-		table.insert(rainDrops, {
-			label = label, hot = hot, born = nil, life = 2,
-			x = 0, y = 0, vy = 0, nextChange = 0,
+		}, { new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
+		local dot = new("Frame", {
+			Name = "Core",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromScale(1 / 3.2, 1 / 3.2),
+			BackgroundColor3 = hot and Theme.Active:Lerp(Color3.fromRGB(255, 255, 255), 0.65) or Theme.Active,
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			Parent = halo,
+		}, { new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
+		table.insert(sparks, {
+			dot = dot, halo = halo, hot = hot, born = nil, life = 2,
+			x = 0, y = 0, vx = 0, vy = 0, size = SPARK_SIZE_PX, phase = math.random() * 6.28,
 		})
 	end
 	onAccent(function()
-		for _, dr in ipairs(rainDrops) do
-			if dr.label.Parent then
-				dr.label.TextColor3 = dr.hot and Theme.Active:Lerp(Color3.fromRGB(255, 255, 255), 0.6) or Theme.Active
+		for _, sp in ipairs(sparks) do
+			if sp.dot.Parent then
+				sp.dot.BackgroundColor3 = sp.hot and Theme.Active:Lerp(Color3.fromRGB(255, 255, 255), 0.65) or Theme.Active
+				sp.halo.BackgroundColor3 = Theme.Active
 			end
 		end
 	end)
 
-	-- Nace en un punto al azar del BORDE SUPERIOR de la tarjeta y cae
-	-- derecho hacia abajo, un poco más rápido o más lento cada vez.
-	local function respawnDrop(dr, now, stagger)
+	local function respawnSpark(sp, now, stagger)
 		local W, H = Panel.Size.X.Offset, PANEL_H
-		dr.x = math.random() * W
-		dr.y = 0
-		dr.vy = 26 + math.random() * 40
-		dr.life = (H / dr.vy) * (1 + math.random() * 0.3)
-		dr.born = now - (stagger and math.random() * dr.life or 0)
-		dr.nextChange = 0
+		local r = math.random() * (2 * W + 2 * H)
+		local nx, ny
+		if r < W then
+			sp.x, sp.y, nx, ny = r, 0, 0, -1
+		elseif r < 2 * W then
+			sp.x, sp.y, nx, ny = r - W, H, 0, 1
+		elseif r < 2 * W + H then
+			sp.x, sp.y, nx, ny = 0, r - 2 * W, -1, 0
+		else
+			sp.x, sp.y, nx, ny = W, r - 2 * W - H, 1, 0
+		end
+		local speed = 16 + math.random() * 34
+		local drift = (math.random() - 0.5) * 22
+		sp.vx = nx * speed + (ny ~= 0 and drift or 0)
+		sp.vy = ny * speed + (nx ~= 0 and drift or 0) - 8 -- un poco hacia arriba, como brasas
+		sp.life = 1.8 + math.random() * 1.8
+		sp.size = SPARK_SIZE_PX * (0.6 + math.random() * 0.8)
+		sp.born = now - (stagger and math.random() * sp.life or 0)
 	end
 
 	-- ---------------- BOCANADAS DE NIEBLA ----------------
@@ -1325,8 +1395,8 @@ function UI:CreateTab(config)
 		Parent = PanelHeader,
 	})
 
-	-- Brillo verde que recorre el título de izquierda a derecha (el texto
-	-- es blanco y el degradado le pinta una franja verde que se desliza).
+	-- Brillo rojo que recorre el título de izquierda a derecha (el texto
+	-- es blanco y el degradado le pinta una franja roja que se desliza).
 	local function titleColors()
 		local white = Color3.fromRGB(255, 255, 255)
 		return ColorSequence.new({
@@ -1388,12 +1458,12 @@ function UI:CreateTab(config)
 		_rowCount = 0,
 	}, UI)
 
-	-- ---------------- Color de la pestaña (verde persistente) ----------------
+	-- ---------------- Color de la pestaña (rojo persistente) ----------------
 	-- UNA sola función decide cómo se ve la línea según su estado:
-	--   · abierta  → verde, y se queda verde pase lo que pase con el mouse
+	--   · abierta  → rojo, y se queda rojo pase lo que pase con el mouse
 	--   · cerrada  → negro (o un poco más claro si el mouse está encima)
 	-- Se usa tween sobre las MISMAS propiedades, así un tween de hover
-	-- que todavía esté corriendo nunca le pisa el verde al terminar.
+	-- que todavía esté corriendo nunca le pisa el rojo al terminar.
 	local hovering = false
 
 	local function paintPill()
@@ -1436,24 +1506,23 @@ function UI:CreateTab(config)
 		TitleGradient.Offset = Vector2.new(-1 + 2 * ((now % 3.6) / 3.6), 0)
 		ShineGradient.Offset = Vector2.new(-1 + 2 * ((now % 2.2) / 2.2), 0)
 
-		-- Lluvia digital.
-		for _, dr in ipairs(rainDrops) do
-			if dr.born == nil then
-				respawnDrop(dr, now, true)
-			elseif now - dr.born >= dr.life then
-				respawnDrop(dr, now, false)
+		-- Chispas.
+		for _, sp in ipairs(sparks) do
+			if sp.born == nil then
+				respawnSpark(sp, now, true)
+			elseif now - sp.born >= sp.life then
+				respawnSpark(sp, now, false)
 			end
-			local age = now - dr.born
-			local t = math.clamp(age / dr.life, 0, 1)
-			dr.label.Position = UDim2.fromOffset(dr.x, dr.y + dr.vy * age)
-			-- Cambia de dígito cada tanto, como una columna de la Matrix.
-			if now >= dr.nextChange then
-				dr.label.Text = tostring(math.random(0, 9))
-				dr.nextChange = now + 0.1 + math.random() * 0.15
-			end
-			-- Aparece, se mantiene, y se apaga cerca del final de la caída.
-			local vis = math.min(t * 6, 1, (1 - t) * 4) * appear
-			dr.label.TextTransparency = 1 - vis
+			local age = now - sp.born
+			local t = math.clamp(age / sp.life, 0, 1)
+			local sz = sp.size * (1 - 0.6 * t)
+			sp.halo.Position = UDim2.fromOffset(sp.x + sp.vx * age, sp.y + sp.vy * age)
+			sp.halo.Size = UDim2.fromOffset(sz * 3.2, sz * 3.2)
+			-- Aparece, brilla y se apaga; además titila un poco (parpadeo).
+			local twinkle = 0.82 + 0.18 * math.sin(now * 12 + sp.phase)
+			local vis = math.sin(t * math.pi) * appear * twinkle
+			sp.dot.BackgroundTransparency = 1 - vis
+			sp.halo.BackgroundTransparency = 1 - 0.34 * vis
 		end
 
 		-- Bocanadas de niebla.
@@ -1490,7 +1559,7 @@ function UI:CreateTab(config)
 
 	-- Abre esta tarjeta y cierra la de cualquier otra pestaña que haya
 	-- quedado abierta (solo una ventana de lógicas a la vez). La
-	-- pestaña activa se pone verde y se queda así hasta que cambies de
+	-- pestaña activa se pone roja y se queda así hasta que cambies de
 	-- pestaña o la cierres; las demás vuelven a negro.
 	local function setOpen(open)
 		if open then
@@ -1508,7 +1577,7 @@ function UI:CreateTab(config)
 			paintPill()
 			pulsePillAura(true)
 			Shine.Visible = true
-			for _, dr in ipairs(rainDrops) do dr.born = nil end -- la lluvia digital arranca de nuevo
+			for _, sp in ipairs(sparks) do sp.born = nil end -- las chispas arrancan de nuevo
 			for _, w in ipairs(wisps) do w.born = nil end -- y la niebla también
 			tween(Arrow, { Rotation = 180 }, 0.15)
 			fitPanel() -- reafirma el ancho cada vez que se abre
@@ -1556,7 +1625,7 @@ function UI:CreateTab(config)
 end
 
 -- ============================================================
--- 	A PARTIR DE ACÁ: CONTROLES (mismo motor, look reskineado)
+-- 	A PARTIR DE ACÁ: TODO IGUAL A AzucarSlideUI v1.0.0, SIN CAMBIOS
 -- 	(la transparencia ya no va fila por fila: la maneja la tarjeta entera).
 -- ============================================================
 
@@ -1589,7 +1658,7 @@ function UI:CreateButton(config)
 	local Button = setmetatable({ Instance = Btn, Callback = callback, _threads = {} }, UI)
 
 	function Button:Set(...)
-		-- Efecto: destello verde de fondo que se apaga solo.
+		-- Efecto: destello rojo de fondo que se apaga solo.
 		Btn.BackgroundColor3 = Theme.ActiveDim
 		tween(Btn, { BackgroundColor3 = Theme.LineOpen }, 0.3)
 		Btn.TextColor3 = Theme.Active
@@ -1657,7 +1726,7 @@ function UI:CreateToggle(config)
 		Parent = Row,
 	}, { corner(3) })
 
-	-- Efectos: pequeño "salto" al cambiar y un brillo verde suave cuando está prendido.
+	-- Efectos: pequeño "salto" al cambiar y un brillo rojo suave cuando está prendido.
 	local BoxPop = new("UIScale", { Scale = 1, Parent = Box })
 	local BoxGlow = new("UIStroke", {
 		Color = Theme.Active,
@@ -2364,7 +2433,7 @@ function UI:SaveConfig(name)
 	name = name or "default"
 
 	if typeof(writefile) ~= "function" then
-		warn("[NovaUI] Tu ejecutor no tiene writefile — no se puede guardar la config.")
+		warn("[AzucarLegit] Tu ejecutor no tiene writefile — no se puede guardar la config.")
 		return false
 	end
 
@@ -2386,13 +2455,13 @@ function UI:SaveConfig(name)
 		return game:GetService("HttpService"):JSONEncode(data)
 	end)
 	if not okJson then
-		warn("[NovaUI] No se pudo convertir la config a JSON.")
+		warn("[AzucarLegit] No se pudo convertir la config a JSON.")
 		return false
 	end
 
 	local okWrite, err = pcall(writefile, UI.ConfigFolder .. "/" .. name .. ".json", encoded)
 	if not okWrite then
-		warn("[NovaUI] No se pudo guardar la config: " .. tostring(err))
+		warn("[AzucarLegit] No se pudo guardar la config: " .. tostring(err))
 		return false
 	end
 	return true
@@ -2412,7 +2481,7 @@ function UI:LoadConfig(name, stagger)
 	if stagger == nil then stagger = self._loadStagger or 0 end
 
 	if typeof(readfile) ~= "function" or typeof(isfile) ~= "function" then
-		warn("[NovaUI] Tu ejecutor no tiene readfile/isfile — no se puede cargar la config.")
+		warn("[AzucarLegit] Tu ejecutor no tiene readfile/isfile — no se puede cargar la config.")
 		return false
 	end
 
@@ -2423,7 +2492,7 @@ function UI:LoadConfig(name, stagger)
 
 	local okRead, raw = pcall(readfile, path)
 	if not okRead then
-		warn("[NovaUI] No se pudo leer el archivo de config.")
+		warn("[AzucarLegit] No se pudo leer el archivo de config.")
 		return false
 	end
 
@@ -2431,7 +2500,7 @@ function UI:LoadConfig(name, stagger)
 		return game:GetService("HttpService"):JSONDecode(raw)
 	end)
 	if not okJson or typeof(data) ~= "table" then
-		warn("[NovaUI] La config guardada está corrupta o vacía.")
+		warn("[AzucarLegit] La config guardada está corrupta o vacía.")
 		return false
 	end
 
@@ -2496,7 +2565,7 @@ function UI:LoadConfig(name, stagger)
 	end)
 	loadingConfig = false
 	if not ok then
-		warn("[NovaUI] Ocurrió un error aplicando la config guardada.")
+		warn("[AzucarLegit] Ocurrió un error aplicando la config guardada.")
 		return false
 	end
 	return true
