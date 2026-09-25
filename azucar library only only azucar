@@ -293,6 +293,8 @@ local Theme = {
 	TextDim    = Color3.fromRGB(130, 130, 140),
 	Active     = Color3.fromRGB(255, 35, 55),
 	ActiveDim  = Color3.fromRGB(190, 20, 40),
+	FX         = Color3.fromRGB(255, 35, 55),
+	FXSpark    = Color3.fromRGB(255, 35, 55),
 	Font       = UI_FONT,
 	FontBold   = UI_FONT,
 	-- Transparencia de TODA la tarjeta que abre cada pestaña (fondo y
@@ -300,6 +302,75 @@ local Theme = {
 	Alpha      = 0.2,
 }
 UI.Theme = Theme
+
+-- ============================================================
+-- 	TEMAS COMPLETOS — no solo el acento, TODO el fondo/texto cambia
+-- ============================================================
+-- Esto es distinto de las Paletas de acá abajo (que solo cambian
+-- Active/ActiveDim, el color de resalte). Un THEME cambia también el
+-- fondo, las filas, los bordes y el texto: es un estilo entero, no
+-- solo un color.
+--
+-- config.Theme = "Negro" (o "Blanco") en CreateWindow elige el tema
+-- ANTES de armar la ventana. Para cambiarlo mientras la UI ya está
+-- abierta, UI:SetTheme("Blanco") existe, pero solo repinta el acento
+-- al toque; los fondos ya dibujados no se actualizan solos (recrear la
+-- ventana con el theme elegido es lo más prolijo para un cambio completo).
+-- FX: el color de la NIEBLA/AURA alrededor de la tarjeta, el borde que
+-- gira, y el color al que se pone la pestaña mientras está PRESIONADA.
+-- FXSpark: el color BASE de las chispas (las "calientes" salen de ahí
+-- mismo, mezcladas hacia blanco). Son cosas separadas de Active (que
+-- sigue siendo el acento de texto/resaltados normales) para que un
+-- tema claro u oscuro no tenga que verse rojo en esos efectos.
+local Themes = {
+	-- El que ya usábamos casi siempre: oscuro casi negro, todo en rojo.
+	Rojo = {
+		Background = Color3.fromRGB(5, 5, 7),
+		Header     = Color3.fromRGB(9, 9, 11),
+		Line       = Color3.fromRGB(12, 12, 14),
+		LineOpen   = Color3.fromRGB(20, 20, 24),
+		Field      = Color3.fromRGB(11, 11, 13),
+		Border     = Color3.fromRGB(28, 28, 32),
+		Text       = Color3.fromRGB(240, 240, 245),
+		TextDim    = Color3.fromRGB(130, 130, 140),
+		Active     = Color3.fromRGB(255, 35, 55),
+		ActiveDim  = Color3.fromRGB(190, 20, 40),
+		FX         = Color3.fromRGB(255, 35, 55),
+		FXSpark    = Color3.fromRGB(255, 35, 55),
+	},
+	-- Negro puro, monocromo: acento blanco; niebla/tabs/chispas en gris.
+	Negro = {
+		Background = Color3.fromRGB(0, 0, 0),
+		Header     = Color3.fromRGB(0, 0, 0),
+		Line       = Color3.fromRGB(3, 3, 3),
+		LineOpen   = Color3.fromRGB(12, 12, 12),
+		Field      = Color3.fromRGB(2, 2, 2),
+		Border     = Color3.fromRGB(42, 42, 42),
+		Text       = Color3.fromRGB(255, 255, 255),
+		TextDim    = Color3.fromRGB(150, 150, 150),
+		Active     = Color3.fromRGB(255, 255, 255),
+		ActiveDim  = Color3.fromRGB(175, 175, 175),
+		FX         = Color3.fromRGB(95, 95, 95),  -- pestaña presionada / niebla: gris (no blanco puro)
+		FXSpark    = Color3.fromRGB(45, 45, 45),  -- chispas negras, las calientes se aclaran a gris
+	},
+	-- Tema claro: fondo blanco, letra oscura, acento rojo (mantiene la marca).
+	Blanco = {
+		Background = Color3.fromRGB(255, 255, 255),
+		Header     = Color3.fromRGB(246, 246, 248),
+		Line       = Color3.fromRGB(238, 238, 241),
+		LineOpen   = Color3.fromRGB(226, 226, 231),
+		Field      = Color3.fromRGB(241, 241, 244),
+		Border     = Color3.fromRGB(210, 210, 217),
+		Text       = Color3.fromRGB(22, 22, 26),
+		TextDim    = Color3.fromRGB(112, 112, 122),
+		Active     = Color3.fromRGB(222, 32, 52),
+		ActiveDim  = Color3.fromRGB(162, 16, 36),
+		FX         = Color3.fromRGB(196, 196, 202), -- pestaña presionada / niebla: blanco casi gris
+		FXSpark    = Color3.fromRGB(55, 55, 60),    -- chispas semi negras, las calientes se aclaran a blanco
+	},
+}
+UI.Themes = Themes
+UI.CurrentTheme = "Rojo"
 
 local Palettes = {
 	Rojo   = { Active = Color3.fromRGB(255, 35, 55),  ActiveDim = Color3.fromRGB(190, 20, 40) },
@@ -346,6 +417,29 @@ function UI:SetAccentColor(paletteName)
 	UI.CurrentPalette = paletteName
 	Theme.Active    = palette.Active
 	Theme.ActiveDim = palette.ActiveDim
+	for _, listener in ipairs(accentListeners) do
+		pcall(listener)
+	end
+end
+
+-- Cambia el TEMA completo (fondo, filas, bordes, texto Y acento), no
+-- solo el acento como SetAccentColor. Para que se vea entero, lo ideal
+-- es pasar config.Theme = "Negro" (o "Blanco") en CreateWindow, ANTES
+-- de que se dibuje nada. Llamado después de que la UI ya está armada,
+-- repinta el acento al toque (como SetAccentColor), pero los fondos,
+-- filas y bordes que ya se dibujaron con el color viejo no se actualizan
+-- solos — no tienen un "onAccent" propio, sería un cambio mucho más
+-- grande tocar cada fila para eso. Sirve como ajuste rápido igual.
+function UI:SetTheme(themeName)
+	local preset = Themes[themeName]
+	if not preset then
+		warn("[AzucarLegit] Tema desconocido: " .. tostring(themeName) .. ". Elegí Rojo, Negro o Blanco.")
+		return
+	end
+	UI.CurrentTheme = themeName
+	for key, value in pairs(preset) do
+		Theme[key] = value
+	end
 	for _, listener in ipairs(accentListeners) do
 		pcall(listener)
 	end
@@ -542,6 +636,13 @@ end
 -- ============================================================
 function UI:CreateWindow(config)
 	config = config or {}
+
+	-- config.Theme = "Negro" o "Blanco" (además del "Rojo" que ya
+	-- tenías): elige el estilo completo ANTES de dibujar nada, así todo
+	-- sale ya con esos colores desde el primer frame.
+	if config.Theme ~= nil then
+		UI:SetTheme(config.Theme)
+	end
 
 	local title      = config.Title or config.Name or "Azúcar Hub"
 	local SIDEBAR_W  = config.Width or config.SidebarWidth or 175
@@ -1009,7 +1110,7 @@ function UI:CreateTab(config)
 				Name = "Aura",
 				Size = UDim2.new(1, grow * 2, 1, grow * 2),
 				Position = UDim2.new(0, -grow, 0, -grow),
-				BackgroundColor3 = Theme.Active,
+				BackgroundColor3 = Theme.FX,
 				BackgroundTransparency = 1, -- arranca apagada
 				BorderSizePixel = 0,
 				ZIndex = 0, -- detrás de la pestaña
@@ -1019,7 +1120,7 @@ function UI:CreateTab(config)
 	end
 	onAccent(function()
 		for _, l in ipairs(pillLayers) do
-			if l.Parent then l.BackgroundColor3 = Theme.Active end
+			if l.Parent then l.BackgroundColor3 = Theme.FX end
 		end
 	end)
 
@@ -1129,7 +1230,7 @@ function UI:CreateTab(config)
 	-- tamaño, su aparición y su animación.
 	local PanelStroke = Panel:FindFirstChildOfClass("UIStroke")
 	if PanelStroke then
-		PanelStroke.Color = Theme.Active
+		PanelStroke.Color = Theme.FX
 		PanelStroke.Transparency = 0.35
 	end
 
@@ -1160,7 +1261,7 @@ function UI:CreateTab(config)
 			local layer = new("Frame", {
 				Size = UDim2.new(1, grow * 2, 1, grow * 2),
 				Position = UDim2.new(0, -grow, 0, -grow),
-				BackgroundColor3 = Theme.Active,
+				BackgroundColor3 = Theme.FX,
 				BackgroundTransparency = 1, -- arranca apagada; la enciende Tab._fx
 				BorderSizePixel = 0,
 				Parent = Glow,
@@ -1195,12 +1296,12 @@ function UI:CreateTab(config)
 	local function borderColors()
 		-- La "cabeza" de la luz es rojo casi blanco (caliente) y se va
 		-- enfriando a rojo oscuro en la cola.
-		local hot = Theme.Active:Lerp(Color3.fromRGB(255, 255, 255), 0.7)
+		local hot = Theme.FX:Lerp(Color3.fromRGB(255, 255, 255), 0.7)
 		return ColorSequence.new({
 			ColorSequenceKeypoint.new(0, hot),
-			ColorSequenceKeypoint.new(0.2, Theme.Active),
-			ColorSequenceKeypoint.new(0.5, Theme.ActiveDim),
-			ColorSequenceKeypoint.new(0.8, Theme.Active),
+			ColorSequenceKeypoint.new(0.2, Theme.FX),
+			ColorSequenceKeypoint.new(0.5, Theme.FX),
+			ColorSequenceKeypoint.new(0.8, Theme.FX),
 			ColorSequenceKeypoint.new(1, hot),
 		})
 	end
@@ -1235,7 +1336,7 @@ function UI:CreateTab(config)
 			Name = "Spark",
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Size = UDim2.fromOffset(SPARK_SIZE_PX * 3.2, SPARK_SIZE_PX * 3.2),
-			BackgroundColor3 = Theme.Active,
+			BackgroundColor3 = Theme.FXSpark,
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
 			Parent = Glow,
@@ -1245,7 +1346,7 @@ function UI:CreateTab(config)
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
 			Size = UDim2.fromScale(1 / 3.2, 1 / 3.2),
-			BackgroundColor3 = hot and Theme.Active:Lerp(Color3.fromRGB(255, 255, 255), 0.65) or Theme.Active,
+			BackgroundColor3 = hot and Theme.FXSpark:Lerp(Color3.fromRGB(255, 255, 255), 0.65) or Theme.FXSpark,
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
 			Parent = halo,
@@ -1258,8 +1359,8 @@ function UI:CreateTab(config)
 	onAccent(function()
 		for _, sp in ipairs(sparks) do
 			if sp.dot.Parent then
-				sp.dot.BackgroundColor3 = sp.hot and Theme.Active:Lerp(Color3.fromRGB(255, 255, 255), 0.65) or Theme.Active
-				sp.halo.BackgroundColor3 = Theme.Active
+				sp.dot.BackgroundColor3 = sp.hot and Theme.FXSpark:Lerp(Color3.fromRGB(255, 255, 255), 0.65) or Theme.FXSpark
+				sp.halo.BackgroundColor3 = Theme.FXSpark
 			end
 		end
 	end)
@@ -1307,7 +1408,7 @@ function UI:CreateTab(config)
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				Position = UDim2.fromScale(0.5, 0.5),
 				Size = UDim2.fromScale(frac, frac),
-				BackgroundColor3 = Theme.Active,
+				BackgroundColor3 = Theme.FX,
 				BackgroundTransparency = 1,
 				BorderSizePixel = 0,
 				Parent = root,
@@ -1318,7 +1419,7 @@ function UI:CreateTab(config)
 	onAccent(function()
 		for _, w in ipairs(wisps) do
 			for _, b in ipairs(w.blobs) do
-				if b.Parent then b.BackgroundColor3 = Theme.Active end
+				if b.Parent then b.BackgroundColor3 = Theme.FX end
 			end
 		end
 	end)
@@ -1349,8 +1450,8 @@ function UI:CreateTab(config)
 	end)
 	onAccent(function()
 		if not Glow.Parent then return end
-		for _, layer in ipairs(glowLayers) do layer.BackgroundColor3 = Theme.Active end
-		if PanelStroke then PanelStroke.Color = Theme.Active end
+		for _, layer in ipairs(glowLayers) do layer.BackgroundColor3 = Theme.FX end
+		if PanelStroke then PanelStroke.Color = Theme.FX end
 	end)
 
 	-- El ancho se calcula EXPLÍCITAMENTE en píxeles y se recalcula si
@@ -1468,7 +1569,7 @@ function UI:CreateTab(config)
 
 	local function paintPill()
 		if Tab._isOpen then
-			tween(Pill, { BackgroundColor3 = Theme.Active, BackgroundTransparency = 0.35 }, 0.15)
+			tween(Pill, { BackgroundColor3 = Theme.FX, BackgroundTransparency = 0.35 }, 0.15)
 		else
 			tween(Pill, {
 				BackgroundColor3 = hovering and Theme.LineOpen or Theme.Line,
@@ -1603,7 +1704,7 @@ function UI:CreateTab(config)
 		self:_updateBlur()
 	end
 	onAccent(function()
-		if Pill.Parent and Tab._isOpen then Pill.BackgroundColor3 = Theme.Active end
+		if Pill.Parent and Tab._isOpen then Pill.BackgroundColor3 = Theme.FX end
 	end)
 
 	table.insert(self._connections, Pill.MouseButton1Click:Connect(function()
