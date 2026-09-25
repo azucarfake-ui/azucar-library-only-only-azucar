@@ -301,6 +301,63 @@ local Theme = {
 }
 UI.Theme = Theme
 
+-- ============================================================
+-- 	TEMAS COMPLETOS — no solo el acento, TODO el fondo/texto cambia
+-- ============================================================
+-- Esto es distinto de las Paletas de acá abajo (que solo cambian
+-- Active/ActiveDim, el color de resalte). Un THEME cambia también el
+-- fondo, las filas, los bordes y el texto: es un estilo entero, no
+-- solo un color.
+--
+-- config.Theme = "Negro" (o "Blanco") en CreateWindow elige el tema
+-- ANTES de armar la ventana. Para cambiarlo mientras la UI ya está
+-- abierta, UI:SetTheme("Blanco") existe, pero solo repinta el acento
+-- al toque; los fondos ya dibujados no se actualizan solos (recrear la
+-- ventana con el theme elegido es lo más prolijo para un cambio completo).
+local Themes = {
+	-- El que ya tenías: oscuro casi negro, acento rojo.
+	Original = {
+		Background = Color3.fromRGB(5, 5, 7),
+		Header     = Color3.fromRGB(9, 9, 11),
+		Line       = Color3.fromRGB(12, 12, 14),
+		LineOpen   = Color3.fromRGB(20, 20, 24),
+		Field      = Color3.fromRGB(11, 11, 13),
+		Border     = Color3.fromRGB(28, 28, 32),
+		Text       = Color3.fromRGB(240, 240, 245),
+		TextDim    = Color3.fromRGB(130, 130, 140),
+		Active     = Color3.fromRGB(255, 35, 55),
+		ActiveDim  = Color3.fromRGB(190, 20, 40),
+	},
+	-- Negro puro, monocromo: acento blanco en vez de rojo.
+	Negro = {
+		Background = Color3.fromRGB(0, 0, 0),
+		Header     = Color3.fromRGB(0, 0, 0),
+		Line       = Color3.fromRGB(3, 3, 3),
+		LineOpen   = Color3.fromRGB(12, 12, 12),
+		Field      = Color3.fromRGB(2, 2, 2),
+		Border     = Color3.fromRGB(42, 42, 42),
+		Text       = Color3.fromRGB(255, 255, 255),
+		TextDim    = Color3.fromRGB(150, 150, 150),
+		Active     = Color3.fromRGB(255, 255, 255),
+		ActiveDim  = Color3.fromRGB(175, 175, 175),
+	},
+	-- Tema claro: fondo blanco, letra oscura, acento rojo (mantiene la marca).
+	Blanco = {
+		Background = Color3.fromRGB(255, 255, 255),
+		Header     = Color3.fromRGB(246, 246, 248),
+		Line       = Color3.fromRGB(238, 238, 241),
+		LineOpen   = Color3.fromRGB(226, 226, 231),
+		Field      = Color3.fromRGB(241, 241, 244),
+		Border     = Color3.fromRGB(210, 210, 217),
+		Text       = Color3.fromRGB(22, 22, 26),
+		TextDim    = Color3.fromRGB(112, 112, 122),
+		Active     = Color3.fromRGB(222, 32, 52),
+		ActiveDim  = Color3.fromRGB(162, 16, 36),
+	},
+}
+UI.Themes = Themes
+UI.CurrentTheme = "Original"
+
 local Palettes = {
 	Rojo   = { Active = Color3.fromRGB(255, 35, 55),  ActiveDim = Color3.fromRGB(190, 20, 40) },
 	Azul   = { Active = Color3.fromRGB(48, 132, 232),  ActiveDim = Color3.fromRGB(28, 84, 160) },
@@ -346,6 +403,29 @@ function UI:SetAccentColor(paletteName)
 	UI.CurrentPalette = paletteName
 	Theme.Active    = palette.Active
 	Theme.ActiveDim = palette.ActiveDim
+	for _, listener in ipairs(accentListeners) do
+		pcall(listener)
+	end
+end
+
+-- Cambia el TEMA completo (fondo, filas, bordes, texto Y acento), no
+-- solo el acento como SetAccentColor. Para que se vea entero, lo ideal
+-- es pasar config.Theme = "Negro" (o "Blanco") en CreateWindow, ANTES
+-- de que se dibuje nada. Llamado después de que la UI ya está armada,
+-- repinta el acento al toque (como SetAccentColor), pero los fondos,
+-- filas y bordes que ya se dibujaron con el color viejo no se actualizan
+-- solos — no tienen un "onAccent" propio, sería un cambio mucho más
+-- grande tocar cada fila para eso. Sirve como ajuste rápido igual.
+function UI:SetTheme(themeName)
+	local preset = Themes[themeName]
+	if not preset then
+		warn("[AzucarLegit] Tema desconocido: " .. tostring(themeName) .. ". Elegí Original, Negro o Blanco.")
+		return
+	end
+	UI.CurrentTheme = themeName
+	for key, value in pairs(preset) do
+		Theme[key] = value
+	end
 	for _, listener in ipairs(accentListeners) do
 		pcall(listener)
 	end
@@ -542,6 +622,13 @@ end
 -- ============================================================
 function UI:CreateWindow(config)
 	config = config or {}
+
+	-- config.Theme = "Negro" o "Blanco" (además del "Original" que ya
+	-- tenías): elige el estilo completo ANTES de dibujar nada, así todo
+	-- sale ya con esos colores desde el primer frame.
+	if config.Theme ~= nil then
+		UI:SetTheme(config.Theme)
+	end
 
 	local title      = config.Title or config.Name or "Azúcar Hub"
 	local SIDEBAR_W  = config.Width or config.SidebarWidth or 175
