@@ -65,6 +65,15 @@
 	 15. IGNORAR CONTROLES: config.AutoSaveIgnore = {"MiniPekka"} hace
 	     que esos Flags nunca se guarden ni se carguen (coincide si el
 	     nombre del Flag CONTIENE la palabra, sin importar mayúsculas).
+	 16. COLOR DE EFECTOS POR TEMA. La niebla, las chispas, el borde que
+	     gira y el color de la pestaña presionada ya NO son siempre
+	     rojos: cada Theme (Original/Rojo, Negro, Blanco) trae su propio
+	     Theme.Effect/EffectDim (aura, borde, pestaña presionada) y
+	     Theme.SparkA/SparkB (las dos tonalidades de las chispas). El
+	     rojo de marca (texto de valores, reloj, relleno de sliders,
+	     etc.) sigue siendo Theme.Active y no cambia con esto. "Rojo" es
+	     alias de "Original" en UI.Themes, para poder pasar
+	     config.Theme = "Rojo" además de "Original".
 
 	IMPORTANTE: la lógica interna de cada control (CreateButton,
 	CreateToggle, CreateSlider, CreateDropdown, CreateInput,
@@ -293,6 +302,16 @@ local Theme = {
 	TextDim    = Color3.fromRGB(130, 130, 140),
 	Active     = Color3.fromRGB(255, 35, 55),
 	ActiveDim  = Color3.fromRGB(190, 20, 40),
+	-- Color de los EFECTOS atmosféricos (niebla/aura, borde que gira,
+	-- pestaña presionada) — separado de Active/ActiveDim, que sigue
+	-- siendo el rojo de marca para texto/relleno de sliders/reloj. Así
+	-- un tema Negro o Blanco puede tener efectos grises/blancos sin
+	-- perder el acento rojo en el resto de la interfaz.
+	Effect     = Color3.fromRGB(255, 35, 55),
+	EffectDim  = Color3.fromRGB(190, 20, 40),
+	-- Las dos tonalidades que alternan las chispas.
+	SparkA     = Color3.fromRGB(255, 35, 55),
+	SparkB     = Color3.fromRGB(255, 173, 183),
 	Font       = UI_FONT,
 	FontBold   = UI_FONT,
 	-- Transparencia de TODA la tarjeta que abre cada pestaña (fondo y
@@ -315,7 +334,7 @@ UI.Theme = Theme
 -- al toque; los fondos ya dibujados no se actualizan solos (recrear la
 -- ventana con el theme elegido es lo más prolijo para un cambio completo).
 local Themes = {
-	-- El que ya tenías: oscuro casi negro, acento rojo.
+	-- El que ya tenías: oscuro casi negro, acento rojo, efectos rojos.
 	Original = {
 		Background = Color3.fromRGB(5, 5, 7),
 		Header     = Color3.fromRGB(9, 9, 11),
@@ -327,8 +346,14 @@ local Themes = {
 		TextDim    = Color3.fromRGB(130, 130, 140),
 		Active     = Color3.fromRGB(255, 35, 55),
 		ActiveDim  = Color3.fromRGB(190, 20, 40),
+		Effect     = Color3.fromRGB(255, 35, 55),
+		EffectDim  = Color3.fromRGB(190, 20, 40),
+		SparkA     = Color3.fromRGB(255, 35, 55),
+		SparkB     = Color3.fromRGB(255, 173, 183),
 	},
-	-- Negro puro, monocromo: acento blanco en vez de rojo.
+	-- Negro puro, monocromo: acento blanco en el texto/relleno, pero los
+	-- EFECTOS (niebla, chispas, pestaña presionada, borde) van en gris
+	-- oscuro/gris — "negro como gris", no blanco puro ni rojo.
 	Negro = {
 		Background = Color3.fromRGB(0, 0, 0),
 		Header     = Color3.fromRGB(0, 0, 0),
@@ -340,8 +365,13 @@ local Themes = {
 		TextDim    = Color3.fromRGB(150, 150, 150),
 		Active     = Color3.fromRGB(255, 255, 255),
 		ActiveDim  = Color3.fromRGB(175, 175, 175),
+		Effect     = Color3.fromRGB(115, 115, 120),
+		EffectDim  = Color3.fromRGB(60, 60, 64),
+		SparkA     = Color3.fromRGB(24, 24, 26),
+		SparkB     = Color3.fromRGB(150, 150, 155),
 	},
-	-- Tema claro: fondo blanco, letra oscura, acento rojo (mantiene la marca).
+	-- Tema claro: fondo blanco, letra oscura, acento rojo en texto (mantiene
+	-- la marca), pero los EFECTOS van en gris casi blanco / brillante, no rojo.
 	Blanco = {
 		Background = Color3.fromRGB(255, 255, 255),
 		Header     = Color3.fromRGB(246, 246, 248),
@@ -353,8 +383,15 @@ local Themes = {
 		TextDim    = Color3.fromRGB(112, 112, 122),
 		Active     = Color3.fromRGB(222, 32, 52),
 		ActiveDim  = Color3.fromRGB(162, 16, 36),
+		Effect     = Color3.fromRGB(206, 206, 213),
+		EffectDim  = Color3.fromRGB(150, 150, 158),
+		SparkA     = Color3.fromRGB(30, 30, 33),
+		SparkB     = Color3.fromRGB(255, 255, 255),
 	},
 }
+-- "Rojo" es el mismo tema de siempre (Original), solo con otro nombre
+-- para poder pasar config.Theme = "Rojo".
+Themes.Rojo = Themes.Original
 UI.Themes = Themes
 UI.CurrentTheme = "Original"
 
@@ -408,18 +445,19 @@ function UI:SetAccentColor(paletteName)
 	end
 end
 
--- Cambia el TEMA completo (fondo, filas, bordes, texto Y acento), no
--- solo el acento como SetAccentColor. Para que se vea entero, lo ideal
--- es pasar config.Theme = "Negro" (o "Blanco") en CreateWindow, ANTES
--- de que se dibuje nada. Llamado después de que la UI ya está armada,
--- repinta el acento al toque (como SetAccentColor), pero los fondos,
--- filas y bordes que ya se dibujaron con el color viejo no se actualizan
--- solos — no tienen un "onAccent" propio, sería un cambio mucho más
--- grande tocar cada fila para eso. Sirve como ajuste rápido igual.
+-- Cambia el TEMA completo (fondo, filas, bordes, texto, acento Y color
+-- de los efectos atmosféricos), no solo el acento como SetAccentColor.
+-- Para que se vea entero, lo ideal es pasar config.Theme = "Negro" (o
+-- "Blanco"/"Rojo") en CreateWindow, ANTES de que se dibuje nada.
+-- Llamado después de que la UI ya está armada, repinta el acento y los
+-- efectos al toque (como SetAccentColor), pero los fondos, filas y
+-- bordes que ya se dibujaron con el color viejo no se actualizan solos
+-- — no tienen un "onAccent" propio, sería un cambio mucho más grande
+-- tocar cada fila para eso. Sirve como ajuste rápido igual.
 function UI:SetTheme(themeName)
 	local preset = Themes[themeName]
 	if not preset then
-		warn("[AzucarLegit] Tema desconocido: " .. tostring(themeName) .. ". Elegí Original, Negro o Blanco.")
+		warn("[AzucarLegit] Tema desconocido: " .. tostring(themeName) .. ". Elegí Original (o Rojo), Negro o Blanco.")
 		return
 	end
 	UI.CurrentTheme = themeName
@@ -623,9 +661,9 @@ end
 function UI:CreateWindow(config)
 	config = config or {}
 
-	-- config.Theme = "Negro" o "Blanco" (además del "Original" que ya
-	-- tenías): elige el estilo completo ANTES de dibujar nada, así todo
-	-- sale ya con esos colores desde el primer frame.
+	-- config.Theme = "Negro" o "Blanco" (o "Rojo"/"Original"): elige el
+	-- estilo completo ANTES de dibujar nada, así todo sale ya con esos
+	-- colores desde el primer frame.
 	if config.Theme ~= nil then
 		UI:SetTheme(config.Theme)
 	end
@@ -1096,7 +1134,7 @@ function UI:CreateTab(config)
 				Name = "Aura",
 				Size = UDim2.new(1, grow * 2, 1, grow * 2),
 				Position = UDim2.new(0, -grow, 0, -grow),
-				BackgroundColor3 = Theme.Active,
+				BackgroundColor3 = Theme.Effect,
 				BackgroundTransparency = 1, -- arranca apagada
 				BorderSizePixel = 0,
 				ZIndex = 0, -- detrás de la pestaña
@@ -1106,7 +1144,7 @@ function UI:CreateTab(config)
 	end
 	onAccent(function()
 		for _, l in ipairs(pillLayers) do
-			if l.Parent then l.BackgroundColor3 = Theme.Active end
+			if l.Parent then l.BackgroundColor3 = Theme.Effect end
 		end
 	end)
 
@@ -1210,13 +1248,13 @@ function UI:CreateTab(config)
 		new("UISizeConstraint", { MaxSize = Vector2.new(PANEL_MAX_W, math.huge) }),
 	})
 
-	-- ---------------- NIEBLA ROJA alrededor de la tarjeta ----------------
+	-- ---------------- NIEBLA alrededor de la tarjeta (color de Theme.Effect) ----------------
 	-- Vive DETRÁS de la tarjeta (ZIndex 0), como hermana de ella (no
 	-- hija, porque la tarjeta recorta lo que se sale), y copia su
 	-- tamaño, su aparición y su animación.
 	local PanelStroke = Panel:FindFirstChildOfClass("UIStroke")
 	if PanelStroke then
-		PanelStroke.Color = Theme.Active
+		PanelStroke.Color = Theme.Effect
 		PanelStroke.Transparency = 0.35
 	end
 
@@ -1247,7 +1285,7 @@ function UI:CreateTab(config)
 			local layer = new("Frame", {
 				Size = UDim2.new(1, grow * 2, 1, grow * 2),
 				Position = UDim2.new(0, -grow, 0, -grow),
-				BackgroundColor3 = Theme.Active,
+				BackgroundColor3 = Theme.Effect,
 				BackgroundTransparency = 1, -- arranca apagada; la enciende Tab._fx
 				BorderSizePixel = 0,
 				Parent = Glow,
@@ -1275,19 +1313,19 @@ function UI:CreateTab(config)
 		end
 	end
 
-	-- Borde de la tarjeta con una luz roja que da vueltas: un UIGradient
-	-- sobre el borde (opaco en un extremo, casi transparente en el
-	-- medio) al que se le va girando la rotación (ver Tab._fx).
+	-- Borde de la tarjeta con una luz que da vueltas (color de Theme.Effect):
+	-- un UIGradient sobre el borde (opaco en un extremo, casi transparente
+	-- en el medio) al que se le va girando la rotación (ver Tab._fx).
 	local BorderGradient = nil
 	local function borderColors()
-		-- La "cabeza" de la luz es rojo casi blanco (caliente) y se va
-		-- enfriando a rojo oscuro en la cola.
-		local hot = Theme.Active:Lerp(Color3.fromRGB(255, 255, 255), 0.7)
+		-- La "cabeza" de la luz se aclara hacia blanco (caliente) y se va
+		-- enfriando hacia Theme.EffectDim en la cola.
+		local hot = Theme.Effect:Lerp(Color3.fromRGB(255, 255, 255), 0.7)
 		return ColorSequence.new({
 			ColorSequenceKeypoint.new(0, hot),
-			ColorSequenceKeypoint.new(0.2, Theme.Active),
-			ColorSequenceKeypoint.new(0.5, Theme.ActiveDim),
-			ColorSequenceKeypoint.new(0.8, Theme.Active),
+			ColorSequenceKeypoint.new(0.2, Theme.Effect),
+			ColorSequenceKeypoint.new(0.5, Theme.EffectDim),
+			ColorSequenceKeypoint.new(0.8, Theme.Effect),
 			ColorSequenceKeypoint.new(1, hot),
 		})
 	end
@@ -1311,18 +1349,20 @@ function UI:CreateTab(config)
 	end
 
 	-- ---------------- CHISPAS ----------------
-	-- Puntitos rojos que nacen en el borde de la tarjeta, salen flotando
-	-- hacia afuera y se apagan. Viven dentro de Glow (detrás de la tarjeta).
+	-- Puntitos que nacen en el borde de la tarjeta, salen flotando hacia
+	-- afuera y se apagan. Alternan entre Theme.SparkA y Theme.SparkB (por
+	-- ejemplo rojo/rosado en el tema Original, negro/gris en Negro,
+	-- negro/blanco en Blanco). Viven dentro de Glow (detrás de la tarjeta).
 	local sparks = {}
 	for i = 1, SPARKS_COUNT do
-		local hot = (i % 2 == 0) -- la mitad son "calientes" (casi blancas)
+		local hot = (i % 2 == 0) -- la mitad usa SparkB (la tonalidad más clara/caliente)
 		-- Halo: un círculo grande y tenue que es el contenedor de la chispa
 		-- (para que cada una "brille"); el núcleo va adentro, encima.
 		local halo = new("Frame", {
 			Name = "Spark",
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Size = UDim2.fromOffset(SPARK_SIZE_PX * 3.2, SPARK_SIZE_PX * 3.2),
-			BackgroundColor3 = Theme.Active,
+			BackgroundColor3 = Theme.Effect,
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
 			Parent = Glow,
@@ -1332,7 +1372,7 @@ function UI:CreateTab(config)
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
 			Size = UDim2.fromScale(1 / 3.2, 1 / 3.2),
-			BackgroundColor3 = hot and Theme.Active:Lerp(Color3.fromRGB(255, 255, 255), 0.65) or Theme.Active,
+			BackgroundColor3 = hot and Theme.SparkB or Theme.SparkA,
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
 			Parent = halo,
@@ -1345,8 +1385,8 @@ function UI:CreateTab(config)
 	onAccent(function()
 		for _, sp in ipairs(sparks) do
 			if sp.dot.Parent then
-				sp.dot.BackgroundColor3 = sp.hot and Theme.Active:Lerp(Color3.fromRGB(255, 255, 255), 0.65) or Theme.Active
-				sp.halo.BackgroundColor3 = Theme.Active
+				sp.dot.BackgroundColor3 = sp.hot and Theme.SparkB or Theme.SparkA
+				sp.halo.BackgroundColor3 = Theme.Effect
 			end
 		end
 	end)
@@ -1377,7 +1417,8 @@ function UI:CreateTab(config)
 	-- Manchas de niebla (cada una son 4 círculos apilados muy
 	-- transparentes: el centro queda más denso y el borde se desvanece)
 	-- que nacen en el borde de la tarjeta, se agrandan y se van flotando
-	-- hacia afuera mientras se disuelven.
+	-- hacia afuera mientras se disuelven. Usan Theme.Effect, así que
+	-- cambian de rojo a gris/blanco según el tema.
 	local wisps = {}
 	for _ = 1, FOG_WISPS do
 		local root = new("Frame", {
@@ -1394,7 +1435,7 @@ function UI:CreateTab(config)
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				Position = UDim2.fromScale(0.5, 0.5),
 				Size = UDim2.fromScale(frac, frac),
-				BackgroundColor3 = Theme.Active,
+				BackgroundColor3 = Theme.Effect,
 				BackgroundTransparency = 1,
 				BorderSizePixel = 0,
 				Parent = root,
@@ -1405,7 +1446,7 @@ function UI:CreateTab(config)
 	onAccent(function()
 		for _, w in ipairs(wisps) do
 			for _, b in ipairs(w.blobs) do
-				if b.Parent then b.BackgroundColor3 = Theme.Active end
+				if b.Parent then b.BackgroundColor3 = Theme.Effect end
 			end
 		end
 	end)
@@ -1436,8 +1477,8 @@ function UI:CreateTab(config)
 	end)
 	onAccent(function()
 		if not Glow.Parent then return end
-		for _, layer in ipairs(glowLayers) do layer.BackgroundColor3 = Theme.Active end
-		if PanelStroke then PanelStroke.Color = Theme.Active end
+		for _, layer in ipairs(glowLayers) do layer.BackgroundColor3 = Theme.Effect end
+		if PanelStroke then PanelStroke.Color = Theme.Effect end
 	end)
 
 	-- El ancho se calcula EXPLÍCITAMENTE en píxeles y se recalcula si
@@ -1482,16 +1523,17 @@ function UI:CreateTab(config)
 		Parent = PanelHeader,
 	})
 
-	-- Brillo rojo que recorre el título de izquierda a derecha (el texto
-	-- es blanco y el degradado le pinta una franja roja que se desliza).
+	-- Brillo que recorre el título de izquierda a derecha (el texto es
+	-- blanco/oscuro segun el tema, y el degradado le pinta una franja del
+	-- acento de marca — Theme.Active — que se desliza).
 	local function titleColors()
-		local white = Color3.fromRGB(255, 255, 255)
+		local base = Theme.Text
 		return ColorSequence.new({
-			ColorSequenceKeypoint.new(0, white),
-			ColorSequenceKeypoint.new(0.4, white),
+			ColorSequenceKeypoint.new(0, base),
+			ColorSequenceKeypoint.new(0.4, base),
 			ColorSequenceKeypoint.new(0.5, Theme.Active),
-			ColorSequenceKeypoint.new(0.6, white),
-			ColorSequenceKeypoint.new(1, white),
+			ColorSequenceKeypoint.new(0.6, base),
+			ColorSequenceKeypoint.new(1, base),
 		})
 	end
 	local TitleGradient = new("UIGradient", {
@@ -1545,17 +1587,20 @@ function UI:CreateTab(config)
 		_rowCount = 0,
 	}, UI)
 
-	-- ---------------- Color de la pestaña (rojo persistente) ----------------
+	-- ---------------- Color de la pestaña (persistente mientras esté abierta) ----------------
 	-- UNA sola función decide cómo se ve la línea según su estado:
-	--   · abierta  → rojo, y se queda rojo pase lo que pase con el mouse
-	--   · cerrada  → negro (o un poco más claro si el mouse está encima)
+	--   · abierta  → Theme.Effect (rojo en Original, gris en Negro,
+	--                gris claro en Blanco), y se queda así pase lo que
+	--                pase con el mouse
+	--   · cerrada  → negro/línea normal (o un poco más claro si el
+	--                mouse está encima)
 	-- Se usa tween sobre las MISMAS propiedades, así un tween de hover
-	-- que todavía esté corriendo nunca le pisa el rojo al terminar.
+	-- que todavía esté corriendo nunca le pisa el color al terminar.
 	local hovering = false
 
 	local function paintPill()
 		if Tab._isOpen then
-			tween(Pill, { BackgroundColor3 = Theme.Active, BackgroundTransparency = 0.35 }, 0.15)
+			tween(Pill, { BackgroundColor3 = Theme.Effect, BackgroundTransparency = 0.35 }, 0.15)
 		else
 			tween(Pill, {
 				BackgroundColor3 = hovering and Theme.LineOpen or Theme.Line,
@@ -1646,8 +1691,8 @@ function UI:CreateTab(config)
 
 	-- Abre esta tarjeta y cierra la de cualquier otra pestaña que haya
 	-- quedado abierta (solo una ventana de lógicas a la vez). La
-	-- pestaña activa se pone roja y se queda así hasta que cambies de
-	-- pestaña o la cierres; las demás vuelven a negro.
+	-- pestaña activa se pinta con Theme.Effect y se queda así hasta que
+	-- cambies de pestaña o la cierres; las demás vuelven a negro.
 	local function setOpen(open)
 		if open then
 			for _, other in ipairs(self._tabs) do
@@ -1690,7 +1735,7 @@ function UI:CreateTab(config)
 		self:_updateBlur()
 	end
 	onAccent(function()
-		if Pill.Parent and Tab._isOpen then Pill.BackgroundColor3 = Theme.Active end
+		if Pill.Parent and Tab._isOpen then Pill.BackgroundColor3 = Theme.Effect end
 	end)
 
 	table.insert(self._connections, Pill.MouseButton1Click:Connect(function()
