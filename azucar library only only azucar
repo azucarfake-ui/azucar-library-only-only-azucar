@@ -167,10 +167,20 @@ local ANIMATED_FX = true
 local SPARKS_COUNT  = 26        -- cantidad de chispas (0 = sin chispas)
 local SPARK_SIZE_PX = 5         -- tamaño medio de cada chispa (más grande = más notorias)
 
--- LETRA: Creepster en toda la UI. FONT_BOOST le suma tamaño a todos los textos
--- (Creepster se ve más chica que una letra normal). Para otra letra cambiá
--- Enum.Font.Creepster por Enum.Font.Code, Enum.Font.GothamBold, etc.
-local UI_FONT    = Enum.Font.Creepster
+-- LETRA POR TEMA: cada tema (Rojo/Negro/Blanco) trae su propia fuente, no
+-- solo su color. Si tu ejecutor no tiene alguna de estas (son fuentes menos
+-- comunes que Roblox fue agregando), cae sola a Code en vez de romper el
+-- script. FONT_BOOST le suma tamaño a todos los textos (estas fuentes
+-- decorativas se ven más chicas que una letra normal).
+local function safeFont(name, fallback)
+	local ok, item = pcall(function() return Enum.Font[name] end)
+	if ok and item then return item end
+	return fallback
+end
+local FONT_ROJO   = Enum.Font.Creepster                          -- la que ya tenía
+local FONT_BLANCO = safeFont("Fondamento", Enum.Font.Code)       -- elegante y cursiva
+local FONT_NEGRO  = safeFont("GrenzeGotisch", Enum.Font.Code)    -- gótica, tipo dark
+local UI_FONT    = FONT_ROJO -- letra por defecto, hasta que se elija un Theme
 local FONT_BOOST = 2
 
 -- ============================================================
@@ -320,10 +330,10 @@ UI.Theme = Theme
 -- gira, y el color al que se pone la pestaña mientras está PRESIONADA.
 -- FXSpark: el color BASE de las chispas (las "calientes" salen de ahí
 -- mismo, mezcladas hacia blanco). Son cosas separadas de Active (que
--- sigue siendo el acento de texto/resaltados normales) para que un
--- tema claro u oscuro no tenga que verse rojo en esos efectos.
+-- sigue siendo el acento de texto/resaltados normales), y cada tema
+-- también trae su PROPIA FUENTE (Font/FontBold), no solo sus colores.
 local Themes = {
-	-- El que ya usábamos casi siempre: oscuro casi negro, todo en rojo.
+	-- El que ya usábamos casi siempre: oscuro casi negro, todo en rojo, Creepster.
 	Rojo = {
 		Background = Color3.fromRGB(5, 5, 7),
 		Header     = Color3.fromRGB(9, 9, 11),
@@ -337,8 +347,10 @@ local Themes = {
 		ActiveDim  = Color3.fromRGB(190, 20, 40),
 		FX         = Color3.fromRGB(255, 35, 55),
 		FXSpark    = Color3.fromRGB(255, 35, 55),
+		Font       = FONT_ROJO,
+		FontBold   = FONT_ROJO,
 	},
-	-- Negro puro, monocromo: acento blanco; niebla/tabs/chispas en gris.
+	-- Negro puro, monocromo: acento blanco; niebla/tabs/chispas en gris; letra gótica.
 	Negro = {
 		Background = Color3.fromRGB(0, 0, 0),
 		Header     = Color3.fromRGB(0, 0, 0),
@@ -352,8 +364,10 @@ local Themes = {
 		ActiveDim  = Color3.fromRGB(175, 175, 175),
 		FX         = Color3.fromRGB(95, 95, 95),  -- pestaña presionada / niebla: gris (no blanco puro)
 		FXSpark    = Color3.fromRGB(45, 45, 45),  -- chispas negras, las calientes se aclaran a gris
+		Font       = FONT_NEGRO,
+		FontBold   = FONT_NEGRO,
 	},
-	-- Tema claro: fondo blanco, letra oscura, acento rojo (mantiene la marca).
+	-- Tema claro: fondo blanco, letra oscura, acento rojo (mantiene la marca), cursiva elegante.
 	Blanco = {
 		Background = Color3.fromRGB(255, 255, 255),
 		Header     = Color3.fromRGB(246, 246, 248),
@@ -367,6 +381,8 @@ local Themes = {
 		ActiveDim  = Color3.fromRGB(162, 16, 36),
 		FX         = Color3.fromRGB(196, 196, 202), -- pestaña presionada / niebla: blanco casi gris
 		FXSpark    = Color3.fromRGB(55, 55, 60),    -- chispas semi negras, las calientes se aclaran a blanco
+		Font       = FONT_BLANCO,
+		FontBold   = FONT_BLANCO,
 	},
 }
 UI.Themes = Themes
