@@ -178,7 +178,7 @@ local function safeFont(name, fallback)
 	return fallback
 end
 local FONT_ROJO   = Enum.Font.Creepster                          -- la que ya tenía
-local FONT_BLANCO = safeFont("Fondamento", Enum.Font.Code)       -- elegante y cursiva
+local FONT_BLANCO = safeFont("Allura", Enum.Font.Code)           -- cursiva elegante (la que pediste)
 local FONT_NEGRO  = safeFont("GrenzeGotisch", Enum.Font.Code)    -- gótica, tipo dark
 local UI_FONT    = FONT_ROJO -- letra por defecto, hasta que se elija un Theme
 local FONT_BOOST = 2
