@@ -384,6 +384,57 @@ local Themes = {
 		Font       = FONT_BLANCO,
 		FontBold   = FONT_BLANCO,
 	},
+	-- Negro con naranja: mismo fondo oscuro de siempre, acento naranja.
+	Naranja = {
+		Background = Color3.fromRGB(5, 5, 7),
+		Header     = Color3.fromRGB(9, 9, 11),
+		Line       = Color3.fromRGB(12, 12, 14),
+		LineOpen   = Color3.fromRGB(20, 20, 24),
+		Field      = Color3.fromRGB(11, 11, 13),
+		Border     = Color3.fromRGB(28, 28, 32),
+		Text       = Color3.fromRGB(240, 240, 245),
+		TextDim    = Color3.fromRGB(130, 130, 140),
+		Active     = Color3.fromRGB(255, 140, 20),
+		ActiveDim  = Color3.fromRGB(190, 100, 10),
+		FX         = Color3.fromRGB(255, 140, 20),
+		FXSpark    = Color3.fromRGB(255, 140, 20),
+		Font       = FONT_ROJO,
+		FontBold   = FONT_ROJO,
+	},
+	-- Verde oscuro: mismo fondo, acento verde profundo (no el verde brillante de las Paletas viejas).
+	Verde = {
+		Background = Color3.fromRGB(5, 5, 7),
+		Header     = Color3.fromRGB(9, 9, 11),
+		Line       = Color3.fromRGB(12, 12, 14),
+		LineOpen   = Color3.fromRGB(20, 20, 24),
+		Field      = Color3.fromRGB(11, 11, 13),
+		Border     = Color3.fromRGB(28, 28, 32),
+		Text       = Color3.fromRGB(240, 240, 245),
+		TextDim    = Color3.fromRGB(130, 130, 140),
+		Active     = Color3.fromRGB(30, 140, 70),
+		ActiveDim  = Color3.fromRGB(18, 90, 45),
+		FX         = Color3.fromRGB(30, 140, 70),
+		FXSpark    = Color3.fromRGB(30, 140, 70),
+		Font       = FONT_ROJO,
+		FontBold   = FONT_ROJO,
+	},
+	-- Azul oscuro: mismo fondo, acento azul profundo.
+	Azul = {
+		Background = Color3.fromRGB(5, 5, 7),
+		Header     = Color3.fromRGB(9, 9, 11),
+		Line       = Color3.fromRGB(12, 12, 14),
+		LineOpen   = Color3.fromRGB(20, 20, 24),
+		Field      = Color3.fromRGB(11, 11, 13),
+		Border     = Color3.fromRGB(28, 28, 32),
+		Text       = Color3.fromRGB(240, 240, 245),
+		TextDim    = Color3.fromRGB(130, 130, 140),
+		Active     = Color3.fromRGB(45, 110, 200),
+		ActiveDim  = Color3.fromRGB(25, 70, 140),
+		FX         = Color3.fromRGB(45, 110, 200),
+		FXSpark    = Color3.fromRGB(45, 110, 200),
+		Font       = FONT_ROJO,
+		FontBold   = FONT_ROJO,
+	},
 }
 UI.Themes = Themes
 UI.CurrentTheme = "Rojo"
@@ -449,7 +500,7 @@ end
 function UI:SetTheme(themeName)
 	local preset = Themes[themeName]
 	if not preset then
-		warn("[AzucarLegit] Tema desconocido: " .. tostring(themeName) .. ". Elegí Rojo, Negro o Blanco.")
+		warn("[AzucarLegit] Tema desconocido: " .. tostring(themeName) .. ". Elegí Rojo, Naranja, Verde, Azul, Negro o Blanco.")
 		return
 	end
 	UI.CurrentTheme = themeName
