@@ -109,7 +109,7 @@ end
 -- ============================================================
 local WINDOW_W = 400
 local WINDOW_H = 300
-local TAB_STRIP_H = 32
+local TAB_STRIP_H = 28
 
 local AURA_SIZE_PX      = 16   -- halo alrededor del rectángulo (0 = sin halo)
 local AURA_LAYERS       = 10
@@ -509,8 +509,11 @@ function UI:CreateWindow(config)
 		ScrollingDirection = Enum.ScrollingDirection.X, CanvasSize = UDim2.new(0, 0, 1, 0),
 		AutomaticCanvasSize = Enum.AutomaticSize.X, ClipsDescendants = true, Parent = Panel,
 	})
-	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, Parent = TabStrip })
-	new("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8), PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4), Parent = TabStrip })
+	new("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6),
+		VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder, Parent = TabStrip,
+	})
+	new("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8), PaddingTop = UDim.new(0, 3), PaddingBottom = UDim.new(0, 3), Parent = TabStrip })
 
 	-- Contenido: debajo de la fila de pestañas, vertical, sin barra.
 	local ContentScroll = new("ScrollingFrame", {
@@ -686,18 +689,27 @@ end
 -- 	CREATE TAB
 -- ============================================================
 function UI:CreateTab(config)
+	-- Acepta tanto Window:CreateTab("Combate") como
+	-- Window:CreateTab({ Name = "Combate" }) — antes, pasar un string
+	-- suelto hacía que el nombre se ignorara silenciosamente y quedara
+	-- como "Tab 1", "Tab 2"...
+	if typeof(config) == "string" then config = { Name = config } end
 	config = config or {}
 	local name = config.Text or config.Name or ("Tab " .. (#self._tabs + 1))
 	if self.EmptyHint then self.EmptyHint:Destroy() self.EmptyHint = nil end
 
-	local collapsedW = math.clamp(#name * 7 + 20, 44, 120)
+	-- Píldoras más chicas: menos alto y menos ancho por letra que antes.
+	-- (El centrado vertical lo hace el VerticalAlignment del
+	-- UIListLayout de TabStrip, ver CreateWindow.)
+	local collapsedW = math.clamp(#name * 6 + 16, 36, 96)
 	local Pill = new("TextButton", {
 		Text = "", AutoButtonColor = false, BackgroundColor3 = Theme.Line, BackgroundTransparency = 0.15,
-		Size = UDim2.new(0, collapsedW, 1, 0), LayoutOrder = #self._tabs + 1, Parent = self.TabStrip,
-	}, { corner(8), stroke(Theme.Border, 1) })
+		Size = UDim2.new(0, collapsedW, 0, 22),
+		LayoutOrder = #self._tabs + 1, Parent = self.TabStrip,
+	}, { corner(7), stroke(Theme.Border, 1) })
 	new("TextLabel", {
-		Text = name, Font = Theme.FontBold, TextSize = 11, TextColor3 = Theme.Text, TextTruncate = Enum.TextTruncate.AtEnd,
-		BackgroundTransparency = 1, Size = UDim2.new(1, -8, 1, 0), Position = UDim2.new(0, 4, 0, 0), Parent = Pill,
+		Text = name, Font = Theme.FontBold, TextSize = 10, TextColor3 = Theme.Text, TextTruncate = Enum.TextTruncate.AtEnd,
+		BackgroundTransparency = 1, Size = UDim2.new(1, -6, 1, 0), Position = UDim2.new(0, 3, 0, 0), Parent = Pill,
 	})
 
 	local List = new("Frame", {
