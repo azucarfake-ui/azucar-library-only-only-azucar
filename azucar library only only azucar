@@ -1,11 +1,11 @@
 --[[
-	AzucarRage  v1.0
+	AzucarRage  v1.2
 	================
 	UI CHICA, de un solo rectángulo (estilo "external"): arriba las
 	pestañas en una fila horizontal, abajo las lógicas (sliders,
 	toggles, etc.) de la pestaña activa. Nada de tarjetas grandes que
 	ocupan media pantalla — esto es compacto, pensado para quedar
-	flotando en una esquina.
+	flotando en una esquina. Por defecto se para del lado IZQUIERDO.
 
 	Tema: RABIA. Negro casi puro con rojo violento. El borde del
 	rectángulo respira solo (un pulso rojo, como algo furioso que
@@ -15,6 +15,25 @@
 	Window:Rage() cuando fallás algo en el juego— el rectángulo entero
 	tiembla y se prende en un fogonazo rojo/blanco antes de volver a
 	su pulso normal. La furia es una función, no solo un color.
+
+	NOVEDAD v1.2 — todo por CÓDIGO, nada de botones en la UI:
+	  • Se sacaron los dos puntitos de la barra superior (color y
+	    esquinas). Ahora el acento y la forma de las esquinas se
+	    deciden en CreateWindow, igual que cualquier otra opción:
+
+	        local Window = UI:CreateWindow({
+	            Title       = "Azúcar Rage",
+	            ToggleKey   = Enum.KeyCode.K,
+	            Theme       = "Rojo",   -- "Rojo" | "Negro" | "Blanco"
+	            CornerStyle = "Round",  -- "Round" | "Sharp"
+	            Width       = 400,      -- el tamaño también es config,
+	            Height      = 300,      -- igual que el Theme.
+	        })
+
+	    UI:SetAccentColor(...) y UI:SetCornerStyle(...) siguen
+	    existiendo por si querés cambiarlos en caliente desde tu
+	    propio script, simplemente ya no hay un botón que lo haga por
+	    vos en la ventana.
 
 	TRAÍDO DE LA VERSIÓN GRANDE (v1.8.5), adaptado a este formato chico:
 	  • Transparencia real de toda la tarjeta junta (CanvasGroup).
@@ -31,8 +50,6 @@
 	    solo (config.AutoSaveConfig = true), con carga escalonada
 	    (config.AutoLoadStagger), orden de carga (config.AutoLoadOrder)
 	    y Flags que podés ignorar (config.AutoSaveIgnore).
-	  • Paleta rápida (Rojo/Negro/Blanco): un puntito en la barra
-	    superior cicla el acento sin rearmar la ventana.
 
 	LO QUE SE DEJÓ AFUERA a propósito (para que esto sea chico, no la
 	tarjeta grande de antes): el panel que crece hasta ocupar media
@@ -42,7 +59,11 @@
 
 	Uso:
 		local UI = loadstring(game:HttpGet("...AzucarRage.lua"))()
-		local Window = UI:CreateWindow({ Title = "Azúcar Rage" })
+		local Window = UI:CreateWindow({
+			Title     = "Azúcar Rage",
+			ToggleKey = Enum.KeyCode.K,
+			Theme     = "Rojo",
+		})
 		local Combate = Window:CreateTab({ Name = "Combate" })
 		Combate:CreateToggle({ Text = "Auto Farm", Flag = "AutoFarm",
 			Callback = function(state) ... end })
@@ -60,7 +81,7 @@ local RunService       = game:GetService("RunService")
 
 local UI = {}
 UI.__index = UI
-UI.Version    = "1.1"
+UI.Version    = "1.2"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -129,14 +150,13 @@ local Theme = {
 UI.Theme = Theme
 
 -- Paleta rápida: cambia SOLO el acento (borde/niebla/chispas/pestaña
--- activa), no todo el fondo. El puntito de la barra superior cicla
--- entre estas tres.
+-- activa), no todo el fondo. Se elige por código con config.Theme al
+-- crear la ventana, o en caliente con UI:SetAccentColor(...).
 local Palettes = {
 	Rojo   = Color3.fromRGB(255, 35, 50),
 	Negro  = Color3.fromRGB(60, 60, 64),
 	Blanco = Color3.fromRGB(240, 240, 245),
 }
-local PaletteOrder = { "Rojo", "Negro", "Blanco" }
 UI.Palettes = Palettes
 UI.CurrentPalette = "Rojo"
 
@@ -170,6 +190,8 @@ end
 -- Modo de esquinas: "Round" (redondas, como venía) o "Sharp" (perfectamente
 -- puntiagudas, sin radio). corner() guarda el radio "real" de cada elemento
 -- y SetCornerStyle los repinta a todos de una, sin tener que tocar cada uno.
+-- Se elige por código con config.CornerStyle al crear la ventana, o en
+-- caliente con UI:SetCornerStyle(...).
 local CornerMode = "Round"
 local cornerListeners = {}
 local function onCornerChange(fn) table.insert(cornerListeners, fn) return fn end
@@ -341,7 +363,12 @@ end
 -- ============================================================
 function UI:CreateWindow(config)
 	config = config or {}
+
+	-- Acento y esquinas por CÓDIGO (sin botones en la UI). El tamaño
+	-- (Width/Height, más abajo) se configura exactamente igual.
 	if config.CornerStyle ~= nil then UI:SetCornerStyle(config.CornerStyle) end
+	if config.Theme ~= nil then UI:SetAccentColor(config.Theme) end
+
 	local title = config.Title or config.Name or "Azúcar Rage"
 	local W = config.Width or WINDOW_W
 	local H = config.Height or WINDOW_H
@@ -358,11 +385,16 @@ function UI:CreateWindow(config)
 	ScreenGui:SetAttribute("AzucarLoadId", LOAD_ID)
 	ScreenGui.Parent = guiParent
 
+	-- Posición por defecto: IZQUIERDA de la pantalla (antes era derecha).
+	-- Pasá config.Position si querés ubicarla en cualquier otro lado.
+	local defaultPanelPos = UDim2.new(0, 24, 0.5, -H / 2)
+	local defaultAuraPos  = UDim2.new(0, 24 + (W / 2), 0.5, 0)
+
 	-- Aura/niebla: vive DETRÁS del panel (otro hermano en el ScreenGui),
 	-- para no quedar recortada por el ClipsDescendants del panel.
 	local AuraHolder = new("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = config.Position or UDim2.new(1, -(W / 2) - 24, 0.5, 0),
+		Position = config.Position or defaultAuraPos,
 		Size = UDim2.new(0, W, 0, H), BackgroundTransparency = 1, ZIndex = 0, Parent = ScreenGui,
 	})
 	local auraLayers, auraGradients = {}, {}
@@ -430,7 +462,7 @@ function UI:CreateWindow(config)
 	local BorderStroke = stroke(Theme.Border, 2)
 	local Panel = new("CanvasGroup", {
 		Name = "Panel", Size = UDim2.new(0, W, 0, H),
-		Position = config.Position or UDim2.new(1, -W - 24, 0.5, -H / 2),
+		Position = config.Position or defaultPanelPos,
 		BackgroundColor3 = Theme.Background, GroupTransparency = Theme.Alpha,
 		BorderSizePixel = 0, ClipsDescendants = true, ZIndex = 2, Parent = ScreenGui,
 	}, { corner(RADIUS), BorderStroke })
@@ -453,41 +485,22 @@ function UI:CreateWindow(config)
 		if BorderGradient.Parent then BorderGradient.Color = borderColors() end
 	end)
 
-	-- Barra superior: título + reloj + puntito de paleta.
+	-- Barra superior: solo título + reloj. Sin botones de color/esquinas
+	-- (eso ahora se decide por código, ver CreateWindow({ Theme = ...,
+	-- CornerStyle = ... })).
 	local TopBar = new("Frame", { Size = UDim2.new(1, 0, 0, 30), BackgroundColor3 = Theme.Panel, BorderSizePixel = 0, Parent = Panel })
 	new("TextLabel", {
 		Text = title, Font = Theme.FontTitle, TextSize = 14, TextColor3 = Theme.Text,
 		TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
-		BackgroundTransparency = 1, Position = UDim2.new(0, 10, 0, 0), Size = UDim2.new(1, -104, 1, 0), Parent = TopBar,
+		BackgroundTransparency = 1, Position = UDim2.new(0, 10, 0, 0), Size = UDim2.new(1, -62, 1, 0), Parent = TopBar,
 	})
 	local ClockLabel = new("TextLabel", {
 		Text = os.date("%H:%M:%S"), Font = Theme.FontBold, TextSize = 12, TextColor3 = Theme.Active,
 		TextXAlignment = Enum.TextXAlignment.Right, BackgroundTransparency = 1,
-		Position = UDim2.new(1, -96, 0, 0), Size = UDim2.new(0, 42, 1, 0), Parent = TopBar,
+		Position = UDim2.new(1, -56, 0, 0), Size = UDim2.new(0, 46, 1, 0), Parent = TopBar,
 	})
 	onAccent(function() if ClockLabel.Parent then ClockLabel.TextColor3 = Theme.Active end end)
 	task.spawn(function() while ClockLabel.Parent do ClockLabel.Text = os.date("%H:%M:%S") task.wait(1) end end)
-
-	-- Botón de esquinas: el cuadradito ES el ejemplo — redondo si el modo
-	-- es "Round", perfectamente cuadrado si es "Sharp". Tocarlo alterna.
-	local CornerDot = new("TextButton", {
-		Text = "", AutoButtonColor = false, BackgroundColor3 = Theme.TextDim,
-		Size = UDim2.new(0, 14, 0, 14), Position = UDim2.new(1, -44, 0, 8), Parent = TopBar,
-	}, { corner(4) })
-	CornerDot.MouseButton1Click:Connect(function()
-		UI:SetCornerStyle(CornerMode == "Round" and "Sharp" or "Round")
-	end)
-
-	local ColorDot = new("TextButton", {
-		Text = "", AutoButtonColor = false, BackgroundColor3 = Theme.Active,
-		Size = UDim2.new(0, 14, 0, 14), Position = UDim2.new(1, -24, 0, 8), Parent = TopBar,
-	}, { new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
-	onAccent(function() ColorDot.BackgroundColor3 = Theme.Active end)
-	local paletteIndex = 1
-	ColorDot.MouseButton1Click:Connect(function()
-		paletteIndex = (paletteIndex % #PaletteOrder) + 1
-		UI:SetAccentColor(PaletteOrder[paletteIndex])
-	end)
 
 	-- Fila de pestañas: horizontal, sin barra de scroll visible.
 	local TabStrip = new("ScrollingFrame", {
@@ -554,11 +567,21 @@ function UI:CreateWindow(config)
 	track(TabStrip.MouseWheelForward:Connect(function() TabStrip.CanvasPosition = Vector2.new(math.max(0, TabStrip.CanvasPosition.X - 40), 0) end))
 	track(TabStrip.MouseWheelBackward:Connect(function() TabStrip.CanvasPosition = Vector2.new(TabStrip.CanvasPosition.X + 40, 0) end))
 
-	local toggleKey = config.ToggleKey or Enum.KeyCode.K
-	track(UserInputService.InputBegan:Connect(function(input, gameProcessed)
-		if gameProcessed then return end
-		if input.KeyCode == toggleKey then Window:Toggle() end
-	end))
+	-- Mostrar/ocultar con una tecla. config.ToggleKey = false/nil
+	-- desactiva el atajo si alguna vez no lo querés.
+	local toggleKey = config.ToggleKey
+	if toggleKey == nil then toggleKey = Enum.KeyCode.K end
+	if toggleKey then
+		track(UserInputService.InputBegan:Connect(function(input, gameProcessed)
+			if gameProcessed then return end
+			if input.KeyCode == toggleKey then
+				local ok, err = pcall(function() Window:Toggle() end)
+				if not ok then
+					warn("[AzucarRage] Error al abrir/cerrar con " .. tostring(toggleKey) .. ": " .. tostring(err))
+				end
+			end
+		end))
+	end
 
 	-- Bucle de FX: aura que respira, luz que gira, chispas.
 	track(RunService.Heartbeat:Connect(function()
