@@ -71,7 +71,7 @@ local RunService       = game:GetService("RunService")
 
 local UI = {}
 UI.__index = UI
-UI.Version    = "1.4"
+UI.Version    = "1.5"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -790,6 +790,7 @@ function UI:CreateButton(config)
 		tween(Btn, { BackgroundColor3 = Theme.LineOpen }, 0.25)
 		Btn.TextColor3 = Theme.Active
 		task.delay(0.12, function() if Btn.Parent then Btn.TextColor3 = Theme.Text end end)
+		if window and window.Rage then window:Rage(0.5) end
 		return safeCall(self, self.Callback, ...)
 	end
 	Button.Fire = Button.Set
@@ -834,6 +835,7 @@ function UI:CreateToggle(config)
 		tween(BoxGlow, { Thickness = newState and 1.6 or 1.3 }, 0.18)
 		BoxPop.Scale = 1.4
 		tween(BoxPop, { Scale = 1 }, 0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+		if window and window.Rage then window:Rage(0.5) end
 		setFlagValue(config.Flag, newState)
 		return safeCall(self, self.Callback, newState)
 	end
