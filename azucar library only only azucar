@@ -1,11 +1,16 @@
 --[[
-	AzucarRage  v1.3
+	AzucarRage  v1.3.1
 	================
 	UI CHICA, de un solo rectángulo (estilo "external"): arriba las
 	pestañas en una fila horizontal, abajo las lógicas (sliders,
 	toggles, etc.) de la pestaña activa. Nada de tarjetas grandes que
 	ocupan media pantalla — esto es compacto, pensado para quedar
 	flotando en una esquina. Por defecto se para del lado IZQUIERDO.
+
+	v1.3.1: ARREGLO DE PESTAÑAS. La fila de pestañas ya no depende de
+	UIListLayout / UIPadding / AutomaticCanvasSize: cada pestaña se
+	posiciona a mano y el canvas se calcula solo. Las pestañas siempre
+	se ven.
 
 	Tema: RABIA. Negro casi puro con rojo violento. El borde del
 	rectángulo respira solo (un pulso rojo, como algo furioso que
@@ -16,11 +21,7 @@
 	tiembla y se prende en un fogonazo rojo/blanco antes de volver a
 	su pulso normal. La furia es una función, no solo un color.
 
-	NOVEDAD v1.2 — todo por CÓDIGO, nada de botones en la UI:
-	  • Se sacaron los dos puntitos de la barra superior (color y
-	    esquinas). Ahora el acento, la forma de las esquinas, el
-	    tamaño, el Badge y el ServerName se deciden en CreateWindow,
-	    con esta pinta (podés copiar/pegar esto tal cual):
+	Todo por CÓDIGO, nada de botones en la UI:
 
 	        local Window = UI:CreateWindow({
 	            Title           = "HUB?",
@@ -44,31 +45,7 @@
 
 	    UI:SetAccentColor(...) y UI:SetCornerStyle(...) siguen
 	    existiendo por si querés cambiarlos en caliente desde tu
-	    propio script, simplemente ya no hay un botón que lo haga por
-	    vos en la ventana. Si no pasás Badge ni ServerName, la cabecera
-	    queda exactamente como antes (no rompe nada de lo que ya tenías).
-
-	TRAÍDO DE LA VERSIÓN GRANDE (v1.8.5), adaptado a este formato chico:
-	  • Transparencia real de toda la tarjeta junta (CanvasGroup).
-	  • Scroll sin barra visible, tanto en la fila de pestañas
-	    (horizontal) como en el contenido (vertical).
-	  • La pestaña activa se queda roja hasta que cambies o cierres.
-	  • Aura/niebla continua alrededor del rectángulo (sin anillos),
-	    que "respira", más chispas que flotan hacia afuera, y una luz
-	    que gira por el borde.
-	  • Botones que destellan, toggles que saltan y brillan, sliders
-	    cuya perilla crece al arrastrar, barrita de hover en filas.
-	  • Si volvés a correr el script, la ventana vieja se destruye sola.
-	  • GUARDADO DE CONFIG: todo control con Flag se guarda y recupera
-	    solo (config.AutoSaveConfig = true), con carga escalonada
-	    (config.AutoLoadStagger), orden de carga (config.AutoLoadOrder)
-	    y Flags que podés ignorar (config.AutoSaveIgnore).
-
-	LO QUE SE DEJÓ AFUERA a propósito (para que esto sea chico, no la
-	tarjeta grande de antes): el panel que crece hasta ocupar media
-	pantalla, el desenfoque del fondo, y los temas completos
-	(Rojo/Negro/Blanco/Naranja/Verde/Azul) con fondo propio — acá hay
-	UN tema (Rabia) con paleta de acento intercambiable.
+	    propio script.
 
 	Uso:
 		local UI = loadstring(game:HttpGet("...AzucarRage.lua"))()
@@ -94,7 +71,7 @@ local RunService       = game:GetService("RunService")
 
 local UI = {}
 UI.__index = UI
-UI.Version    = "1.3"
+UI.Version    = "1.3.1"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -532,17 +509,15 @@ function UI:CreateWindow(config)
 	task.spawn(function() while ClockLabel.Parent do ClockLabel.Text = os.date("%H:%M:%S") task.wait(1) end end)
 
 	-- Fila de pestañas: horizontal, sin barra de scroll visible.
+	-- v1.3.1: SIN UIListLayout / UIPadding / AutomaticCanvasSize. Cada
+	-- pestaña se posiciona a mano en CreateTab (Window._tabX) y el
+	-- CanvasSize se actualiza ahí mismo, así nunca queda en blanco.
 	local TabStrip = new("ScrollingFrame", {
 		Name = "TabStrip", Position = UDim2.new(0, 0, 0, HEADER_H), Size = UDim2.new(1, 0, 0, TAB_STRIP_H),
 		BackgroundColor3 = Theme.Panel, BorderSizePixel = 0, ScrollBarThickness = 0, ScrollBarImageTransparency = 1,
-		ScrollingDirection = Enum.ScrollingDirection.X, CanvasSize = UDim2.new(0, 0, 1, 0),
-		AutomaticCanvasSize = Enum.AutomaticSize.X, ClipsDescendants = true, Parent = Panel,
+		ScrollingDirection = Enum.ScrollingDirection.X, CanvasSize = UDim2.new(0, 0, 0, 0),
+		ClipsDescendants = true, ZIndex = 3, Parent = Panel,
 	})
-	new("UIListLayout", {
-		FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6),
-		VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder, Parent = TabStrip,
-	})
-	new("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8), PaddingTop = UDim.new(0, 3), PaddingBottom = UDim.new(0, 3), Parent = TabStrip })
 
 	-- Contenido: debajo de la fila de pestañas, vertical, sin barra.
 	local ContentScroll = new("ScrollingFrame", {
@@ -561,7 +536,7 @@ function UI:CreateWindow(config)
 	local Window = setmetatable({
 		ScreenGui = ScreenGui, Panel = Panel, AuraHolder = AuraHolder, BorderStroke = BorderStroke,
 		TabStrip = TabStrip, ContentScroll = ContentScroll, EmptyHint = EmptyHint,
-		_tabs = {}, _connections = {}, _visible = true, _loadId = LOAD_ID,
+		_tabs = {}, _tabX = 8, _connections = {}, _visible = true, _loadId = LOAD_ID,
 		_loadStagger = config.AutoLoadStagger or 0, _loadOrder = config.AutoLoadOrder,
 		_sparks = sparks, _auraLayers = auraLayers, W = W, H = H,
 	}, UI)
@@ -724,21 +699,23 @@ function UI:CreateTab(config)
 	-- como "Tab 1", "Tab 2"...
 	if typeof(config) == "string" then config = { Name = config } end
 	config = config or {}
-	local name = config.Text or config.Name or ("Tab " .. (#self._tabs + 1))
+	local name = config.Text or config.Name or config.Title or ("Tab " .. (#self._tabs + 1))
 	if self.EmptyHint then self.EmptyHint:Destroy() self.EmptyHint = nil end
 
-	-- Píldoras más chicas: menos alto y menos ancho por letra que antes.
-	-- (El centrado vertical lo hace el VerticalAlignment del
-	-- UIListLayout de TabStrip, ver CreateWindow.)
+	-- Píldoras posicionadas a mano (v1.3.1): sin UIListLayout. Cada una
+	-- ocupa su ancho, y _tabX avanza para la siguiente.
 	local collapsedW = math.clamp(#name * 6 + 16, 36, 96)
 	local Pill = new("TextButton", {
-		Text = "", AutoButtonColor = false, BackgroundColor3 = Theme.Line, BackgroundTransparency = 0.15,
-		Size = UDim2.new(0, collapsedW, 0, 22),
-		LayoutOrder = #self._tabs + 1, Parent = self.TabStrip,
+		Text = "", AutoButtonColor = false, BackgroundColor3 = Theme.Field, BackgroundTransparency = 0,
+		Size = UDim2.new(0, collapsedW, 0, 22), Position = UDim2.new(0, self._tabX, 0, 3),
+		ZIndex = 4, Parent = self.TabStrip,
 	}, { corner(7), stroke(Theme.Border, 1) })
+	self._tabX = self._tabX + collapsedW + 6
+	self.TabStrip.CanvasSize = UDim2.new(0, self._tabX + 8, 0, 0)
+
 	new("TextLabel", {
 		Text = name, Font = Theme.FontBold, TextSize = 10, TextColor3 = Theme.Text, TextTruncate = Enum.TextTruncate.AtEnd,
-		BackgroundTransparency = 1, Size = UDim2.new(1, -6, 1, 0), Position = UDim2.new(0, 3, 0, 0), Parent = Pill,
+		BackgroundTransparency = 1, Size = UDim2.new(1, -6, 1, 0), Position = UDim2.new(0, 3, 0, 0), ZIndex = 5, Parent = Pill,
 	})
 
 	local List = new("Frame", {
@@ -753,7 +730,7 @@ function UI:CreateTab(config)
 		if Tab._isOpen then
 			tween(Pill, { BackgroundColor3 = Theme.FX, BackgroundTransparency = 0.3 }, 0.12)
 		else
-			tween(Pill, { BackgroundColor3 = hovering and Theme.LineOpen or Theme.Line, BackgroundTransparency = 0.15 }, 0.12)
+			tween(Pill, { BackgroundColor3 = hovering and Theme.LineOpen or Theme.Field, BackgroundTransparency = 0 }, 0.12)
 		end
 	end
 	onAccent(function() if Pill.Parent and Tab._isOpen then Pill.BackgroundColor3 = Theme.FX end end)
