@@ -71,7 +71,7 @@ local RunService       = game:GetService("RunService")
 
 local UI = {}
 UI.__index = UI
-UI.Version    = "1.3.1"
+UI.Version    = "1.4"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -816,18 +816,22 @@ function UI:CreateToggle(config)
 		TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, BackgroundTransparency = 1,
 		Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(1, -36, 1, 0), Parent = Row,
 	})
-	local Box = new("Frame", { Size = UDim2.new(0, 12, 0, 12), Position = UDim2.new(1, -20, 0.5, -6), BackgroundColor3 = state and Theme.Active or Theme.Border, BorderSizePixel = 0, Parent = Row }, { corner(3) })
+	-- Apagado: caja oscura (Theme.Field) con un bordecito rojo fino, bien
+	-- visible, para que se note dónde tocar. Prendido: caja rellena de
+	-- rojo. Antes el "apagado" usaba Theme.Border, que es EL MISMO rojo
+	-- que Theme.Active — por eso parecía que siempre estaba encendido.
+	local Box = new("Frame", { Size = UDim2.new(0, 12, 0, 12), Position = UDim2.new(1, -20, 0.5, -6), BackgroundColor3 = state and Theme.Active or Theme.Field, BorderSizePixel = 0, Parent = Row }, { corner(3) })
 	local BoxPop = new("UIScale", { Scale = 1, Parent = Box })
-	local BoxGlow = new("UIStroke", { Color = Theme.Active, Thickness = 2, Transparency = state and 0.55 or 1, Parent = Box })
+	local BoxGlow = new("UIStroke", { Color = Theme.Active, Thickness = state and 1.6 or 1.3, Transparency = 0, Parent = Box })
 
 	local Toggle = setmetatable({ Box = Box, Value = state, Callback = callback, _threads = {} }, UI)
-	onAccent(function() if Box.Parent then Box.BackgroundColor3 = Toggle.Value and Theme.Active or Theme.Border BoxGlow.Color = Theme.Active end end)
+	onAccent(function() if Box.Parent then Box.BackgroundColor3 = Toggle.Value and Theme.Active or Theme.Field BoxGlow.Color = Theme.Active end end)
 
 	function Toggle:Set(newState)
 		newState = not not newState
 		self.Value = newState
-		tween(Box, { BackgroundColor3 = newState and Theme.Active or Theme.Border })
-		tween(BoxGlow, { Transparency = newState and 0.55 or 1 }, 0.18)
+		tween(Box, { BackgroundColor3 = newState and Theme.Active or Theme.Field })
+		tween(BoxGlow, { Thickness = newState and 1.6 or 1.3 }, 0.18)
 		BoxPop.Scale = 1.4
 		tween(BoxPop, { Scale = 1 }, 0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 		setFlagValue(config.Flag, newState)
@@ -870,7 +874,11 @@ function UI:CreateSlider(config)
 		BackgroundTransparency = 1, Size = UDim2.new(0, 42, 0, 14), Position = UDim2.new(1, -42, 0, 0), Parent = Row,
 	})
 	onAccent(function() if ValueLabel.Parent then ValueLabel.TextColor3 = Theme.Active end end)
-	local Track = new("Frame", { Size = UDim2.new(1, 0, 0, 4), Position = UDim2.new(0, 0, 1, -8), BackgroundColor3 = Theme.Border, BorderSizePixel = 0, Parent = Row }, { corner(2) })
+	-- Fondo del track oscuro (no rojo) — antes usaba Theme.Border, que es
+	-- el mismo color que el relleno (Theme.Active), así que la barra
+	-- entera se veía roja sin importar el valor. Ahora solo el Fill se
+	-- ve en rojo, como un slider normal.
+	local Track = new("Frame", { Size = UDim2.new(1, 0, 0, 4), Position = UDim2.new(0, 0, 1, -8), BackgroundColor3 = Theme.Field, BorderSizePixel = 0, Parent = Row }, { stroke(Theme.Border, 1), corner(2) })
 	local function ratio(v) return (v - min) / (max - min) end
 	local Fill = new("Frame", { Size = UDim2.new(ratio(value), 0, 1, 0), BackgroundColor3 = Theme.Active, BorderSizePixel = 0, Parent = Track }, { corner(2) })
 	onAccent(function() if Fill.Parent then Fill.BackgroundColor3 = Theme.Active end end)
