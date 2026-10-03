@@ -71,7 +71,7 @@ local RunService       = game:GetService("RunService")
 
 local UI = {}
 UI.__index = UI
-UI.Version    = "1.7"
+UI.Version    = "1.8"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -760,8 +760,22 @@ function UI:CreateWindow(config)
 	return Window
 end
 
-function UI:Show() self.Panel.Visible = true self.AuraHolder.Visible = true self._visible = true end
-function UI:Hide() self.Panel.Visible = false self.AuraHolder.Visible = false self._visible = false end
+function UI:Show()
+	self.Panel.Visible = true
+	self.AuraHolder.Visible = true
+	self._visible = true
+	if self._poke then self:_poke() end -- abrir la UI también cuenta como "seguís acá"
+end
+function UI:Hide()
+	self.Panel.Visible = false
+	self.AuraHolder.Visible = false
+	-- Los números son parte de la UI: si se oculta todo con K, se
+	-- ocultan ellos también. El bucle de FX deja de correr mientras
+	-- _visible es false, así que si no se apagara acá quedaban
+	-- prendidos con el último estado que tenían.
+	if self.GlitchHolder then self.GlitchHolder.Visible = false end
+	self._visible = false
+end
 function UI:Toggle() if self._visible then self:Hide() else self:Show() end end
 function UI:Destroy()
 	for _, conn in ipairs(self._connections or {}) do pcall(function() conn:Disconnect() end) end
