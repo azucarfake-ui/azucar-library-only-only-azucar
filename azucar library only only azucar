@@ -71,7 +71,7 @@ local RunService       = game:GetService("RunService")
 
 local UI = {}
 UI.__index = UI
-UI.Version    = "1.5"
+UI.Version    = "1.6"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -533,14 +533,50 @@ function UI:CreateWindow(config)
 		TextColor3 = Theme.TextDim, TextWrapped = true, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), Parent = ContentScroll,
 	})
 
+	-- ---------------- NÚMEROS DE LA INACTIVIDAD ----------------
+	-- Si pasás mucho tiempo sin tocar nada (pestañas, toggles, sliders,
+	-- inputs, botones), a partir de los 40s aparecen estas filas largas
+	-- de números a la derecha del panel, bien rojas y titilando con el
+	-- mismo "temperamento" que la furia. Arrancan apagadas.
+	local GLITCH_ROWS = 14
+	local GLITCH_CHARS = 28
+	local GlitchHolder = new("Frame", {
+		Position = Panel.Position + UDim2.new(0, W + 14, 0, 0),
+		Size = UDim2.new(0, 190, 0, H),
+		BackgroundTransparency = 1, ClipsDescendants = true, ZIndex = 1, Visible = false, Parent = ScreenGui,
+	})
+	local glitchRows = {}
+	for i = 1, GLITCH_ROWS do
+		local rowH = H / GLITCH_ROWS
+		table.insert(glitchRows, new("TextLabel", {
+			Text = "", Font = Enum.Font.Code, TextSize = math.max(math.floor(rowH * 0.7), 9), TextColor3 = Theme.Active,
+			TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, BackgroundTransparency = 1,
+			Position = UDim2.new(0, 0, 0, (i - 1) * rowH), Size = UDim2.new(1, 0, 0, rowH), Parent = GlitchHolder,
+		}))
+	end
+	onAccent(function() for _, r in ipairs(glitchRows) do if r.Parent then r.TextColor3 = Theme.Active end end end)
+	local function randomDigits(n)
+		local out = table.create(n)
+		for i = 1, n do out[i] = tostring(math.random(0, 9)) end
+		return table.concat(out)
+	end
+
 	local Window = setmetatable({
 		ScreenGui = ScreenGui, Panel = Panel, AuraHolder = AuraHolder, BorderStroke = BorderStroke,
 		TabStrip = TabStrip, ContentScroll = ContentScroll, EmptyHint = EmptyHint,
 		_tabs = {}, _tabX = 8, _connections = {}, _visible = true, _loadId = LOAD_ID,
 		_loadStagger = config.AutoLoadStagger or 0, _loadOrder = config.AutoLoadOrder,
 		_sparks = sparks, _auraLayers = auraLayers, W = W, H = H,
+		-- Inactividad: desde acá se mide cuánto hace que no tocás nada.
+		_lastInteraction = os.clock(), _nextAutoRageAt = nil, _glitchNextUpdate = 0,
+		GlitchHolder = GlitchHolder,
 	}, UI)
 	ActiveWindow = Window
+
+	-- Cualquier control que se use llama a esto para avisar "seguís acá".
+	function Window:_poke()
+		self._lastInteraction = os.clock()
+	end
 
 	local function track(conn) table.insert(Window._connections, conn) return conn end
 
@@ -623,6 +659,35 @@ function UI:CreateWindow(config)
 			local vis = math.sin(t * math.pi) * twinkle
 			sp.dot.BackgroundTransparency = 1 - vis
 			sp.outer.BackgroundTransparency = 1 - 0.3 * vis
+		end
+
+		-- ---------------- FURIA POR INACTIVIDAD ----------------
+		-- A los 10s sin tocar nada, la furia empieza a dispararse sola; de
+		-- ahí a los 40s se va poniendo cada vez más seguido (y más fuerte).
+		local idle = now - (Window._lastInteraction or now)
+		if idle >= 10 then
+			local t = math.clamp((idle - 10) / 30, 0, 1) -- 0 a los 10s, 1 a los 40s
+			if not Window._nextAutoRageAt or now >= Window._nextAutoRageAt then
+				Window:Rage(0.4 + t * 1.1)
+				Window._nextAutoRageAt = now + (2.2 - t * 1.8) -- 2.2s a los 10s, 0.4s a los 40s
+			end
+		else
+			Window._nextAutoRageAt = nil
+		end
+
+		-- A los 40s de inactividad, filas largas de números a la derecha,
+		-- titilando — con el mismo temperamento que el resto de la furia.
+		if idle >= 40 then
+			GlitchHolder.Visible = true
+			if now >= Window._glitchNextUpdate then
+				for _, r in ipairs(glitchRows) do
+					r.Text = randomDigits(GLITCH_CHARS)
+					r.TextTransparency = math.random() * 0.35
+				end
+				Window._glitchNextUpdate = now + 0.08
+			end
+		elseif GlitchHolder.Visible then
+			GlitchHolder.Visible = false
 		end
 	end))
 
@@ -759,6 +824,7 @@ function UI:CreateTab(config)
 
 	Pill.MouseButton1Click:Connect(function()
 		if self._dragMoved then return end
+		if self._poke then self:_poke() end
 		setOpen(not Tab._isOpen)
 	end)
 
@@ -790,6 +856,7 @@ function UI:CreateButton(config)
 		tween(Btn, { BackgroundColor3 = Theme.LineOpen }, 0.25)
 		Btn.TextColor3 = Theme.Active
 		task.delay(0.12, function() if Btn.Parent then Btn.TextColor3 = Theme.Text end end)
+		if window and window._poke then window:_poke() end
 		if window and window.Rage then window:Rage(0.5) end
 		return safeCall(self, self.Callback, ...)
 	end
@@ -835,6 +902,7 @@ function UI:CreateToggle(config)
 		tween(BoxGlow, { Thickness = newState and 1.6 or 1.3 }, 0.18)
 		BoxPop.Scale = 1.4
 		tween(BoxPop, { Scale = 1 }, 0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+		if window and window._poke then window:_poke() end
 		if window and window.Rage then window:Rage(0.5) end
 		setFlagValue(config.Flag, newState)
 		return safeCall(self, self.Callback, newState)
@@ -912,6 +980,7 @@ function UI:CreateSlider(config)
 	table.insert(window._connections, Track.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			dragging = true
+			if window and window._poke then window:_poke() end
 			tween(KnobPop, { Scale = 1.5 }, 0.1)
 			setFromX(input.Position.X)
 		end
@@ -1034,6 +1103,7 @@ function UI:CreateInput(config)
 	function Input:Get() return Box.Text end
 	function Input:Stop() stopAllThreads(self) end
 	table.insert(window._connections, Box.FocusLost:Connect(function(enterPressed)
+		if window and window._poke then window:_poke() end
 		if enterPressed or config.FireOnLoseFocus then
 			Input.Value = Box.Text
 			setFlagValue(config.Flag, Box.Text)
