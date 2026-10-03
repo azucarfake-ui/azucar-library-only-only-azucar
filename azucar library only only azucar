@@ -71,7 +71,7 @@ local RunService       = game:GetService("RunService")
 
 local UI = {}
 UI.__index = UI
-UI.Version    = "1.6"
+UI.Version    = "1.7"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -535,14 +535,14 @@ function UI:CreateWindow(config)
 
 	-- ---------------- NÚMEROS DE LA INACTIVIDAD ----------------
 	-- Si pasás mucho tiempo sin tocar nada (pestañas, toggles, sliders,
-	-- inputs, botones), a partir de los 40s aparecen estas filas largas
+	-- inputs, botones), a partir de los 60s aparecen estas filas largas
 	-- de números a la derecha del panel, bien rojas y titilando con el
 	-- mismo "temperamento" que la furia. Arrancan apagadas.
-	local GLITCH_ROWS = 14
-	local GLITCH_CHARS = 28
+	local GLITCH_ROWS = 22
+	local GLITCH_CHARS = 42
 	local GlitchHolder = new("Frame", {
 		Position = Panel.Position + UDim2.new(0, W + 14, 0, 0),
-		Size = UDim2.new(0, 190, 0, H),
+		Size = UDim2.new(0, 260, 0, H),
 		BackgroundTransparency = 1, ClipsDescendants = true, ZIndex = 1, Visible = false, Parent = ScreenGui,
 	})
 	local glitchRows = {}
@@ -570,6 +570,9 @@ function UI:CreateWindow(config)
 		-- Inactividad: desde acá se mide cuánto hace que no tocás nada.
 		_lastInteraction = os.clock(), _nextAutoRageAt = nil, _glitchNextUpdate = 0,
 		GlitchHolder = GlitchHolder,
+		-- Posición de origen: Rage() siempre sacude relativo a ESTO, nunca
+		-- se reasigna, así el panel nunca "deriva" de donde arrancó.
+		_homePos = Panel.Position,
 	}, UI)
 	ActiveWindow = Window
 
@@ -662,22 +665,22 @@ function UI:CreateWindow(config)
 		end
 
 		-- ---------------- FURIA POR INACTIVIDAD ----------------
-		-- A los 10s sin tocar nada, la furia empieza a dispararse sola; de
-		-- ahí a los 40s se va poniendo cada vez más seguido (y más fuerte).
+		-- A los 30s sin tocar nada, la furia empieza a dispararse sola; de
+		-- ahí a los 60s se va poniendo cada vez más seguido (y más fuerte).
 		local idle = now - (Window._lastInteraction or now)
-		if idle >= 10 then
-			local t = math.clamp((idle - 10) / 30, 0, 1) -- 0 a los 10s, 1 a los 40s
+		if idle >= 30 then
+			local t = math.clamp((idle - 30) / 30, 0, 1) -- 0 a los 30s, 1 a los 60s
 			if not Window._nextAutoRageAt or now >= Window._nextAutoRageAt then
 				Window:Rage(0.4 + t * 1.1)
-				Window._nextAutoRageAt = now + (2.2 - t * 1.8) -- 2.2s a los 10s, 0.4s a los 40s
+				Window._nextAutoRageAt = now + (2.2 - t * 1.8) -- 2.2s a los 30s, 0.4s a los 60s
 			end
 		else
 			Window._nextAutoRageAt = nil
 		end
 
-		-- A los 40s de inactividad, filas largas de números a la derecha,
+		-- A los 60s de inactividad, filas largas de números a la derecha,
 		-- titilando — con el mismo temperamento que el resto de la furia.
-		if idle >= 40 then
+		if idle >= 60 then
 			GlitchHolder.Visible = true
 			if now >= Window._glitchNextUpdate then
 				for _, r in ipairs(glitchRows) do
@@ -701,16 +704,28 @@ function UI:CreateWindow(config)
 		strength = strength or 1
 		self._rageUntil = os.clock() + RAGE_DURATION
 		local shakeAmount = RAGE_SHAKE_PX * strength
-		local basePos = Panel.Position
+		-- SIEMPRE se sacude relativo a self._homePos (fijado una sola vez
+		-- al crear la ventana), nunca a Panel.Position "actual" — si no,
+		-- cuando la furia se dispara seguido (como con la inactividad),
+		-- cada sacudida nueva arrancaba desde donde había quedado la
+		-- anterior a mitad de camino, y el panel terminaba derivando
+		-- lejos de donde empezó. Además, un Rage nuevo cancela
+		-- prolijamente al anterior (token) en vez de pisarlo.
+		local home = self._homePos
+		local token = (self._rageToken or 0) + 1
+		self._rageToken = token
 		local shakes = 7
 		task.spawn(function()
 			for i = 1, shakes do
+				if self._rageToken ~= token then return end -- una sacudida más nueva tomó el control
 				local ox = (math.random() - 0.5) * 2 * shakeAmount
 				local oy = (math.random() - 0.5) * 2 * shakeAmount
-				Panel.Position = basePos + UDim2.fromOffset(ox, oy)
+				Panel.Position = home + UDim2.fromOffset(ox, oy)
 				task.wait(RAGE_DURATION / shakes)
 			end
-			Panel.Position = basePos
+			if self._rageToken == token then
+				Panel.Position = home
+			end
 		end)
 		-- Fogonazo blanco/rojo en el borde.
 		BorderStroke.Thickness = 4
