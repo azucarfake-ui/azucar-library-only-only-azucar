@@ -71,7 +71,7 @@ local RunService       = game:GetService("RunService")
 
 local UI = {}
 UI.__index = UI
-UI.Version    = "1.8"
+UI.Version    = "2.0"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -533,33 +533,57 @@ function UI:CreateWindow(config)
 		TextColor3 = Theme.TextDim, TextWrapped = true, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), Parent = ContentScroll,
 	})
 
-	-- ---------------- NÚMEROS DE LA INACTIVIDAD ----------------
-	-- Si pasás mucho tiempo sin tocar nada (pestañas, toggles, sliders,
-	-- inputs, botones), a partir de los 60s aparecen estas filas largas
-	-- de números a la derecha del panel, bien rojas y titilando con el
-	-- mismo "temperamento" que la furia. Arrancan apagadas.
-	local GLITCH_ROWS = 22
-	local GLITCH_CHARS = 42
-	local GlitchHolder = new("Frame", {
-		Position = Panel.Position + UDim2.new(0, W + 14, 0, 0),
-		Size = UDim2.new(0, 260, 0, H),
-		BackgroundTransparency = 1, ClipsDescendants = true, ZIndex = 1, Visible = false, Parent = ScreenGui,
+	-- ---------------- NÚMEROS DE LA INACTIVIDAD (pantalla completa) ----------------
+	-- Filas de números que cubren TODA la pantalla, no solo al lado del
+	-- panel. La cantidad de filas activas crece con cada minuto de
+	-- inactividad (nivel 1 a 5): al nivel 5 están las 40 filas prendidas,
+	-- tapando toda la pantalla. Arrancan todas invisibles.
+	local FULL_GLITCH_MAX_ROWS = 40
+	local FULL_GLITCH_CHARS = 70
+	local FullGlitchHolder = new("Frame", {
+		Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, ClipsDescendants = true,
+		ZIndex = 40, Visible = false, Parent = ScreenGui,
 	})
-	local glitchRows = {}
-	for i = 1, GLITCH_ROWS do
-		local rowH = H / GLITCH_ROWS
-		table.insert(glitchRows, new("TextLabel", {
-			Text = "", Font = Enum.Font.Code, TextSize = math.max(math.floor(rowH * 0.7), 9), TextColor3 = Theme.Active,
-			TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, BackgroundTransparency = 1,
-			Position = UDim2.new(0, 0, 0, (i - 1) * rowH), Size = UDim2.new(1, 0, 0, rowH), Parent = GlitchHolder,
-		}))
+	local fullGlitchRows = {}
+	do
+		local rowScale = 1 / FULL_GLITCH_MAX_ROWS
+		for i = 1, FULL_GLITCH_MAX_ROWS do
+			table.insert(fullGlitchRows, new("TextLabel", {
+				Text = "", Font = Enum.Font.Code, TextSize = 12, TextColor3 = Theme.Active,
+				TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
+				BackgroundTransparency = 1, Visible = false,
+				Position = UDim2.new(0, 0, rowScale * (i - 1), 0), Size = UDim2.new(1, 0, rowScale, 0),
+				Parent = FullGlitchHolder,
+			}))
+		end
 	end
-	onAccent(function() for _, r in ipairs(glitchRows) do if r.Parent then r.TextColor3 = Theme.Active end end end)
+	onAccent(function() for _, r in ipairs(fullGlitchRows) do if r.Parent then r.TextColor3 = Theme.Active end end end)
 	local function randomDigits(n)
 		local out = table.create(n)
 		for i = 1, n do out[i] = tostring(math.random(0, 9)) end
 		return table.concat(out)
 	end
+
+	-- ---------------- PANTALLA NEGRA + TEXTOS FANTASMA (minuto 1 a 5) ----------------
+	-- A cada minuto completo de inactividad (1 a 5) la pantalla se pone
+	-- negra y aparece uno de estos 5 textos, uno por minuto, en orden.
+	-- Editá esta lista para cambiarlos o agregar más (si agregás un 6°,
+	-- no se usa — el tope son 5 minutos).
+	local GHOST_TEXTS = { "Solo.", "Vacío.", "Volverá...", "Mientes.", "¡Traidor!" }
+	local GHOST_HOLD = 5    -- segundos que se queda el texto en pantalla
+	local GHOST_FADE = 2.5  -- segundos que tarda en desvanecerse, lento
+
+	local BlackOverlay = new("Frame", {
+		Size = UDim2.new(1, 0, 1, 0), BackgroundColor3 = Color3.new(0, 0, 0),
+		BackgroundTransparency = 1, ZIndex = 50, Visible = false, Parent = ScreenGui,
+	})
+	local GhostText = new("TextLabel", {
+		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0),
+		Size = UDim2.new(0.9, 0, 0, 60), BackgroundTransparency = 1,
+		Font = Theme.FontTitle, TextSize = 32, TextColor3 = Theme.Active, TextTransparency = 1,
+		Text = "", ZIndex = 51, Parent = BlackOverlay,
+	})
+	onAccent(function() if GhostText.Parent then GhostText.TextColor3 = Theme.Active end end)
 
 	local Window = setmetatable({
 		ScreenGui = ScreenGui, Panel = Panel, AuraHolder = AuraHolder, BorderStroke = BorderStroke,
@@ -568,8 +592,8 @@ function UI:CreateWindow(config)
 		_loadStagger = config.AutoLoadStagger or 0, _loadOrder = config.AutoLoadOrder,
 		_sparks = sparks, _auraLayers = auraLayers, W = W, H = H,
 		-- Inactividad: desde acá se mide cuánto hace que no tocás nada.
-		_lastInteraction = os.clock(), _nextAutoRageAt = nil, _glitchNextUpdate = 0,
-		GlitchHolder = GlitchHolder,
+		_lastInteraction = os.clock(), _nextAutoRageAt = nil, _glitchNextUpdate = 0, _ghostLevel = 0,
+		FullGlitchHolder = FullGlitchHolder, BlackOverlay = BlackOverlay,
 		-- Posición de origen: Rage() siempre sacude relativo a ESTO, nunca
 		-- se reasigna, así el panel nunca "deriva" de donde arrancó.
 		_homePos = Panel.Position,
@@ -579,6 +603,41 @@ function UI:CreateWindow(config)
 	-- Cualquier control que se use llama a esto para avisar "seguís acá".
 	function Window:_poke()
 		self._lastInteraction = os.clock()
+	end
+
+	-- Dispara el texto fantasma del minuto `level` (1 a 5): pantalla
+	-- negra, texto, un empujón de furia que crece con cada minuto, y el
+	-- propio texto tiembla mientras está en pantalla. Se queda GHOST_HOLD
+	-- segundos y después se desvanece lento (GHOST_FADE).
+	local function showGhost(level)
+		local text = GHOST_TEXTS[level]
+		if not text then return end
+		GhostText.Text = text
+		BlackOverlay.Visible = true
+		tween(BlackOverlay, { BackgroundTransparency = 0.08 }, 0.4)
+		tween(GhostText, { TextTransparency = 0 }, 0.4)
+		Window:Rage(1.0 + level * 0.35)
+
+		local basePos = GhostText.Position
+		task.spawn(function()
+			local steps = math.floor(GHOST_HOLD / 0.1)
+			for _ = 1, steps do
+				if GhostText.Text ~= text then return end
+				GhostText.Position = basePos + UDim2.fromOffset((math.random() - 0.5) * 6, (math.random() - 0.5) * 6)
+				task.wait(0.1)
+			end
+			if GhostText.Text == text then GhostText.Position = basePos end
+		end)
+
+		task.delay(GHOST_HOLD, function()
+			if BlackOverlay.Parent and GhostText.Text == text then
+				tween(BlackOverlay, { BackgroundTransparency = 1 }, GHOST_FADE)
+				tween(GhostText, { TextTransparency = 1 }, GHOST_FADE)
+				task.delay(GHOST_FADE, function()
+					if BlackOverlay.Parent and GhostText.Text == text then BlackOverlay.Visible = false end
+				end)
+			end
+		end)
 	end
 
 	local function track(conn) table.insert(Window._connections, conn) return conn end
@@ -678,19 +737,36 @@ function UI:CreateWindow(config)
 			Window._nextAutoRageAt = nil
 		end
 
-		-- A los 60s de inactividad, filas largas de números a la derecha,
-		-- titilando — con el mismo temperamento que el resto de la furia.
-		if idle >= 60 then
-			GlitchHolder.Visible = true
+		-- ---------------- MINUTOS 1 A 5: PANTALLA NEGRA + TEXTO ----------------
+		-- Un nivel por cada minuto completo de inactividad (1 a 5). Al
+		-- cruzar uno nuevo, dispara el texto de ese minuto UNA sola vez.
+		local minuteLevel = math.min(math.floor(idle / 60), 5)
+		if minuteLevel > Window._ghostLevel then
+			Window._ghostLevel = minuteLevel
+			showGhost(minuteLevel)
+		elseif idle < 60 then
+			Window._ghostLevel = 0
+		end
+
+		-- Números a pantalla completa: la cantidad de filas prendidas
+		-- crece con el nivel alcanzado (más filas = más minutos).
+		if Window._ghostLevel >= 1 then
+			FullGlitchHolder.Visible = true
+			local activeRows = math.ceil(FULL_GLITCH_MAX_ROWS * (Window._ghostLevel / 5))
 			if now >= Window._glitchNextUpdate then
-				for _, r in ipairs(glitchRows) do
-					r.Text = randomDigits(GLITCH_CHARS)
-					r.TextTransparency = math.random() * 0.35
+				for i, r in ipairs(fullGlitchRows) do
+					if i <= activeRows then
+						r.Visible = true
+						r.Text = randomDigits(FULL_GLITCH_CHARS)
+						r.TextTransparency = math.random() * 0.4
+					else
+						r.Visible = false
+					end
 				end
 				Window._glitchNextUpdate = now + 0.08
 			end
-		elseif GlitchHolder.Visible then
-			GlitchHolder.Visible = false
+		else
+			FullGlitchHolder.Visible = false
 		end
 	end))
 
@@ -773,7 +849,9 @@ function UI:Hide()
 	-- ocultan ellos también. El bucle de FX deja de correr mientras
 	-- _visible es false, así que si no se apagara acá quedaban
 	-- prendidos con el último estado que tenían.
-	if self.GlitchHolder then self.GlitchHolder.Visible = false end
+	if self.FullGlitchHolder then self.FullGlitchHolder.Visible = false end
+	if self.BlackOverlay then self.BlackOverlay.Visible = false end
+	self._ghostLevel = 0
 	self._visible = false
 end
 function UI:Toggle() if self._visible then self:Hide() else self:Show() end end
