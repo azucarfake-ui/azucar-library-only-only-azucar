@@ -1,5 +1,5 @@
 --[[
-	AzucarRage  v2.3
+	AzucarRage  v2.4
 	================
 	UI CHICA, de un solo rectángulo (estilo "external"): arriba las
 	pestañas en una fila horizontal, abajo las lógicas (sliders,
@@ -22,6 +22,14 @@
 	v2.3: SE SACÓ LA PANTALLA NEGRA CON TEXTO FANTASMA Y LOS NÚMEROS A
 	PANTALLA COMPLETA (habían llegado a existir entre v2.0 y v2.2). La
 	furia por inactividad (30-60s, solo sacudida/destello) se mantiene.
+
+	v2.4: ARREGLO DE LAG. El aura, las chispas y el giro del borde
+	recalculaban TODO en cada frame del juego, sin límite (hasta 240+
+	veces por segundo en pantallas de alta tasa de refresco) — era la
+	causa más probable del lag. Ahora se limitan a FX_UPDATE_INTERVAL
+	(30 veces por segundo, arriba del archivo) y bajé un poco la
+	cantidad por defecto de capas de aura y de chispas. Se sigue viendo
+	fluido pero con bastante menos trabajo por segundo.
 
 	Tema: RABIA. Negro casi puro con rojo violento. El borde del
 	rectángulo respira solo (un pulso rojo, como algo furioso que
@@ -82,7 +90,7 @@ local RunService       = game:GetService("RunService")
 
 local UI = {}
 UI.__index = UI
-UI.Version    = "2.3"
+UI.Version    = "2.4"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -113,11 +121,19 @@ local WINDOW_H = 300
 local TAB_STRIP_H = 28
 
 local AURA_SIZE_PX      = 16   -- halo alrededor del rectángulo (0 = sin halo)
-local AURA_LAYERS       = 10
+local AURA_LAYERS       = 6    -- antes 10: cada capa anima cada frame, bajarlo rinde mejor
 local AURA_TRANSPARENCY = 0.5  -- en reposo: 0 = muy denso, 1 = invisible
-local SPARKS_COUNT      = 12
+local SPARKS_COUNT      = 8    -- antes 12: cada chispa son 2 instancias animando
 local SPARK_SIZE_PX     = 4
 local ANIMATED_FX        = true
+-- Cada cuántos segundos se recalculan aura/chispas/el giro del borde.
+-- Antes esto corría SIN LÍMITE, una vez por frame (hasta 240+ veces por
+-- segundo en pantallas de alta tasa de refresco) — para un efecto
+-- ambiente como este no hace falta esa precisión, y era la causa más
+-- probable del lag: 1/30 (30 veces por segundo) se sigue viendo fluido
+-- y es bastante más liviano. Subilo (ej. 1/15) si todavía te tira lag,
+-- o bajalo (ej. 1/60) si tu PC/dispositivo aguanta de sobra.
+local FX_UPDATE_INTERVAL = 1 / 30
 
 -- Furia (Window:Rage()): qué tan fuerte sacude y destella por defecto.
 local RAGE_SHAKE_PX   = 6
@@ -613,43 +629,54 @@ function UI:CreateWindow(config)
 	end
 
 	-- Bucle de FX: aura que respira, luz que gira, chispas.
+	local fxNextUpdate = 0
 	track(RunService.Heartbeat:Connect(function()
 		if not Window._visible then return end
 		local now = os.clock()
-		local strength = 1
-		if ANIMATED_FX then
-			strength = 0.7 + 0.3 * (0.5 + 0.5 * math.sin(now * 1.4))
-			-- La furia (Window._rageUntil) sube la intensidad bien arriba por un rato.
-			if Window._rageUntil and now < Window._rageUntil then
-				strength = 1 + (Window._rageUntil - now > 0 and 1.6 or 0)
+
+		-- Aura, chispas y el giro del borde: antes esto recalculaba TODO
+		-- sin límite, una vez por cada frame del juego. Ahora se limita a
+		-- FX_UPDATE_INTERVAL (ver arriba del archivo) — sigue viéndose
+		-- fluido pero hace mucho menos trabajo por segundo.
+		if now >= fxNextUpdate then
+			fxNextUpdate = now + FX_UPDATE_INTERVAL
+			local strength = 1
+			if ANIMATED_FX then
+				strength = 0.7 + 0.3 * (0.5 + 0.5 * math.sin(now * 1.4))
+				-- La furia (Window._rageUntil) sube la intensidad bien arriba por un rato.
+				if Window._rageUntil and now < Window._rageUntil then
+					strength = 1 + (Window._rageUntil - now > 0 and 1.6 or 0)
+				end
+				local rot = (now * 70) % 360
+				BorderGradient.Rotation = rot
+				for _, g in ipairs(auraGradients) do g.Rotation = rot end
 			end
-			local rot = (now * 70) % 360
-			BorderGradient.Rotation = rot
-			for _, g in ipairs(auraGradients) do g.Rotation = rot end
-		end
-		local count = #auraLayers
-		if count > 0 then
-			local total = 1 - (1 - AURA_TRANSPARENCY) * math.clamp(strength, 0, 1.6)
-			local perLayer = math.clamp(total, 0, 1) ^ (1 / count)
-			for _, l in ipairs(auraLayers) do l.BackgroundTransparency = perLayer end
-		end
-		for _, sp in ipairs(sparks) do
-			if sp.born == nil then respawnSpark(sp, now, true)
-			elseif now - sp.born >= sp.life then respawnSpark(sp, now, false) end
-			local age = now - sp.born
-			local t = math.clamp(age / sp.life, 0, 1)
-			local sz = sp.size * (1 - 0.6 * t)
-			sp.outer.Position = AuraHolder.Position + UDim2.fromOffset(sp.x + sp.vx * age - W / 2, sp.y + sp.vy * age - H / 2)
-			sp.outer.Size = UDim2.fromOffset(sz * 3, sz * 3)
-			local twinkle = 0.82 + 0.18 * math.sin(now * 12 + sp.phase)
-			local vis = math.sin(t * math.pi) * twinkle
-			sp.dot.BackgroundTransparency = 1 - vis
-			sp.outer.BackgroundTransparency = 1 - 0.3 * vis
+			local count = #auraLayers
+			if count > 0 then
+				local total = 1 - (1 - AURA_TRANSPARENCY) * math.clamp(strength, 0, 1.6)
+				local perLayer = math.clamp(total, 0, 1) ^ (1 / count)
+				for _, l in ipairs(auraLayers) do l.BackgroundTransparency = perLayer end
+			end
+			for _, sp in ipairs(sparks) do
+				if sp.born == nil then respawnSpark(sp, now, true)
+				elseif now - sp.born >= sp.life then respawnSpark(sp, now, false) end
+				local age = now - sp.born
+				local t = math.clamp(age / sp.life, 0, 1)
+				local sz = sp.size * (1 - 0.6 * t)
+				sp.outer.Position = AuraHolder.Position + UDim2.fromOffset(sp.x + sp.vx * age - W / 2, sp.y + sp.vy * age - H / 2)
+				sp.outer.Size = UDim2.fromOffset(sz * 3, sz * 3)
+				local twinkle = 0.82 + 0.18 * math.sin(now * 12 + sp.phase)
+				local vis = math.sin(t * math.pi) * twinkle
+				sp.dot.BackgroundTransparency = 1 - vis
+				sp.outer.BackgroundTransparency = 1 - 0.3 * vis
+			end
 		end
 
 		-- ---------------- FURIA POR INACTIVIDAD ----------------
 		-- A los 30s sin tocar nada, la furia empieza a dispararse sola; de
 		-- ahí a los 60s se va poniendo cada vez más seguido (y más fuerte).
+		-- Esto es barato (son solo comparaciones), así que corre siempre,
+		-- sin el límite de arriba.
 		local idle = now - (Window._lastInteraction or now)
 		if idle >= 30 then
 			local t = math.clamp((idle - 30) / 30, 0, 1) -- 0 a los 30s, 1 a los 60s
