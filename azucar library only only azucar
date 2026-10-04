@@ -562,8 +562,16 @@ function UI:CreateWindow(config)
 	-- "toda la pantalla"; ahora incluso con pocas filas activas, están
 	-- separadas de punta a punta. La cantidad de filas activas sigue
 	-- creciendo con cada minuto de inactividad (nivel 1 a 5).
+	-- v2.2: NO TOCAN EL PANEL. Cada fila es en realidad DOS franjas (una
+	-- a cada lado del panel). Cuando la altura de una fila se cruza con
+	-- el panel, esa franja se corta justo antes de llegar a él (con un
+	-- margen de aire, PANEL_GAP_PX) en vez de pasar por encima; las
+	-- filas que no se cruzan con el panel siguen de punta a punta como
+	-- antes. El hueco se recalcula en cada actualización, así que sigue
+	-- funcionando aunque muevas el panel con config.Position.
 	local FULL_GLITCH_MAX_ROWS = 24
 	local FULL_GLITCH_CHARS = 60
+	local PANEL_GAP_PX = 14 -- aire entre los números y el panel
 	local FullGlitchHolder = new("Frame", {
 		Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, ClipsDescendants = true,
 		ZIndex = 40, Visible = false, Parent = ScreenGui,
@@ -572,16 +580,30 @@ function UI:CreateWindow(config)
 	do
 		local rowScale = 1 / FULL_GLITCH_MAX_ROWS
 		for i = 1, FULL_GLITCH_MAX_ROWS do
-			table.insert(fullGlitchRows, new("TextLabel", {
+			local topFrac, botFrac = rowScale * (i - 1), rowScale * i
+			local left = new("TextLabel", {
 				Text = "", Font = Enum.Font.Code, TextSize = 20, TextColor3 = Theme.Active,
 				TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
 				BackgroundTransparency = 1, Visible = false,
-				Position = UDim2.new(0, 0, rowScale * (i - 1), 0), Size = UDim2.new(1, 0, rowScale, 0),
+				Position = UDim2.new(0, 0, topFrac, 0), Size = UDim2.new(0, 0, rowScale, 0),
 				Parent = FullGlitchHolder,
-			}))
+			})
+			local right = new("TextLabel", {
+				Text = "", Font = Enum.Font.Code, TextSize = 20, TextColor3 = Theme.Active,
+				TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
+				BackgroundTransparency = 1, Visible = false,
+				Position = UDim2.new(0, 0, topFrac, 0), Size = UDim2.new(0, 0, rowScale, 0),
+				Parent = FullGlitchHolder,
+			})
+			table.insert(fullGlitchRows, { left = left, right = right, topFrac = topFrac, botFrac = botFrac })
 		end
 	end
-	onAccent(function() for _, r in ipairs(fullGlitchRows) do if r.Parent then r.TextColor3 = Theme.Active end end end)
+	onAccent(function()
+		for _, row in ipairs(fullGlitchRows) do
+			if row.left.Parent then row.left.TextColor3 = Theme.Active end
+			if row.right.Parent then row.right.TextColor3 = Theme.Active end
+		end
+	end)
 	local function randomDigits(n)
 		local out = table.create(n)
 		for i = 1, n do out[i] = tostring(math.random(0, 9)) end
@@ -786,19 +808,55 @@ function UI:CreateWindow(config)
 		-- crece con el nivel alcanzado (más filas = más minutos), pero
 		-- SIEMPRE repartidas parejo de arriba a abajo (antes eran
 		-- siempre las primeras N filas, amontonadas contra el techo).
+		-- v2.2: ninguna fila pasa por encima del panel — la que se cruza
+		-- con él se corta en dos (antes y después), dejando el hueco del
+		-- panel más su margen (PANEL_GAP_PX) libre.
 		if Window._ghostLevel >= 1 then
 			FullGlitchHolder.Visible = true
 			local activeRows = math.ceil(FULL_GLITCH_MAX_ROWS * (Window._ghostLevel / 5))
 			if now >= Window._glitchNextUpdate then
-				for _, r in ipairs(fullGlitchRows) do r.Visible = false end
+				local screenW = math.max(FullGlitchHolder.AbsoluteSize.X, 1)
+				local screenH = math.max(FullGlitchHolder.AbsoluteSize.Y, 1)
+				local panelLeft   = (Panel.AbsolutePosition.X - PANEL_GAP_PX) / screenW
+				local panelRight  = (Panel.AbsolutePosition.X + Panel.AbsoluteSize.X + PANEL_GAP_PX) / screenW
+				local panelTop    = (Panel.AbsolutePosition.Y - PANEL_GAP_PX) / screenH
+				local panelBottom = (Panel.AbsolutePosition.Y + Panel.AbsoluteSize.Y + PANEL_GAP_PX) / screenH
+
+				for _, row in ipairs(fullGlitchRows) do
+					row.left.Visible = false
+					row.right.Visible = false
+				end
 				for k = 1, activeRows do
 					local idx = math.floor((k - 0.5) * FULL_GLITCH_MAX_ROWS / activeRows) + 1
 					idx = math.clamp(idx, 1, FULL_GLITCH_MAX_ROWS)
-					local r = fullGlitchRows[idx]
-					if r then
-						r.Visible = true
-						r.Text = randomDigits(FULL_GLITCH_CHARS)
-						r.TextTransparency = math.random() * 0.4
+					local row = fullGlitchRows[idx]
+					if row then
+						local rowH = row.botFrac - row.topFrac
+						local overlapsPanel = row.botFrac > panelTop and row.topFrac < panelBottom
+						if not overlapsPanel then
+							-- Libre de punta a punta: una sola franja.
+							row.right.Position = UDim2.new(0, 0, row.topFrac, 0)
+							row.right.Size = UDim2.new(1, 0, rowH, 0)
+							row.right.Text = randomDigits(FULL_GLITCH_CHARS)
+							row.right.TextTransparency = math.random() * 0.4
+							row.right.Visible = true
+						else
+							-- Se cruza con el panel: deja su hueco (+ margen) libre.
+							if panelLeft > 0.015 then
+								row.left.Position = UDim2.new(0, 0, row.topFrac, 0)
+								row.left.Size = UDim2.new(panelLeft, 0, rowH, 0)
+								row.left.Text = randomDigits(FULL_GLITCH_CHARS)
+								row.left.TextTransparency = math.random() * 0.4
+								row.left.Visible = true
+							end
+							if panelRight < 0.985 then
+								row.right.Position = UDim2.new(panelRight, 0, row.topFrac, 0)
+								row.right.Size = UDim2.new(1 - panelRight, 0, rowH, 0)
+								row.right.Text = randomDigits(FULL_GLITCH_CHARS)
+								row.right.TextTransparency = math.random() * 0.4
+								row.right.Visible = true
+							end
+						end
 					end
 				end
 				Window._glitchNextUpdate = now + 0.08
