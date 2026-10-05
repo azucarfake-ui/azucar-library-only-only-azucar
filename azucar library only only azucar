@@ -1,104 +1,63 @@
 --[[
-	AzucarRage  v2.4
-	================
-	UI CHICA, de un solo rectángulo (estilo "external"): arriba las
-	pestañas en una fila horizontal, abajo las lógicas (sliders,
-	toggles, etc.) de la pestaña activa. Nada de tarjetas grandes que
-	ocupan media pantalla — esto es compacto, pensado para quedar
-	flotando en una esquina. Por defecto se para del lado IZQUIERDO.
+	AzucarDulce  v1.0
+	=================
+	(Antes: AzucarRage — misma estructura, piel nueva)
 
-	v1.3.1: ARREGLO DE PESTAÑAS. La fila de pestañas ya no depende de
-	UIListLayout / UIPadding / AutomaticCanvasSize: cada pestaña se
-	posiciona a mano y el canvas se calcula solo. Las pestañas siempre
-	se ven.
+	UI CHICA, de un solo rectángulo: arriba las pestañas en una fila
+	horizontal, abajo las lógicas (sliders, toggles, etc.) de la
+	pestaña activa. Compacta, pensada para quedar flotando en una
+	esquina. Por defecto se para del lado IZQUIERDO.
 
-	v1.3.2: ARREGLO DE CONTRASTE. Toggles y sliders ya no se ven
-	siempre rojos — antes "apagado" y "prendido" usaban el mismo color.
+	Es un RESKIN de AzucarRage: la estructura, los controles y la
+	lógica interna (Flags, Callbacks, guardado de config) son
+	EXACTAMENTE los mismos. Lo único que cambió es el tema visual:
+	rosa pastel y blanco en vez de negro y rojo, esquinas más
+	redonditas, y una letra más suave para el título. Sin aura, sin
+	chispas, sin Window:Rage() ni nada corriendo en bucle por detrás
+	(eso se sacó del todo en AzucarRage y acá tampoco está) — las
+	únicas animaciones son las chiquitas de cada control al tocarlo
+	(un destello, un saltito, una barrita de acento), que no cuestan
+	nada porque no quedan corriendo todo el tiempo.
 
-	v2.0: FURIA POR INACTIVIDAD. Si no tocás nada por 30s la furia
-	empieza a dispararse sola (cada vez más seguido hasta los 60s) —
-	solo sacude y destella el panel, sin pantalla negra ni texto.
-
-	v2.3: SE SACÓ LA PANTALLA NEGRA CON TEXTO FANTASMA Y LOS NÚMEROS A
-	PANTALLA COMPLETA (habían llegado a existir entre v2.0 y v2.2). La
-	furia por inactividad (30-60s, solo sacudida/destello) se mantiene.
-
-	v2.4: ARREGLO DE LAG. El aura, las chispas y el giro del borde
-	recalculaban TODO en cada frame del juego, sin límite (hasta 240+
-	veces por segundo en pantallas de alta tasa de refresco) — era la
-	causa más probable del lag. Ahora se limitan a FX_UPDATE_INTERVAL
-	(30 veces por segundo, arriba del archivo) y bajé un poco la
-	cantidad por defecto de capas de aura y de chispas. Se sigue viendo
-	fluido pero con bastante menos trabajo por segundo.
-
-	Tema: RABIA. Negro casi puro con rojo violento. El borde del
-	rectángulo respira solo (un pulso rojo, como algo furioso que
-	hierve), con una lucecita que le da vueltas al borde y chispas que
-	salen flotando. Y lo importante: cuando algo FALLA —ya sea un
-	error en uno de tus Callbacks, o vos mismo llamando a
-	Window:Rage() cuando fallás algo en el juego— el rectángulo entero
-	tiembla y se prende en un fogonazo rojo/blanco antes de volver a
-	su pulso normal. La furia es una función, no solo un color.
-
-	Todo por CÓDIGO, nada de botones en la UI:
-
-	        local Window = UI:CreateWindow({
-	            Title           = "HUB?",
-	            Badge           = "NAH ID ADAPT",   -- texto chico bajo el título
-	            ServerName      = "NAH ID ADAPT",   -- idem, al lado del Badge
-	            ToggleKey       = Enum.KeyCode.K,
-	            Theme           = "Rojo",           -- "Rojo" | "Negro" | "Blanco"
-	            CornerStyle     = "Round",          -- "Round" | "Sharp"
-	            Width           = 400,              -- tamaño: config, igual que Theme
-	            Height          = 300,
-	            AutoSaveConfig  = true,
-	            AutoLoadStagger = 0.1,
-	            AutoLoadOrder   = {"M", "F", "A"},
-	            AutoSaveIgnore  = {"MiniPekka"},
-	        })
-
-	        -- Furia manual, en cualquier parte de tu script:
-	        Window:Rage()        -- fogonazo + sacudida normal
-	        Window:Rage(1.6)     -- más fuerte
-	        Window:Rage(0.4)     -- más suave
-
-	    UI:SetAccentColor(...) y UI:SetCornerStyle(...) siguen
-	    existiendo por si querés cambiarlos en caliente desde tu
-	    propio script.
+	Paleta de "sabores" en vez de Rojo/Negro/Blanco: Fresa (rosa
+	fuerte, el que usa por defecto), Chicle (rosa chicle), Uva
+	(violeta suave) y Menta (verde agua). Cambia SOLO el acento
+	(borde/pestaña activa/relleno de toggles y sliders), no el fondo.
 
 	Uso:
-		local UI = loadstring(game:HttpGet("...AzucarRage.lua"))()
+		local UI = loadstring(game:HttpGet("...AzucarDulce.lua"))()
 		local Window = UI:CreateWindow({
-			Title     = "Azúcar Rage",
-			ToggleKey = Enum.KeyCode.K,
-			Theme     = "Rojo",
+			Title       = "Dulce Hub",
+			Badge       = "NAH ID ADAPT",
+			ServerName  = "NAH ID ADAPT",
+			ToggleKey   = Enum.KeyCode.K,
+			Theme       = "Fresa",  -- "Fresa" | "Chicle" | "Uva" | "Menta"
+			CornerStyle = "Round",  -- "Round" | "Sharp"
+			Width       = 400,
+			Height      = 300,
+			AutoSaveConfig  = true,
+			AutoLoadStagger = 0.1,
+			AutoLoadOrder   = {"M", "F", "A"},
+			AutoSaveIgnore  = {"MiniPekka"},
 		})
 		local Combate = Window:CreateTab({ Name = "Combate" })
 		Combate:CreateToggle({ Text = "Auto Farm", Flag = "AutoFarm",
 			Callback = function(state) ... end })
 		Combate:CreateSlider({ Text = "Velocidad", Range = {0, 200}, Default = 16,
 			Callback = function(v) ... end })
-
-		-- Furia manual: llamalo vos cuando el JUGADOR falla algo en tu juego.
-		Window:Rage()
 ]]
 
 local TweenService     = game:GetService("TweenService")
 local Players          = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
-local RunService       = game:GetService("RunService")
 
 local UI = {}
 UI.__index = UI
-UI.Version    = "2.4"
+UI.Version    = "1.0"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
-UI.ConfigFolder = "AzucarRage"
-
--- Ventana activa más reciente: safeCall la usa para disparar la furia
--- sola cuando un Callback tuyo tira error (ver más abajo).
-local ActiveWindow = nil
+UI.ConfigFolder = "AzucarDulce"
 
 local autoSaveTargets = {}
 local loadingConfig = false
@@ -120,62 +79,57 @@ local WINDOW_W = 400
 local WINDOW_H = 300
 local TAB_STRIP_H = 28
 
-local AURA_SIZE_PX      = 16   -- halo alrededor del rectángulo (0 = sin halo)
-local AURA_LAYERS       = 6    -- antes 10: cada capa anima cada frame, bajarlo rinde mejor
-local AURA_TRANSPARENCY = 0.5  -- en reposo: 0 = muy denso, 1 = invisible
-local SPARKS_COUNT      = 8    -- antes 12: cada chispa son 2 instancias animando
-local SPARK_SIZE_PX     = 4
-local ANIMATED_FX        = true
--- Cada cuántos segundos se recalculan aura/chispas/el giro del borde.
--- Antes esto corría SIN LÍMITE, una vez por frame (hasta 240+ veces por
--- segundo en pantallas de alta tasa de refresco) — para un efecto
--- ambiente como este no hace falta esa precisión, y era la causa más
--- probable del lag: 1/30 (30 veces por segundo) se sigue viendo fluido
--- y es bastante más liviano. Subilo (ej. 1/15) si todavía te tira lag,
--- o bajalo (ej. 1/60) si tu PC/dispositivo aguanta de sobra.
-local FX_UPDATE_INTERVAL = 1 / 30
-
--- Furia (Window:Rage()): qué tan fuerte sacude y destella por defecto.
-local RAGE_SHAKE_PX   = 6
-local RAGE_DURATION   = 0.45
-
 local Stub = {}
 Stub.__index = function()
 	return function() return setmetatable({}, Stub) end
 end
 
+-- Letra del título: algo redondito y tierno si tu ejecutor la tiene
+-- (Roblox fue agregando fuentes menos comunes); si no existe, cae
+-- sola a GothamBold sin romper el script.
+local function safeFont(names, fallback)
+	if typeof(names) == "string" then names = { names } end
+	for _, name in ipairs(names) do
+		local ok, item = pcall(function() return Enum.Font[name] end)
+		if ok and item then return item end
+	end
+	return fallback
+end
+local FONT_TITLE = safeFont({ "FredokaOne", "GrandstanderBold", "Nunito" }, Enum.Font.GothamBold)
+
 -- ============================================================
--- 	TEMA: RABIA (negro casi puro + rojo violento)
+-- 	TEMA: DULCE (rosa pastel + blanco, esquinas redonditas)
 -- ============================================================
 local Theme = {
-	Background = Color3.fromRGB(7, 5, 5),
-	Panel      = Color3.fromRGB(10, 7, 7),
-	Field      = Color3.fromRGB(16, 10, 10),
-	Line       = Color3.fromRGB(13, 9, 9),
-	LineOpen   = Color3.fromRGB(24, 14, 14),
-	Border     = Color3.fromRGB(255, 35, 50),
-	Text       = Color3.fromRGB(245, 235, 235),
-	TextDim    = Color3.fromRGB(150, 120, 120),
-	Active     = Color3.fromRGB(255, 35, 50),
-	ActiveDim  = Color3.fromRGB(190, 20, 35),
-	FX         = Color3.fromRGB(255, 35, 50),
-	Alpha      = 0.12, -- transparencia de TODA la tarjeta junta
-	FontTitle  = Enum.Font.LuckiestGuy, -- grueso y agresivo, para el título
+	Background = Color3.fromRGB(255, 240, 246),
+	Panel      = Color3.fromRGB(255, 232, 240),
+	Field      = Color3.fromRGB(255, 225, 236),
+	Line       = Color3.fromRGB(255, 220, 232),
+	LineOpen   = Color3.fromRGB(255, 206, 223),
+	Border     = Color3.fromRGB(255, 122, 170),
+	Text       = Color3.fromRGB(100, 45, 65),
+	TextDim    = Color3.fromRGB(180, 125, 145),
+	Active     = Color3.fromRGB(255, 105, 150),
+	ActiveDim  = Color3.fromRGB(214, 74, 115),
+	Alpha      = 0.06, -- transparencia de TODA la tarjeta junta (0 = sólida)
+	FontTitle  = FONT_TITLE,
 	Font       = Enum.Font.GothamMedium,
 	FontBold   = Enum.Font.GothamBold,
 }
 UI.Theme = Theme
 
--- Paleta rápida: cambia SOLO el acento (borde/niebla/chispas/pestaña
--- activa), no todo el fondo. Se elige por código con config.Theme al
--- crear la ventana, o en caliente con UI:SetAccentColor(...).
+-- Paleta: cambia SOLO el acento (borde/pestaña activa/relleno de
+-- toggles y sliders), no el fondo. Se elige por código con
+-- config.Theme al crear la ventana, o en caliente con
+-- UI:SetAccentColor(...). Sin animación: el cambio es instantáneo.
 local Palettes = {
-	Rojo   = Color3.fromRGB(255, 35, 50),
-	Negro  = Color3.fromRGB(60, 60, 64),
-	Blanco = Color3.fromRGB(240, 240, 245),
+	Fresa  = Color3.fromRGB(255, 105, 150),
+	Chicle = Color3.fromRGB(255, 153, 204),
+	Uva    = Color3.fromRGB(186, 130, 230),
+	Menta  = Color3.fromRGB(110, 210, 180),
 }
 UI.Palettes = Palettes
-UI.CurrentPalette = "Rojo"
+UI.CurrentPalette = "Fresa"
 
 local accentListeners = {}
 local function onAccent(fn)
@@ -186,12 +140,12 @@ end
 function UI:SetAccentColor(paletteName)
 	local color = Palettes[paletteName]
 	if not color then
-		warn("[AzucarRage] Paleta desconocida: " .. tostring(paletteName) .. ". Usá Rojo, Negro o Blanco.")
+		warn("[AzucarDulce] Sabor desconocido: " .. tostring(paletteName) .. ". Usá Fresa, Chicle, Uva o Menta.")
 		return
 	end
 	UI.CurrentPalette = paletteName
-	Theme.Border, Theme.Active, Theme.FX = color, color, color
-	Theme.ActiveDim = color:Lerp(Color3.new(0, 0, 0), 0.3)
+	Theme.Border, Theme.Active = color, color
+	Theme.ActiveDim = color:Lerp(Color3.new(0, 0, 0), 0.22)
 	for _, fn in ipairs(accentListeners) do pcall(fn) end
 end
 
@@ -204,11 +158,9 @@ local function new(class, props, children)
 	for _, child in ipairs(children or {}) do child.Parent = inst end
 	return inst
 end
--- Modo de esquinas: "Round" (redondas, como venía) o "Sharp" (perfectamente
--- puntiagudas, sin radio). corner() guarda el radio "real" de cada elemento
--- y SetCornerStyle los repinta a todos de una, sin tener que tocar cada uno.
--- Se elige por código con config.CornerStyle al crear la ventana, o en
--- caliente con UI:SetCornerStyle(...).
+-- Modo de esquinas: "Round" (bien redonditas, el espíritu dulce) o
+-- "Sharp" (sin radio). Se elige por código con config.CornerStyle al
+-- crear la ventana, o en caliente con UI:SetCornerStyle(...).
 local CornerMode = "Round"
 local cornerListeners = {}
 local function onCornerChange(fn) table.insert(cornerListeners, fn) return fn end
@@ -220,7 +172,7 @@ local function corner(radius)
 end
 function UI:SetCornerStyle(mode)
 	if mode ~= "Round" and mode ~= "Sharp" then
-		warn("[AzucarRage] Modo de esquina desconocido: " .. tostring(mode) .. ". Usá \"Round\" o \"Sharp\".")
+		warn("[AzucarDulce] Modo de esquina desconocido: " .. tostring(mode) .. ". Usá \"Round\" o \"Sharp\".")
 		return
 	end
 	CornerMode = mode
@@ -239,7 +191,9 @@ local function tween(inst, props, time, style, dir)
 end
 
 -- Barrita de acento que se enciende a la izquierda de una fila al
--- pasar el mouse (botones, toggles, filas de dropdown, etc.).
+-- pasar el mouse (botones, toggles, filas de dropdown, etc.). Esto es
+-- lo único "animado" que hay: dura una fracción de segundo al tocar
+-- algo, no queda corriendo en bucle, así que no cuesta nada de más.
 local function hoverField(obj, base)
 	base = base or Theme.Field
 	local mark = new("Frame", {
@@ -271,10 +225,7 @@ local function safeCall(controller, fn, ...)
 		if controller then controller._threads[thisThread] = true end
 		local ok, err = pcall(function() fn(table.unpack(args, 1, args.n)) end)
 		if not ok then
-			warn("[AzucarRage] Error en tu callback: " .. tostring(err))
-			-- La furia es una función: si tu Callback falla, la UI lo
-			-- demuestra sola, sin que tengas que llamar nada.
-			if ActiveWindow then ActiveWindow:Rage(0.7) end
+			warn("[AzucarDulce] Error en tu callback: " .. tostring(err))
 		end
 		if controller and controller._threads then controller._threads[thisThread] = nil end
 	end)
@@ -298,7 +249,7 @@ local function resolveCallback(config)
 			if typeof(logic.Toggle) == "function" then logic.Toggle(value)
 			elseif typeof(logic.Set) == "function" then logic.Set(value)
 			elseif typeof(logic.Run) == "function" then logic.Run(value)
-			else warn("[AzucarRage] La tabla en Logic no tiene :Toggle/:Enable+Disable/:Set/:Run.") end
+			else warn("[AzucarDulce] La tabla en Logic no tiene :Toggle/:Enable+Disable/:Set/:Run.") end
 		end
 	end
 	return function() end
@@ -322,7 +273,7 @@ end
 local function host(self)
 	if self.List then return self.List, (self.Window or self), self end
 	if self._tabs and self._tabs[1] then
-		warn("[AzucarRage] Creaste un control sobre la ventana en vez de sobre una pestaña. Se agregó a la primera pestaña.")
+		warn("[AzucarDulce] Creaste un control sobre la ventana en vez de sobre una pestaña. Se agregó a la primera pestaña.")
 		return self._tabs[1].List, self, self._tabs[1]
 	end
 	return nil, (self.Window or self), self
@@ -349,7 +300,7 @@ end
 
 local LOAD_ID = tostring(os.clock()) .. "-" .. tostring(math.random(1, 1000000000))
 local function cleanupOldWindows(guiParent)
-	local registry = rawget(_G, "__AzucarRageWindows")
+	local registry = rawget(_G, "__AzucarDulceWindows")
 	if typeof(registry) == "table" then
 		for i = #registry, 1, -1 do
 			local w = registry[i]
@@ -366,7 +317,7 @@ local function cleanupOldWindows(guiParent)
 	for _, place in ipairs(places) do
 		pcall(function()
 			for _, child in ipairs(place:GetChildren()) do
-				if child:IsA("ScreenGui") and child.Name == "AzucarRage"
+				if child:IsA("ScreenGui") and child.Name == "AzucarDulce"
 					and child:GetAttribute("AzucarLoadId") ~= LOAD_ID then
 					child:Destroy()
 				end
@@ -381,19 +332,14 @@ end
 function UI:CreateWindow(config)
 	config = config or {}
 
-	-- Acento y esquinas por CÓDIGO (sin botones en la UI). El tamaño
-	-- (Width/Height, más abajo) se configura exactamente igual.
 	if config.CornerStyle ~= nil then UI:SetCornerStyle(config.CornerStyle) end
 	if config.Theme ~= nil then UI:SetAccentColor(config.Theme) end
 
-	local title = config.Title or config.Name or "Azúcar Rage"
+	local title = config.Title or config.Name or "Azúcar Dulce"
 	local W = config.Width or WINDOW_W
 	local H = config.Height or WINDOW_H
-	local RADIUS = 12
+	local RADIUS = 18
 
-	-- Badge / ServerName: texto chico debajo del título. Si no pasás
-	-- ninguno de los dos, la cabecera queda del mismo alto de siempre
-	-- (30px) — esto no cambia nada para quien no los use.
 	local subtitleParts = {}
 	if config.Badge and tostring(config.Badge) ~= "" then table.insert(subtitleParts, tostring(config.Badge)) end
 	if config.ServerName and tostring(config.ServerName) ~= "" then table.insert(subtitleParts, tostring(config.ServerName)) end
@@ -401,7 +347,7 @@ function UI:CreateWindow(config)
 	local HEADER_H = (subtitleText ~= "" and 42) or 30
 
 	local ScreenGui = new("ScreenGui", {
-		Name = "AzucarRage", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		Name = "AzucarDulce", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		DisplayOrder = 999, IgnoreGuiInset = config.IgnoreGuiInset ~= false,
 	})
 	local protectGui = rawget(_G, "protectgui") or rawget(_G, "protect_gui")
@@ -411,109 +357,24 @@ function UI:CreateWindow(config)
 	ScreenGui:SetAttribute("AzucarLoadId", LOAD_ID)
 	ScreenGui.Parent = guiParent
 
-	-- Posición por defecto: IZQUIERDA de la pantalla (antes era derecha).
-	-- Pasá config.Position si querés ubicarla en cualquier otro lado.
+	-- Posición por defecto: IZQUIERDA de la pantalla. Pasá
+	-- config.Position si querés ubicarla en cualquier otro lado.
 	local defaultPanelPos = UDim2.new(0, 24, 0.5, -H / 2)
-	local defaultAuraPos  = UDim2.new(0, 24 + (W / 2), 0.5, 0)
-
-	-- Aura/niebla: vive DETRÁS del panel (otro hermano en el ScreenGui),
-	-- para no quedar recortada por el ClipsDescendants del panel.
-	local AuraHolder = new("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = config.Position or defaultAuraPos,
-		Size = UDim2.new(0, W, 0, H), BackgroundTransparency = 1, ZIndex = 0, Parent = ScreenGui,
-	})
-	local auraLayers, auraGradients = {}, {}
-	if AURA_SIZE_PX > 0 then
-		local N = math.max(AURA_LAYERS, 1)
-		local step = AURA_SIZE_PX / N
-		for k = 1, N do
-			local grow = k * step
-			local layer = new("Frame", {
-				AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0),
-				Size = UDim2.new(1, grow * 2, 1, grow * 2), BackgroundColor3 = Theme.FX,
-				BackgroundTransparency = 1, BorderSizePixel = 0, Parent = AuraHolder,
-			}, { corner(RADIUS + grow) })
-			table.insert(auraLayers, layer)
-			table.insert(auraGradients, new("UIGradient", {
-				Transparency = NumberSequence.new({
-					NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.5, 0.7), NumberSequenceKeypoint.new(1, 0),
-				}),
-				Parent = layer,
-			}))
-		end
-	end
-	onAccent(function() for _, l in ipairs(auraLayers) do if l.Parent then l.BackgroundColor3 = Theme.FX end end end)
-
-	-- Chispas, detrás del panel también.
-	local sparks = {}
-	for i = 1, SPARKS_COUNT do
-		local hot = (i % 2 == 0)
-		local outer = new("Frame", {
-			AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(SPARK_SIZE_PX * 3, SPARK_SIZE_PX * 3),
-			BackgroundColor3 = Theme.FX, BackgroundTransparency = 1, BorderSizePixel = 0, Parent = AuraHolder,
-		}, { new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
-		local dot = new("Frame", {
-			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1 / 3, 1 / 3),
-			BackgroundColor3 = hot and Theme.FX:Lerp(Color3.new(1, 1, 1), 0.65) or Theme.FX,
-			BackgroundTransparency = 1, BorderSizePixel = 0, Parent = outer,
-		}, { new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
-		table.insert(sparks, { outer = outer, dot = dot, hot = hot, born = nil, life = 2, x = 0, y = 0, vx = 0, vy = 0, size = SPARK_SIZE_PX, phase = math.random() * 6.28 })
-	end
-	onAccent(function()
-		for _, sp in ipairs(sparks) do
-			if sp.outer.Parent then
-				sp.outer.BackgroundColor3 = Theme.FX
-				sp.dot.BackgroundColor3 = sp.hot and Theme.FX:Lerp(Color3.new(1, 1, 1), 0.65) or Theme.FX
-			end
-		end
-	end)
-	local function respawnSpark(sp, now, stagger)
-		local r = math.random() * (2 * W + 2 * H)
-		local nx, ny
-		if r < W then sp.x, sp.y, nx, ny = r, 0, 0, -1
-		elseif r < 2 * W then sp.x, sp.y, nx, ny = r - W, H, 0, 1
-		elseif r < 2 * W + H then sp.x, sp.y, nx, ny = 0, r - 2 * W, -1, 0
-		else sp.x, sp.y, nx, ny = W, r - 2 * W - H, 1, 0 end
-		local speed = 10 + math.random() * 22
-		local drift = (math.random() - 0.5) * 14
-		sp.vx = nx * speed + (ny ~= 0 and drift or 0)
-		sp.vy = ny * speed + (nx ~= 0 and drift or 0) - 6
-		sp.life = 1.4 + math.random() * 1.4
-		sp.size = SPARK_SIZE_PX * (0.6 + math.random() * 0.8)
-		sp.born = now - (stagger and math.random() * sp.life or 0)
-	end
 
 	-- ---------------- EL RECTÁNGULO ----------------
-	local BorderStroke = stroke(Theme.Border, 2)
+	-- CanvasGroup: dibuja fondo + controles juntos con UNA sola
+	-- transparencia (Theme.Alpha) en vez de apilar transparencias fila
+	-- por fila. Borde fijo, sin degradado ni rotación.
 	local Panel = new("CanvasGroup", {
 		Name = "Panel", Size = UDim2.new(0, W, 0, H),
 		Position = config.Position or defaultPanelPos,
 		BackgroundColor3 = Theme.Background, GroupTransparency = Theme.Alpha,
 		BorderSizePixel = 0, ClipsDescendants = true, ZIndex = 2, Parent = ScreenGui,
-	}, { corner(RADIUS), BorderStroke })
-
-	local function borderColors()
-		local hot = Theme.FX:Lerp(Color3.new(1, 1, 1), 0.7)
-		return ColorSequence.new({
-			ColorSequenceKeypoint.new(0, hot), ColorSequenceKeypoint.new(0.2, Theme.FX),
-			ColorSequenceKeypoint.new(0.5, Theme.FX), ColorSequenceKeypoint.new(0.8, Theme.FX),
-			ColorSequenceKeypoint.new(1, hot),
-		})
-	end
-	local BorderGradient = new("UIGradient", {
-		Color = borderColors(),
-		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.5, 0.88), NumberSequenceKeypoint.new(1, 0) }),
-		Parent = BorderStroke,
-	})
-	onAccent(function()
-		BorderStroke.Color = Theme.FX
-		if BorderGradient.Parent then BorderGradient.Color = borderColors() end
-	end)
+	}, { corner(RADIUS), stroke(Theme.Border, 2) })
+	local PanelStroke = Panel:FindFirstChildOfClass("UIStroke")
+	onAccent(function() if PanelStroke and PanelStroke.Parent then PanelStroke.Color = Theme.Border end end)
 
 	-- Barra superior: título (+ Badge/ServerName si los pasaste) + reloj.
-	-- Sin botones de color/esquinas (eso ahora se decide por código, ver
-	-- CreateWindow({ Theme = ..., CornerStyle = ... })).
 	local TopBar = new("Frame", { Size = UDim2.new(1, 0, 0, HEADER_H), BackgroundColor3 = Theme.Panel, BorderSizePixel = 0, Parent = Panel })
 	new("TextLabel", {
 		Text = title, Font = Theme.FontTitle, TextSize = 14, TextColor3 = Theme.Text,
@@ -535,10 +396,8 @@ function UI:CreateWindow(config)
 	onAccent(function() if ClockLabel.Parent then ClockLabel.TextColor3 = Theme.Active end end)
 	task.spawn(function() while ClockLabel.Parent do ClockLabel.Text = os.date("%H:%M:%S") task.wait(1) end end)
 
-	-- Fila de pestañas: horizontal, sin barra de scroll visible.
-	-- v1.3.1: SIN UIListLayout / UIPadding / AutomaticCanvasSize. Cada
-	-- pestaña se posiciona a mano en CreateTab (Window._tabX) y el
-	-- CanvasSize se actualiza ahí mismo, así nunca queda en blanco.
+	-- Fila de pestañas: horizontal, sin barra de scroll visible. Cada
+	-- pestaña se posiciona a mano en CreateTab (Window._tabX).
 	local TabStrip = new("ScrollingFrame", {
 		Name = "TabStrip", Position = UDim2.new(0, 0, 0, HEADER_H), Size = UDim2.new(1, 0, 0, TAB_STRIP_H),
 		BackgroundColor3 = Theme.Panel, BorderSizePixel = 0, ScrollBarThickness = 0, ScrollBarImageTransparency = 1,
@@ -561,29 +420,16 @@ function UI:CreateWindow(config)
 	})
 
 	local Window = setmetatable({
-		ScreenGui = ScreenGui, Panel = Panel, AuraHolder = AuraHolder, BorderStroke = BorderStroke,
+		ScreenGui = ScreenGui, Panel = Panel,
 		TabStrip = TabStrip, ContentScroll = ContentScroll, EmptyHint = EmptyHint,
 		_tabs = {}, _tabX = 8, _connections = {}, _visible = true, _loadId = LOAD_ID,
 		_loadStagger = config.AutoLoadStagger or 0, _loadOrder = config.AutoLoadOrder,
-		_sparks = sparks, _auraLayers = auraLayers, W = W, H = H,
-		-- Inactividad: desde acá se mide cuánto hace que no tocás nada
-		-- (lo usa la furia automática a los 30-60s, más abajo).
-		_lastInteraction = os.clock(), _nextAutoRageAt = nil,
-		-- Posición de origen: Rage() siempre sacude relativo a ESTO, nunca
-		-- se reasigna, así el panel nunca "deriva" de donde arrancó.
-		_homePos = Panel.Position,
+		W = W, H = H,
 	}, UI)
-	ActiveWindow = Window
-
-	-- Cualquier control que se use llama a esto para avisar "seguís acá".
-	function Window:_poke()
-		self._lastInteraction = os.clock()
-	end
 
 	local function track(conn) table.insert(Window._connections, conn) return conn end
 
-	-- Scroll horizontal de pestañas también con la rueda del mouse (no
-	-- solo arrastrando), y arrastre con mouse/dedo.
+	-- Scroll horizontal de pestañas con la rueda del mouse y arrastre con mouse/dedo.
 	local dragKind, dragStartPos, canvasStartX = nil, Vector2.new(0, 0), 0
 	Window._dragMoved = false
 	track(TabStrip.InputBegan:Connect(function(input)
@@ -612,8 +458,7 @@ function UI:CreateWindow(config)
 	track(TabStrip.MouseWheelForward:Connect(function() TabStrip.CanvasPosition = Vector2.new(math.max(0, TabStrip.CanvasPosition.X - 40), 0) end))
 	track(TabStrip.MouseWheelBackward:Connect(function() TabStrip.CanvasPosition = Vector2.new(TabStrip.CanvasPosition.X + 40, 0) end))
 
-	-- Mostrar/ocultar con una tecla. config.ToggleKey = false/nil
-	-- desactiva el atajo si alguna vez no lo querés.
+	-- Mostrar/ocultar con una tecla. config.ToggleKey = false/nil desactiva el atajo.
 	local toggleKey = config.ToggleKey
 	if toggleKey == nil then toggleKey = Enum.KeyCode.K end
 	if toggleKey then
@@ -622,116 +467,15 @@ function UI:CreateWindow(config)
 			if input.KeyCode == toggleKey then
 				local ok, err = pcall(function() Window:Toggle() end)
 				if not ok then
-					warn("[AzucarRage] Error al abrir/cerrar con " .. tostring(toggleKey) .. ": " .. tostring(err))
+					warn("[AzucarDulce] Error al abrir/cerrar con " .. tostring(toggleKey) .. ": " .. tostring(err))
 				end
 			end
 		end))
 	end
 
-	-- Bucle de FX: aura que respira, luz que gira, chispas.
-	local fxNextUpdate = 0
-	track(RunService.Heartbeat:Connect(function()
-		if not Window._visible then return end
-		local now = os.clock()
-
-		-- Aura, chispas y el giro del borde: antes esto recalculaba TODO
-		-- sin límite, una vez por cada frame del juego. Ahora se limita a
-		-- FX_UPDATE_INTERVAL (ver arriba del archivo) — sigue viéndose
-		-- fluido pero hace mucho menos trabajo por segundo.
-		if now >= fxNextUpdate then
-			fxNextUpdate = now + FX_UPDATE_INTERVAL
-			local strength = 1
-			if ANIMATED_FX then
-				strength = 0.7 + 0.3 * (0.5 + 0.5 * math.sin(now * 1.4))
-				-- La furia (Window._rageUntil) sube la intensidad bien arriba por un rato.
-				if Window._rageUntil and now < Window._rageUntil then
-					strength = 1 + (Window._rageUntil - now > 0 and 1.6 or 0)
-				end
-				local rot = (now * 70) % 360
-				BorderGradient.Rotation = rot
-				for _, g in ipairs(auraGradients) do g.Rotation = rot end
-			end
-			local count = #auraLayers
-			if count > 0 then
-				local total = 1 - (1 - AURA_TRANSPARENCY) * math.clamp(strength, 0, 1.6)
-				local perLayer = math.clamp(total, 0, 1) ^ (1 / count)
-				for _, l in ipairs(auraLayers) do l.BackgroundTransparency = perLayer end
-			end
-			for _, sp in ipairs(sparks) do
-				if sp.born == nil then respawnSpark(sp, now, true)
-				elseif now - sp.born >= sp.life then respawnSpark(sp, now, false) end
-				local age = now - sp.born
-				local t = math.clamp(age / sp.life, 0, 1)
-				local sz = sp.size * (1 - 0.6 * t)
-				sp.outer.Position = AuraHolder.Position + UDim2.fromOffset(sp.x + sp.vx * age - W / 2, sp.y + sp.vy * age - H / 2)
-				sp.outer.Size = UDim2.fromOffset(sz * 3, sz * 3)
-				local twinkle = 0.82 + 0.18 * math.sin(now * 12 + sp.phase)
-				local vis = math.sin(t * math.pi) * twinkle
-				sp.dot.BackgroundTransparency = 1 - vis
-				sp.outer.BackgroundTransparency = 1 - 0.3 * vis
-			end
-		end
-
-		-- ---------------- FURIA POR INACTIVIDAD ----------------
-		-- A los 30s sin tocar nada, la furia empieza a dispararse sola; de
-		-- ahí a los 60s se va poniendo cada vez más seguido (y más fuerte).
-		-- Esto es barato (son solo comparaciones), así que corre siempre,
-		-- sin el límite de arriba.
-		local idle = now - (Window._lastInteraction or now)
-		if idle >= 30 then
-			local t = math.clamp((idle - 30) / 30, 0, 1) -- 0 a los 30s, 1 a los 60s
-			if not Window._nextAutoRageAt or now >= Window._nextAutoRageAt then
-				Window:Rage(0.4 + t * 1.1)
-				Window._nextAutoRageAt = now + (2.2 - t * 1.8) -- 2.2s a los 30s, 0.4s a los 60s
-			end
-		else
-			Window._nextAutoRageAt = nil
-		end
-	end))
-
-	-- ---------------- FURIA ----------------
-	-- Sacude el panel y la aura, y prende todo en un fogonazo que se
-	-- apaga solo. `strength` (0-1+) multiplica cuánto sacude/destella;
-	-- por defecto 1. Llamá Window:Rage() cuando el JUGADOR falla algo
-	-- en tu juego, o dejá que se dispare sola cuando un Callback tuyo
-	-- tira error.
-	function Window:Rage(strength)
-		strength = strength or 1
-		self._rageUntil = os.clock() + RAGE_DURATION
-		local shakeAmount = RAGE_SHAKE_PX * strength
-		-- SIEMPRE se sacude relativo a self._homePos (fijado una sola vez
-		-- al crear la ventana), nunca a Panel.Position "actual" — si no,
-		-- cuando la furia se dispara seguido (como con la inactividad),
-		-- cada sacudida nueva arrancaba desde donde había quedado la
-		-- anterior a mitad de camino, y el panel terminaba derivando
-		-- lejos de donde empezó. Además, un Rage nuevo cancela
-		-- prolijamente al anterior (token) en vez de pisarlo.
-		local home = self._homePos
-		local token = (self._rageToken or 0) + 1
-		self._rageToken = token
-		local shakes = 7
-		task.spawn(function()
-			for i = 1, shakes do
-				if self._rageToken ~= token then return end -- una sacudida más nueva tomó el control
-				local ox = (math.random() - 0.5) * 2 * shakeAmount
-				local oy = (math.random() - 0.5) * 2 * shakeAmount
-				Panel.Position = home + UDim2.fromOffset(ox, oy)
-				task.wait(RAGE_DURATION / shakes)
-			end
-			if self._rageToken == token then
-				Panel.Position = home
-			end
-		end)
-		-- Fogonazo blanco/rojo en el borde.
-		BorderStroke.Thickness = 4
-		BorderStroke.Color = Color3.new(1, 1, 1)
-		tween(BorderStroke, { Thickness = 2 }, RAGE_DURATION)
-		task.delay(0.08, function() if BorderStroke.Parent then BorderStroke.Color = Theme.FX end end)
-	end
-
 	table.insert(UI.Windows, Window)
-	local registry = rawget(_G, "__AzucarRageWindows")
-	if typeof(registry) ~= "table" then registry = {} rawset(_G, "__AzucarRageWindows", registry) end
+	local registry = rawget(_G, "__AzucarDulceWindows")
+	if typeof(registry) ~= "table" then registry = {} rawset(_G, "__AzucarDulceWindows", registry) end
 	table.insert(registry, Window)
 
 	-- ---------------- Guardado/carga de configuración ----------------
@@ -757,13 +501,10 @@ end
 
 function UI:Show()
 	self.Panel.Visible = true
-	self.AuraHolder.Visible = true
 	self._visible = true
-	if self._poke then self:_poke() end -- abrir la UI también cuenta como "seguís acá"
 end
 function UI:Hide()
 	self.Panel.Visible = false
-	self.AuraHolder.Visible = false
 	self._visible = false
 end
 function UI:Toggle() if self._visible then self:Hide() else self:Show() end end
@@ -777,23 +518,17 @@ end
 -- 	CREATE TAB
 -- ============================================================
 function UI:CreateTab(config)
-	-- Acepta tanto Window:CreateTab("Combate") como
-	-- Window:CreateTab({ Name = "Combate" }) — antes, pasar un string
-	-- suelto hacía que el nombre se ignorara silenciosamente y quedara
-	-- como "Tab 1", "Tab 2"...
 	if typeof(config) == "string" then config = { Name = config } end
 	config = config or {}
 	local name = config.Text or config.Name or config.Title or ("Tab " .. (#self._tabs + 1))
 	if self.EmptyHint then self.EmptyHint:Destroy() self.EmptyHint = nil end
 
-	-- Píldoras posicionadas a mano (v1.3.1): sin UIListLayout. Cada una
-	-- ocupa su ancho, y _tabX avanza para la siguiente.
 	local collapsedW = math.clamp(#name * 6 + 16, 36, 96)
 	local Pill = new("TextButton", {
 		Text = "", AutoButtonColor = false, BackgroundColor3 = Theme.Field, BackgroundTransparency = 0,
 		Size = UDim2.new(0, collapsedW, 0, 22), Position = UDim2.new(0, self._tabX, 0, 3),
 		ZIndex = 4, Parent = self.TabStrip,
-	}, { corner(7), stroke(Theme.Border, 1) })
+	}, { corner(10), stroke(Theme.Border, 1) })
 	self._tabX = self._tabX + collapsedW + 6
 	self.TabStrip.CanvasSize = UDim2.new(0, self._tabX + 8, 0, 0)
 
@@ -812,12 +547,12 @@ function UI:CreateTab(config)
 	local hovering = false
 	local function paintPill()
 		if Tab._isOpen then
-			tween(Pill, { BackgroundColor3 = Theme.FX, BackgroundTransparency = 0.3 }, 0.12)
+			tween(Pill, { BackgroundColor3 = Theme.Border, BackgroundTransparency = 0.12 }, 0.12)
 		else
 			tween(Pill, { BackgroundColor3 = hovering and Theme.LineOpen or Theme.Field, BackgroundTransparency = 0 }, 0.12)
 		end
 	end
-	onAccent(function() if Pill.Parent and Tab._isOpen then Pill.BackgroundColor3 = Theme.FX end end)
+	onAccent(function() if Pill.Parent and Tab._isOpen then Pill.BackgroundColor3 = Theme.Border end end)
 	Pill.MouseEnter:Connect(function() hovering = true paintPill() end)
 	Pill.MouseLeave:Connect(function() hovering = false paintPill() end)
 
@@ -843,7 +578,6 @@ function UI:CreateTab(config)
 
 	Pill.MouseButton1Click:Connect(function()
 		if self._dragMoved then return end
-		if self._poke then self:_poke() end
 		setOpen(not Tab._isOpen)
 	end)
 
@@ -853,7 +587,7 @@ function UI:CreateTab(config)
 end
 
 -- ============================================================
--- 	CONTROLES (misma lógica/FX que la versión grande, en Theme chico)
+-- 	CONTROLES
 -- ============================================================
 function UI:CreateButton(config)
 	config = config or {}
@@ -866,17 +600,18 @@ function UI:CreateButton(config)
 		Text = text, Font = Theme.FontBold, TextSize = 11, TextColor3 = Theme.Text, TextTruncate = Enum.TextTruncate.AtEnd,
 		AutoButtonColor = false, BackgroundColor3 = Theme.Field, BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, 26), LayoutOrder = nextOrder(owner), Parent = list,
-	}, { corner(5) })
+	}, { corner(8) })
 	hoverField(Btn, Theme.Field)
 
 	local Button = setmetatable({ Instance = Btn, Callback = callback, _threads = {} }, UI)
 	function Button:Set(...)
+		-- Destello rosa de fondo que se apaga solo.
 		Btn.BackgroundColor3 = Theme.ActiveDim
-		tween(Btn, { BackgroundColor3 = Theme.LineOpen }, 0.25)
+		tween(Btn, { BackgroundColor3 = Theme.LineOpen }, 0.3)
 		Btn.TextColor3 = Theme.Active
-		task.delay(0.12, function() if Btn.Parent then Btn.TextColor3 = Theme.Text end end)
-		if window and window._poke then window:_poke() end
-		if window and window.Rage then window:Rage(0.5) end
+		task.delay(0.15, function()
+			if Btn.Parent then Btn.TextColor3 = Theme.Text end
+		end)
 		return safeCall(self, self.Callback, ...)
 	end
 	Button.Fire = Button.Set
@@ -896,23 +631,27 @@ function UI:CreateToggle(config)
 	local list, window, owner = host(self)
 	if not list then return setmetatable({}, Stub) end
 
-	local Row = new("Frame", { Size = UDim2.new(1, 0, 0, 26), BackgroundColor3 = Theme.Field, BorderSizePixel = 0, LayoutOrder = nextOrder(owner), Parent = list }, { corner(5) })
+	local Row = new("Frame", { Size = UDim2.new(1, 0, 0, 26), BackgroundColor3 = Theme.Field, BorderSizePixel = 0, LayoutOrder = nextOrder(owner), Parent = list }, { corner(8) })
 	hoverField(Row, Theme.Field)
 	new("TextLabel", {
 		Text = config.Text or config.Name or "Opción", Font = Theme.Font, TextSize = 11, TextColor3 = Theme.Text,
 		TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, BackgroundTransparency = 1,
 		Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(1, -36, 1, 0), Parent = Row,
 	})
-	-- Apagado: caja oscura (Theme.Field) con un bordecito rojo fino, bien
-	-- visible, para que se note dónde tocar. Prendido: caja rellena de
-	-- rojo. Antes el "apagado" usaba Theme.Border, que es EL MISMO rojo
-	-- que Theme.Active — por eso parecía que siempre estaba encendido.
-	local Box = new("Frame", { Size = UDim2.new(0, 12, 0, 12), Position = UDim2.new(1, -20, 0.5, -6), BackgroundColor3 = state and Theme.Active or Theme.Field, BorderSizePixel = 0, Parent = Row }, { corner(3) })
+	-- Apagado: caja clara con bordecito rosa fino para saber dónde
+	-- tocar. Prendido: caja rellena de rosa fuerte, con un saltito y un
+	-- brillo suave al cambiar.
+	local Box = new("Frame", { Size = UDim2.new(0, 12, 0, 12), Position = UDim2.new(1, -20, 0.5, -6), BackgroundColor3 = state and Theme.Active or Theme.Field, BorderSizePixel = 0, Parent = Row }, { corner(4) })
 	local BoxPop = new("UIScale", { Scale = 1, Parent = Box })
 	local BoxGlow = new("UIStroke", { Color = Theme.Active, Thickness = state and 1.6 or 1.3, Transparency = 0, Parent = Box })
 
 	local Toggle = setmetatable({ Box = Box, Value = state, Callback = callback, _threads = {} }, UI)
-	onAccent(function() if Box.Parent then Box.BackgroundColor3 = Toggle.Value and Theme.Active or Theme.Field BoxGlow.Color = Theme.Active end end)
+	onAccent(function()
+		if Box.Parent then
+			Box.BackgroundColor3 = Toggle.Value and Theme.Active or Theme.Field
+			BoxGlow.Color = Theme.Active
+		end
+	end)
 
 	function Toggle:Set(newState)
 		newState = not not newState
@@ -921,8 +660,6 @@ function UI:CreateToggle(config)
 		tween(BoxGlow, { Thickness = newState and 1.6 or 1.3 }, 0.18)
 		BoxPop.Scale = 1.4
 		tween(BoxPop, { Scale = 1 }, 0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-		if window and window._poke then window:_poke() end
-		if window and window.Rage then window:Rage(0.5) end
 		setFlagValue(config.Flag, newState)
 		return safeCall(self, self.Callback, newState)
 	end
@@ -952,7 +689,7 @@ function UI:CreateSlider(config)
 	local list, window, owner = host(self)
 	if not list then return setmetatable({}, Stub) end
 
-	local Row = new("Frame", { Size = UDim2.new(1, 0, 0, 38), BackgroundColor3 = Theme.Field, BorderSizePixel = 0, LayoutOrder = nextOrder(owner), Parent = list }, { corner(5), pad(0, 5, 8, 5, 8) })
+	local Row = new("Frame", { Size = UDim2.new(1, 0, 0, 38), BackgroundColor3 = Theme.Field, BorderSizePixel = 0, LayoutOrder = nextOrder(owner), Parent = list }, { corner(8), pad(0, 5, 8, 5, 8) })
 	new("TextLabel", {
 		Text = config.Text or config.Name or "Valor", Font = Theme.Font, TextSize = 11, TextColor3 = Theme.Text,
 		TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, BackgroundTransparency = 1,
@@ -963,15 +700,12 @@ function UI:CreateSlider(config)
 		BackgroundTransparency = 1, Size = UDim2.new(0, 42, 0, 14), Position = UDim2.new(1, -42, 0, 0), Parent = Row,
 	})
 	onAccent(function() if ValueLabel.Parent then ValueLabel.TextColor3 = Theme.Active end end)
-	-- Fondo del track oscuro (no rojo) — antes usaba Theme.Border, que es
-	-- el mismo color que el relleno (Theme.Active), así que la barra
-	-- entera se veía roja sin importar el valor. Ahora solo el Fill se
-	-- ve en rojo, como un slider normal.
-	local Track = new("Frame", { Size = UDim2.new(1, 0, 0, 4), Position = UDim2.new(0, 0, 1, -8), BackgroundColor3 = Theme.Field, BorderSizePixel = 0, Parent = Row }, { stroke(Theme.Border, 1), corner(2) })
+	-- Track claro (sin rosa fuerte) + Fill rosa: contraste claro, como un slider normal.
+	local Track = new("Frame", { Size = UDim2.new(1, 0, 0, 4), Position = UDim2.new(0, 0, 1, -8), BackgroundColor3 = Theme.Line, BorderSizePixel = 0, Parent = Row }, { stroke(Theme.Border, 1), corner(2) })
 	local function ratio(v) return (v - min) / (max - min) end
 	local Fill = new("Frame", { Size = UDim2.new(ratio(value), 0, 1, 0), BackgroundColor3 = Theme.Active, BorderSizePixel = 0, Parent = Track }, { corner(2) })
 	onAccent(function() if Fill.Parent then Fill.BackgroundColor3 = Theme.Active end end)
-	local Knob = new("Frame", { Size = UDim2.new(0, 9, 0, 9), Position = UDim2.new(ratio(value), -4, 0.5, -4), BackgroundColor3 = Theme.Text, BorderSizePixel = 0, Parent = Track }, { corner(4) })
+	local Knob = new("Frame", { Size = UDim2.new(0, 9, 0, 9), Position = UDim2.new(ratio(value), -4, 0.5, -4), BackgroundColor3 = Color3.fromRGB(255, 255, 255), BorderSizePixel = 0, Parent = Track }, { corner(4), stroke(Theme.Border, 1) })
 	local KnobPop = new("UIScale", { Scale = 1, Parent = Knob })
 
 	local Slider = setmetatable({ Track = Track, Fill = Fill, Knob = Knob, Value = value, Min = min, Max = max, Callback = callback, _threads = {} }, UI)
@@ -999,7 +733,6 @@ function UI:CreateSlider(config)
 	table.insert(window._connections, Track.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			dragging = true
-			if window and window._poke then window:_poke() end
 			tween(KnobPop, { Scale = 1.5 }, 0.1)
 			setFromX(input.Position.X)
 		end
@@ -1035,7 +768,7 @@ function UI:CreateDropdown(config)
 	local list, window, owner = host(self)
 	if not list then return setmetatable({}, Stub) end
 
-	local Row = new("Frame", { Size = UDim2.new(1, 0, 0, 26), BackgroundColor3 = Theme.Field, BorderSizePixel = 0, ClipsDescendants = true, LayoutOrder = nextOrder(owner), Parent = list }, { corner(5) })
+	local Row = new("Frame", { Size = UDim2.new(1, 0, 0, 26), BackgroundColor3 = Theme.Field, BorderSizePixel = 0, ClipsDescendants = true, LayoutOrder = nextOrder(owner), Parent = list }, { corner(8) })
 	new("TextLabel", { Text = config.Text or config.Name or "Opciones", Font = Theme.Font, TextSize = 11, TextColor3 = Theme.TextDim, TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1, Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(0.45, 0, 0, 26), Parent = Row })
 	local SelectedLabel = new("TextLabel", { Text = selected ~= nil and display(selected) or "-", Font = Theme.FontBold, TextSize = 11, TextColor3 = Theme.Active, TextXAlignment = Enum.TextXAlignment.Right, TextTruncate = Enum.TextTruncate.AtEnd, BackgroundTransparency = 1, Position = UDim2.new(0.45, 0, 0, 0), Size = UDim2.new(0.55, -20, 0, 26), Parent = Row })
 	onAccent(function() if SelectedLabel.Parent then SelectedLabel.TextColor3 = Theme.Active end end)
@@ -1065,7 +798,7 @@ function UI:CreateDropdown(config)
 				Text = display(optionValue), Font = Theme.Font, TextSize = 10, TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left,
 				TextTruncate = Enum.TextTruncate.AtEnd, AutoButtonColor = false, BackgroundColor3 = Theme.Field, BorderSizePixel = 0,
 				Size = UDim2.new(1, 0, 0, 18), LayoutOrder = index, Parent = ListFrame,
-			}, { corner(3), pad(0, 0, 4, 0, 4) })
+			}, { corner(5), pad(0, 0, 4, 0, 4) })
 			OptionBtn.MouseEnter:Connect(function() tween(OptionBtn, { BackgroundColor3 = Theme.LineOpen }) end)
 			OptionBtn.MouseLeave:Connect(function() tween(OptionBtn, { BackgroundColor3 = Theme.Field }) end)
 			table.insert(window._connections, OptionBtn.MouseButton1Click:Connect(function()
@@ -1103,14 +836,14 @@ function UI:CreateInput(config)
 	local list, window, owner = host(self)
 	if not list then return setmetatable({}, Stub) end
 
-	local Row = new("Frame", { Size = UDim2.new(1, 0, 0, 26), BackgroundColor3 = Theme.Field, BorderSizePixel = 0, LayoutOrder = nextOrder(owner), Parent = list }, { corner(5) })
+	local Row = new("Frame", { Size = UDim2.new(1, 0, 0, 26), BackgroundColor3 = Theme.Field, BorderSizePixel = 0, LayoutOrder = nextOrder(owner), Parent = list }, { corner(8) })
 	new("TextLabel", { Text = config.Text or config.Name or "Texto", Font = Theme.Font, TextSize = 11, TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1, Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(0.4, 0, 1, 0), Parent = Row })
 	local Box = new("TextBox", {
 		Text = tostring(config.Default or config.CurrentValue or ""), PlaceholderText = config.PlaceholderText or config.Placeholder or "...",
 		Font = Theme.Font, TextSize = 10, TextColor3 = Theme.Text, PlaceholderColor3 = Theme.TextDim, TextXAlignment = Enum.TextXAlignment.Left,
 		ClearTextOnFocus = false, ClipsDescendants = true, BackgroundColor3 = Theme.Line, BorderSizePixel = 0,
 		Position = UDim2.new(0.42, 0, 0.5, -8), Size = UDim2.new(0.55, -8, 0, 16), Parent = Row,
-	}, { corner(3), stroke(Theme.Border, 1), pad(0, 0, 4, 0, 4) })
+	}, { corner(5), stroke(Theme.Border, 1), pad(0, 0, 6, 0, 6) })
 
 	local Input = setmetatable({ Instance = Box, Value = Box.Text, Callback = callback, _threads = {} }, UI)
 	function Input:Set(text)
@@ -1122,7 +855,6 @@ function UI:CreateInput(config)
 	function Input:Get() return Box.Text end
 	function Input:Stop() stopAllThreads(self) end
 	table.insert(window._connections, Box.FocusLost:Connect(function(enterPressed)
-		if window and window._poke then window:_poke() end
 		if enterPressed or config.FireOnLoseFocus then
 			Input.Value = Box.Text
 			setFlagValue(config.Flag, Box.Text)
@@ -1145,13 +877,13 @@ function UI:CreateKeybind(config)
 	local list, window, owner = host(self)
 	if not list then return setmetatable({}, Stub) end
 
-	local Row = new("Frame", { Size = UDim2.new(1, 0, 0, 26), BackgroundColor3 = Theme.Field, BorderSizePixel = 0, LayoutOrder = nextOrder(owner), Parent = list }, { corner(5) })
+	local Row = new("Frame", { Size = UDim2.new(1, 0, 0, 26), BackgroundColor3 = Theme.Field, BorderSizePixel = 0, LayoutOrder = nextOrder(owner), Parent = list }, { corner(8) })
 	new("TextLabel", { Text = config.Text or config.Name or "Tecla", Font = Theme.Font, TextSize = 11, TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1, Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(1, -64, 1, 0), Parent = Row })
 	local KeyButton = new("TextButton", {
 		Text = currentKey.Name, Font = Theme.FontBold, TextSize = 10, TextColor3 = Theme.Text, TextTruncate = Enum.TextTruncate.AtEnd,
 		AutoButtonColor = false, BackgroundColor3 = Theme.Line, BorderSizePixel = 0, Size = UDim2.new(0, 50, 0, 18),
 		Position = UDim2.new(1, -56, 0.5, -9), Parent = Row,
-	}, { corner(3), stroke(Theme.Border, 1) })
+	}, { corner(5), stroke(Theme.Border, 1) })
 
 	local Keybind = setmetatable({ Value = currentKey, Callback = callback, _threads = {} }, UI)
 	function Keybind:Set(keyCode)
@@ -1207,7 +939,7 @@ function UI:CreateSection(config)
 	if not list then return setmetatable({}, Stub) end
 	local holder = new("Frame", { Size = UDim2.new(1, 0, 0, 16), BackgroundTransparency = 1, LayoutOrder = nextOrder(owner), Parent = list })
 	local label = new("TextLabel", { Text = string.upper(tostring(text)), Font = Theme.FontBold, TextSize = 9, TextColor3 = Theme.TextDim, TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Parent = holder })
-	local underline = new("Frame", { Size = UDim2.new(0, 14, 0, 2), Position = UDim2.new(0, 0, 1, -1), BackgroundColor3 = Theme.Active, BorderSizePixel = 0, Parent = holder })
+	local underline = new("Frame", { Size = UDim2.new(0, 14, 0, 2), Position = UDim2.new(0, 0, 1, -1), BackgroundColor3 = Theme.Active, BorderSizePixel = 0, Parent = holder }, { corner(1) })
 	onAccent(function() if underline.Parent then underline.BackgroundColor3 = Theme.Active end end)
 	local controller = setmetatable({ Instance = label }, UI)
 	function controller:Set(newText) label.Text = string.upper(tostring(newText)) end
@@ -1227,7 +959,7 @@ function UI:CreateStat(config)
 	config = config or {}
 	local list, window, owner = host(self)
 	if not list then return setmetatable({}, Stub) end
-	local holder = new("Frame", { Size = UDim2.new(1, 0, 0, 32), BackgroundColor3 = Theme.Field, BorderSizePixel = 0, LayoutOrder = nextOrder(owner), Parent = list }, { corner(5), pad(0, 4, 8, 4, 8) })
+	local holder = new("Frame", { Size = UDim2.new(1, 0, 0, 32), BackgroundColor3 = Theme.Field, BorderSizePixel = 0, LayoutOrder = nextOrder(owner), Parent = list }, { corner(8), pad(0, 4, 8, 4, 8) })
 	local ValueLabel = new("TextLabel", { Text = tostring(config.Value or "0"), Font = Theme.FontBold, TextSize = 15, TextColor3 = Theme.Active, TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 16), Parent = holder })
 	onAccent(function() if ValueLabel.Parent then ValueLabel.TextColor3 = Theme.Active end end)
 	new("TextLabel", { Text = config.Label or config.Text or config.Name or "", Font = Theme.Font, TextSize = 9, TextColor3 = Theme.TextDim, TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 16), Size = UDim2.new(1, 0, 0, 10), Parent = holder })
@@ -1249,7 +981,7 @@ end
 function UI:SaveConfig(name)
 	name = name or "default"
 	if typeof(writefile) ~= "function" then
-		warn("[AzucarRage] Tu ejecutor no tiene writefile — no se puede guardar la config.")
+		warn("[AzucarDulce] Tu ejecutor no tiene writefile — no se puede guardar la config.")
 		return false
 	end
 	ensureConfigFolder()
@@ -1262,9 +994,9 @@ function UI:SaveConfig(name)
 		end
 	end
 	local okJson, encoded = pcall(function() return game:GetService("HttpService"):JSONEncode(data) end)
-	if not okJson then warn("[AzucarRage] No se pudo convertir la config a JSON.") return false end
+	if not okJson then warn("[AzucarDulce] No se pudo convertir la config a JSON.") return false end
 	local okWrite, err = pcall(writefile, UI.ConfigFolder .. "/" .. name .. ".json", encoded)
-	if not okWrite then warn("[AzucarRage] No se pudo guardar la config: " .. tostring(err)) return false end
+	if not okWrite then warn("[AzucarDulce] No se pudo guardar la config: " .. tostring(err)) return false end
 	return true
 end
 
@@ -1272,15 +1004,15 @@ function UI:LoadConfig(name, stagger)
 	name = name or "default"
 	if stagger == nil then stagger = self._loadStagger or 0 end
 	if typeof(readfile) ~= "function" or typeof(isfile) ~= "function" then
-		warn("[AzucarRage] Tu ejecutor no tiene readfile/isfile — no se puede cargar la config.")
+		warn("[AzucarDulce] Tu ejecutor no tiene readfile/isfile — no se puede cargar la config.")
 		return false
 	end
 	local path = UI.ConfigFolder .. "/" .. name .. ".json"
 	if not isfile(path) then return false end
 	local okRead, raw = pcall(readfile, path)
-	if not okRead then warn("[AzucarRage] No se pudo leer el archivo de config.") return false end
+	if not okRead then warn("[AzucarDulce] No se pudo leer el archivo de config.") return false end
 	local okJson, data = pcall(function() return game:GetService("HttpService"):JSONDecode(raw) end)
-	if not okJson or typeof(data) ~= "table" then warn("[AzucarRage] La config guardada está corrupta o vacía.") return false end
+	if not okJson or typeof(data) ~= "table" then warn("[AzucarDulce] La config guardada está corrupta o vacía.") return false end
 
 	local order = self._loadOrder
 	local function priority(flag)
@@ -1317,7 +1049,7 @@ function UI:LoadConfig(name, stagger)
 		end
 	end)
 	loadingConfig = false
-	if not ok then warn("[AzucarRage] Ocurrió un error aplicando la config guardada.") return false end
+	if not ok then warn("[AzucarDulce] Ocurrió un error aplicando la config guardada.") return false end
 	return true
 end
 
