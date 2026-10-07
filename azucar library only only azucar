@@ -1,5 +1,5 @@
 --[[
-	AzucarDulce  v1.0
+	AzucarDulce  v1.1
 	=================
 	(Antes: AzucarRage — misma estructura, piel nueva)
 
@@ -24,6 +24,12 @@
 	(violeta suave) y Menta (verde agua). Cambia SOLO el acento
 	(borde/pestaña activa/relleno de toggles y sliders), no el fondo.
 
+	v1.1: NOTIFICACIONES. Window:Notify("Listo") o Window:Notify({
+	Title = "...", Text = "...", Duration = 3 }) — aparece abajo a la
+	derecha en una tarjetita redondeada, se queda Duration segundos (3
+	por defecto) y se va sola con un fundido. Si mandás varias, se
+	apilan.
+
 	Uso:
 		local UI = loadstring(game:HttpGet("...AzucarDulce.lua"))()
 		local Window = UI:CreateWindow({
@@ -45,6 +51,9 @@
 			Callback = function(state) ... end })
 		Combate:CreateSlider({ Text = "Velocidad", Range = {0, 200}, Default = 16,
 			Callback = function(v) ... end })
+
+		Window:Notify("Auto Farm activado")
+		Window:Notify({ Title = "Atención", Text = "Te quedaste sin energía", Duration = 4 })
 ]]
 
 local TweenService     = game:GetService("TweenService")
@@ -53,7 +62,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local UI = {}
 UI.__index = UI
-UI.Version    = "1.0"
+UI.Version    = "1.1"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -512,6 +521,104 @@ function UI:Destroy()
 	for _, conn in ipairs(self._connections or {}) do pcall(function() conn:Disconnect() end) end
 	if self.ScreenGui then pcall(function() self.ScreenGui:Destroy() end) end
 	for i, w in ipairs(UI.Windows) do if w == self then table.remove(UI.Windows, i) break end end
+end
+
+-- ============================================================
+-- 	NOTIFICACIONES
+-- ============================================================
+-- Window:Notify("Listo") o Window:Notify({ Title = "...", Text = "...",
+-- Duration = 3 }). Aparece abajo a la derecha de la pantalla, en una
+-- tarjetita redondeada, se queda Duration segundos (3 por defecto) y
+-- se va sola con un fundido. Si mandás varias, se apilan: la más
+-- nueva queda pegada a la esquina y las anteriores se corren hacia
+-- arriba. Es un fundido de entrada y uno de salida nada más — no
+-- queda nada corriendo en bucle, así que no cuesta rendimiento.
+function UI:Notify(config)
+	if typeof(config) == "string" then config = { Text = config } end
+	config = config or {}
+
+	local ScreenGui = self.ScreenGui
+	if not ScreenGui then
+		warn("[AzucarDulce] Notify se llama sobre la ventana: Window:Notify(...).")
+		return
+	end
+
+	local titleText = config.Title
+	local bodyText = config.Text or config.Message or config.Content or ""
+	local duration = config.Duration or 3
+	local hasTitle = titleText ~= nil and tostring(titleText) ~= ""
+
+	local Holder = self._notifyHolder
+	if not Holder then
+		Holder = new("Frame", {
+			Name = "Notifications",
+			AnchorPoint = Vector2.new(1, 1),
+			Position = UDim2.new(1, -16, 1, -16),
+			Size = UDim2.new(0, 260, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundTransparency = 1,
+			ZIndex = 100,
+			Parent = ScreenGui,
+		}, {
+			new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
+		})
+		self._notifyHolder = Holder
+		self._notifyCount = 0
+	end
+
+	self._notifyCount = (self._notifyCount or 0) + 1
+	local cardH = hasTitle and 54 or 40
+
+	-- CanvasGroup para que el fundido de entrada/salida mueva TODO junto
+	-- (fondo, borde, barrita de acento y texto) con una sola propiedad.
+	local Card = new("CanvasGroup", {
+		Name = "Notification",
+		Size = UDim2.new(1, 0, 0, cardH),
+		BackgroundColor3 = Theme.Panel,
+		GroupTransparency = 1, -- arranca invisible
+		ClipsDescendants = true,
+		LayoutOrder = self._notifyCount,
+		ZIndex = 101,
+		Parent = Holder,
+	}, { corner(14), stroke(Theme.Border, 1.5) })
+
+	new("Frame", {
+		Size = UDim2.new(0, 4, 1, -14), AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 7, 0.5, 0),
+		BackgroundColor3 = Theme.Active, BorderSizePixel = 0, Parent = Card,
+	}, { corner(2) })
+
+	if hasTitle then
+		new("TextLabel", {
+			Text = tostring(titleText), Font = Theme.FontBold, TextSize = 12, TextColor3 = Theme.Text,
+			TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
+			BackgroundTransparency = 1, Position = UDim2.new(0, 18, 0, 8), Size = UDim2.new(1, -28, 0, 16),
+			Parent = Card,
+		})
+		new("TextLabel", {
+			Text = tostring(bodyText), Font = Theme.Font, TextSize = 11, TextColor3 = Theme.TextDim,
+			TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true, TextTruncate = Enum.TextTruncate.AtEnd,
+			BackgroundTransparency = 1, Position = UDim2.new(0, 18, 0, 26), Size = UDim2.new(1, -28, 0, 22),
+			Parent = Card,
+		})
+	else
+		new("TextLabel", {
+			Text = tostring(bodyText), Font = Theme.Font, TextSize = 12, TextColor3 = Theme.Text,
+			TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true, TextTruncate = Enum.TextTruncate.AtEnd,
+			BackgroundTransparency = 1, Position = UDim2.new(0, 18, 0, 0), Size = UDim2.new(1, -28, 1, 0),
+			Parent = Card,
+		})
+	end
+
+	tween(Card, { GroupTransparency = 0 }, 0.25)
+	task.delay(duration, function()
+		if not Card.Parent then return end
+		tween(Card, { GroupTransparency = 1 }, 0.3)
+		task.delay(0.3, function()
+			if Card.Parent then Card:Destroy() end
+		end)
+	end)
+
+	return Card
 end
 
 -- ============================================================
