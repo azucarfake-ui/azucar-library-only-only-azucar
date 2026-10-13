@@ -1,34 +1,34 @@
 --[[
-	AzucarDulce  v1.1
-	=================
-	(Antes: AzucarRage — misma estructura, piel nueva)
+	AzucarDulce  v2.0  —  "Píldoras"
+	================================
+	(Antes: v1.1 con un rectángulo único. Misma lógica por dentro:
+	Flags, Callbacks, Logic, guardado de config, Notify. Lo que cambió
+	es el LAYOUT.)
 
-	UI CHICA, de un solo rectángulo: arriba las pestañas en una fila
-	horizontal, abajo las lógicas (sliders, toggles, etc.) de la
-	pestaña activa. Compacta, pensada para quedar flotando en una
-	esquina. Por defecto se para del lado IZQUIERDO.
+	CÓMO SE VE Y SE USA:
+	  • Cada pestaña es una tarjetita flotante (píldora) con su nombre y
+	    un contador de opciones activas ("Movement  3 / 5").
+	  • Tocás la cabecera de la pestaña y se abre la lista de opciones.
+	    Tocala de nuevo y se cierra. Si la arrastrás, la movés de lugar.
+	  • Tocás una opción (toggle, slider, dropdown, input, tecla o
+	    botón) y se despliega al costado una píldora con el control:
+	        Toggle   -> interruptor ON / OFF
+	        Slider   -> barra + flechitas ‹ › para subir/bajar de a un paso
+	        Dropdown -> ‹ Valor › (las flechas cambian de opción)
+	        Input    -> caja de texto (Enter para aplicar)
+	        Keybind  -> botón para elegir la tecla
+	        Button   -> botón "Ejecutar"
+	    Podés tener varias píldoras abiertas a la vez. Tocás la opción de
+	    nuevo y la píldora se pliega.
+	  • El puntito de cada opción se rellena cuando está "activa":
+	        Toggle prendido, Slider/Dropdown con un valor distinto del
+	        inicial, Input con texto. Botones y teclas no cuentan.
+	    Ese conteo es el "3 / 5" de la cabecera.
+	  • Arriba a la izquierda hay una tarjetita con el título, el
+	    Badge/ServerName y el reloj (se apaga con ShowBrand = false).
 
-	Es un RESKIN de AzucarRage: la estructura, los controles y la
-	lógica interna (Flags, Callbacks, guardado de config) son
-	EXACTAMENTE los mismos. Lo único que cambió es el tema visual:
-	rosa pastel y blanco en vez de negro y rojo, esquinas más
-	redonditas, y una letra más suave para el título. Sin aura, sin
-	chispas, sin Window:Rage() ni nada corriendo en bucle por detrás
-	(eso se sacó del todo en AzucarRage y acá tampoco está) — las
-	únicas animaciones son las chiquitas de cada control al tocarlo
-	(un destello, un saltito, una barrita de acento), que no cuestan
-	nada porque no quedan corriendo todo el tiempo.
-
-	Paleta de "sabores" en vez de Rojo/Negro/Blanco: Fresa (rosa
-	fuerte, el que usa por defecto), Chicle (rosa chicle), Uva
-	(violeta suave) y Menta (verde agua). Cambia SOLO el acento
-	(borde/pestaña activa/relleno de toggles y sliders), no el fondo.
-
-	v1.1: NOTIFICACIONES. Window:Notify("Listo") o Window:Notify({
-	Title = "...", Text = "...", Duration = 3 }) — aparece abajo a la
-	derecha en una tarjetita redondeada, se queda Duration segundos (3
-	por defecto) y se va sola con un fundido. Si mandás varias, se
-	apilan.
+	Paleta de "sabores": Fresa (por defecto), Chicle, Uva y Menta.
+	Cambia SOLO el acento, no el fondo.
 
 	Uso:
 		local UI = loadstring(game:HttpGet("...AzucarDulce.lua"))()
@@ -37,20 +37,24 @@
 			Badge       = "NAH ID ADAPT",
 			ServerName  = "NAH ID ADAPT",
 			ToggleKey   = Enum.KeyCode.K,
-			Theme       = "Fresa",  -- "Fresa" | "Chicle" | "Uva" | "Menta"
-			CornerStyle = "Round",  -- "Round" | "Sharp"
-			Width       = 400,
-			Height      = 300,
+			Theme       = "Fresa",   -- "Fresa" | "Chicle" | "Uva" | "Menta"
+			CornerStyle = "Round",   -- "Round" | "Sharp"
+			TabWidth    = 134,       -- ancho de una pestaña abierta
+			SideWidth   = 148,       -- espacio entre pestañas para las píldoras
+			Position    = UDim2.new(0, 12, 0, 10), -- dónde arranca todo
+			ShowBrand   = true,
 			AutoSaveConfig  = true,
 			AutoLoadStagger = 0.1,
 			AutoLoadOrder   = {"M", "F", "A"},
 			AutoSaveIgnore  = {"MiniPekka"},
 		})
-		local Combate = Window:CreateTab({ Name = "Combate" })
-		Combate:CreateToggle({ Text = "Auto Farm", Flag = "AutoFarm",
-			Callback = function(state) ... end })
-		Combate:CreateSlider({ Text = "Velocidad", Range = {0, 200}, Default = 16,
+		local Movement = Window:CreateTab({ Name = "Movement" })
+		Movement:CreateSlider({ Text = "Walk Speed", Range = {16, 300}, Default = 16,
 			Callback = function(v) ... end })
+		Movement:CreateToggle({ Text = "Fly", Flag = "Fly",
+			Callback = function(state) ... end })
+		Movement:CreateDropdown({ Text = "Point Mode", Options = {"Void", "Head"},
+			Callback = function(opt) ... end })
 
 		Window:Notify("Auto Farm activado")
 		Window:Notify({ Title = "Atención", Text = "Te quedaste sin energía", Duration = 4 })
@@ -59,10 +63,11 @@
 local TweenService     = game:GetService("TweenService")
 local Players          = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
+local TextService      = game:GetService("TextService")
 
 local UI = {}
 UI.__index = UI
-UI.Version    = "1.1"
+UI.Version    = "2.0"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -84,18 +89,22 @@ end
 -- ============================================================
 -- 	NÚMEROS QUE PODÉS TOCAR
 -- ============================================================
-local WINDOW_W = 400
-local WINDOW_H = 300
-local TAB_STRIP_H = 28
+local CARD_W   = 134  -- ancho de una pestaña abierta
+local SIDE_W   = 148  -- espacio a la derecha de cada pestaña para sus píldoras
+local TAB_GAP  = 8    -- aire extra entre una pestaña y la siguiente
+local HEADER_H = 28   -- alto de la cabecera de cada pestaña
+local ROW_H    = 24   -- alto de cada opción
+local PILL_H   = 22   -- alto de la píldora lateral
+local START_X, START_Y = 12, 10
+local ROW_PITCH = 260 -- salto vertical cuando las pestañas no entran en una fila
 
 local Stub = {}
 Stub.__index = function()
 	return function() return setmetatable({}, Stub) end
 end
 
--- Letra del título: algo redondito y tierno si tu ejecutor la tiene
--- (Roblox fue agregando fuentes menos comunes); si no existe, cae
--- sola a GothamBold sin romper el script.
+-- Letra del título: algo redondito si tu ejecutor la tiene; si no
+-- existe, cae sola a GothamBold sin romper el script.
 local function safeFont(names, fallback)
 	if typeof(names) == "string" then names = { names } end
 	for _, name in ipairs(names) do
@@ -113,6 +122,7 @@ local Theme = {
 	Background = Color3.fromRGB(255, 240, 246),
 	Panel      = Color3.fromRGB(255, 232, 240),
 	Field      = Color3.fromRGB(255, 225, 236),
+	RowIdle    = Color3.fromRGB(255, 238, 244),
 	Line       = Color3.fromRGB(255, 220, 232),
 	LineOpen   = Color3.fromRGB(255, 206, 223),
 	Border     = Color3.fromRGB(255, 122, 170),
@@ -120,17 +130,16 @@ local Theme = {
 	TextDim    = Color3.fromRGB(180, 125, 145),
 	Active     = Color3.fromRGB(255, 105, 150),
 	ActiveDim  = Color3.fromRGB(214, 74, 115),
-	Alpha      = 0.06, -- transparencia de TODA la tarjeta junta (0 = sólida)
+	Alpha      = 0.04, -- transparencia del fondo de las tarjetas (0 = sólido)
 	FontTitle  = FONT_TITLE,
 	Font       = Enum.Font.GothamMedium,
 	FontBold   = Enum.Font.GothamBold,
+	FontMono   = Enum.Font.Code,
 }
 UI.Theme = Theme
 
--- Paleta: cambia SOLO el acento (borde/pestaña activa/relleno de
--- toggles y sliders), no el fondo. Se elige por código con
--- config.Theme al crear la ventana, o en caliente con
--- UI:SetAccentColor(...). Sin animación: el cambio es instantáneo.
+-- Paleta: cambia SOLO el acento, no el fondo. Se elige con
+-- config.Theme al crear la ventana o en caliente con UI:SetAccentColor(...).
 local Palettes = {
 	Fresa  = Color3.fromRGB(255, 105, 150),
 	Chicle = Color3.fromRGB(255, 153, 204),
@@ -167,9 +176,8 @@ local function new(class, props, children)
 	for _, child in ipairs(children or {}) do child.Parent = inst end
 	return inst
 end
--- Modo de esquinas: "Round" (bien redonditas, el espíritu dulce) o
--- "Sharp" (sin radio). Se elige por código con config.CornerStyle al
--- crear la ventana, o en caliente con UI:SetCornerStyle(...).
+
+-- Modo de esquinas: "Round" (redonditas) o "Sharp" (sin radio).
 local CornerMode = "Round"
 local cornerListeners = {}
 local function onCornerChange(fn) table.insert(cornerListeners, fn) return fn end
@@ -178,6 +186,10 @@ local function corner(radius)
 	local inst = new("UICorner", { CornerRadius = UDim.new(0, CornerMode == "Round" and radius or 0) })
 	onCornerChange(function() inst.CornerRadius = UDim.new(0, CornerMode == "Round" and radius or 0) end)
 	return inst
+end
+-- Círculo perfecto (puntitos, perillas, botoncitos): siempre redondo.
+local function circle()
+	return new("UICorner", { CornerRadius = UDim.new(1, 0) })
 end
 function UI:SetCornerStyle(mode)
 	if mode ~= "Round" and mode ~= "Sharp" then
@@ -188,6 +200,11 @@ function UI:SetCornerStyle(mode)
 	for _, fn in ipairs(cornerListeners) do pcall(fn) end
 end
 local function stroke(color, thickness) return new("UIStroke", { Color = color or Theme.Border, Thickness = thickness or 1 }) end
+local function accentStroke(thickness)
+	local s = stroke(Theme.Border, thickness)
+	onAccent(function() if s.Parent then s.Color = Theme.Border end end)
+	return s
+end
 local function pad(all, top, right, bottom, left)
 	return new("UIPadding", {
 		PaddingTop = UDim.new(0, top or all or 0), PaddingRight = UDim.new(0, right or all or 0),
@@ -198,26 +215,10 @@ local function tween(inst, props, time, style, dir)
 	TweenService:Create(inst, TweenInfo.new(time or 0.18, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out), props):Play()
 	return inst
 end
-
--- Barrita de acento que se enciende a la izquierda de una fila al
--- pasar el mouse (botones, toggles, filas de dropdown, etc.). Esto es
--- lo único "animado" que hay: dura una fracción de segundo al tocar
--- algo, no queda corriendo en bucle, así que no cuesta nada de más.
-local function hoverField(obj, base)
-	base = base or Theme.Field
-	local mark = new("Frame", {
-		Size = UDim2.new(0, 3, 0.4, 0), AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0),
-		BackgroundColor3 = Theme.Active, BackgroundTransparency = 1, BorderSizePixel = 0, Parent = obj,
-	}, { new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
-	onAccent(function() if mark.Parent then mark.BackgroundColor3 = Theme.Active end end)
-	obj.MouseEnter:Connect(function()
-		tween(obj, { BackgroundColor3 = Theme.LineOpen })
-		tween(mark, { BackgroundTransparency = 0, Size = UDim2.new(0, 3, 0.75, 0) }, 0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-	end)
-	obj.MouseLeave:Connect(function()
-		tween(obj, { BackgroundColor3 = base })
-		tween(mark, { BackgroundTransparency = 1, Size = UDim2.new(0, 3, 0.4, 0) }, 0.15)
-	end)
+local function textW(text, size, font)
+	local ok, w = pcall(function() return TextService:GetTextSize(text, size, font, Vector2.new(1000, 100)).X end)
+	if ok and w then return w end
+	return #text * size * 0.6
 end
 
 -- ============================================================
@@ -336,7 +337,43 @@ local function cleanupOldWindows(guiParent)
 end
 
 -- ============================================================
--- 	CREATE WINDOW — el rectángulo chico
+-- 	ARRASTRAR TARJETAS
+-- ============================================================
+-- handle = lo que recibe el toque; target = lo que se mueve.
+-- Si el dedo/mouse casi no se movió, cuenta como click (onClick).
+local function makeDraggable(window, handle, target, onClick, onPress)
+	local dragging, moved = false, false
+	local startInput, startPos
+	table.insert(window._connections, handle.InputBegan:Connect(function(input)
+		local k = input.UserInputType
+		if k ~= Enum.UserInputType.MouseButton1 and k ~= Enum.UserInputType.Touch then return end
+		dragging, moved = true, false
+		startInput = Vector2.new(input.Position.X, input.Position.Y)
+		startPos = target.Position
+		if onPress then onPress() end
+	end))
+	table.insert(window._connections, UserInputService.InputChanged:Connect(function(input)
+		if not dragging then return end
+		local k = input.UserInputType
+		if k ~= Enum.UserInputType.MouseMovement and k ~= Enum.UserInputType.Touch then return end
+		local d = Vector2.new(input.Position.X, input.Position.Y) - startInput
+		if not moved and d.Magnitude > 5 then moved = true end
+		if moved then
+			target.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
+		end
+	end))
+	table.insert(window._connections, UserInputService.InputEnded:Connect(function(input)
+		if not dragging then return end
+		local k = input.UserInputType
+		if k == Enum.UserInputType.MouseButton1 or k == Enum.UserInputType.Touch then
+			dragging = false
+			if not moved and onClick then onClick() end
+		end
+	end))
+end
+
+-- ============================================================
+-- 	CREATE WINDOW — las tarjetas flotantes
 -- ============================================================
 function UI:CreateWindow(config)
 	config = config or {}
@@ -345,15 +382,21 @@ function UI:CreateWindow(config)
 	if config.Theme ~= nil then UI:SetAccentColor(config.Theme) end
 
 	local title = config.Title or config.Name or "Azúcar Dulce"
-	local W = config.Width or WINDOW_W
-	local H = config.Height or WINDOW_H
-	local RADIUS = 18
+	local cardW = config.TabWidth or CARD_W
+	local sideW = config.SideWidth or SIDE_W
+
+	local startX, startY = START_X, START_Y
+	if typeof(config.Position) == "UDim2" then
+		startX, startY = config.Position.X.Offset, config.Position.Y.Offset
+	end
 
 	local subtitleParts = {}
 	if config.Badge and tostring(config.Badge) ~= "" then table.insert(subtitleParts, tostring(config.Badge)) end
 	if config.ServerName and tostring(config.ServerName) ~= "" then table.insert(subtitleParts, tostring(config.ServerName)) end
 	local subtitleText = table.concat(subtitleParts, "  •  ")
-	local HEADER_H = (subtitleText ~= "" and 42) or 30
+	local showBrand = config.ShowBrand ~= false
+	local brandW = config.BrandWidth or 150
+	local brandH = (subtitleText ~= "" and 40) or 28
 
 	local ScreenGui = new("ScreenGui", {
 		Name = "AzucarDulce", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
@@ -366,112 +409,56 @@ function UI:CreateWindow(config)
 	ScreenGui:SetAttribute("AzucarLoadId", LOAD_ID)
 	ScreenGui.Parent = guiParent
 
-	-- Posición por defecto: IZQUIERDA de la pantalla. Pasá
-	-- config.Position si querés ubicarla en cualquier otro lado.
-	local defaultPanelPos = UDim2.new(0, 24, 0.5, -H / 2)
-
-	-- ---------------- EL RECTÁNGULO ----------------
-	-- CanvasGroup: dibuja fondo + controles juntos con UNA sola
-	-- transparencia (Theme.Alpha) en vez de apilar transparencias fila
-	-- por fila. Borde fijo, sin degradado ni rotación.
-	local Panel = new("CanvasGroup", {
-		Name = "Panel", Size = UDim2.new(0, W, 0, H),
-		Position = config.Position or defaultPanelPos,
-		BackgroundColor3 = Theme.Background, GroupTransparency = Theme.Alpha,
-		BorderSizePixel = 0, ClipsDescendants = true, ZIndex = 2, Parent = ScreenGui,
-	}, { corner(RADIUS), stroke(Theme.Border, 2) })
-	local PanelStroke = Panel:FindFirstChildOfClass("UIStroke")
-	onAccent(function() if PanelStroke and PanelStroke.Parent then PanelStroke.Color = Theme.Border end end)
-
-	-- Barra superior: título (+ Badge/ServerName si los pasaste) + reloj.
-	local TopBar = new("Frame", { Size = UDim2.new(1, 0, 0, HEADER_H), BackgroundColor3 = Theme.Panel, BorderSizePixel = 0, Parent = Panel })
-	new("TextLabel", {
-		Text = title, Font = Theme.FontTitle, TextSize = 14, TextColor3 = Theme.Text,
-		TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, TextTruncate = Enum.TextTruncate.AtEnd,
-		BackgroundTransparency = 1, Position = UDim2.new(0, 10, 0, 4), Size = UDim2.new(1, -62, 0, 18), Parent = TopBar,
-	})
-	if subtitleText ~= "" then
-		new("TextLabel", {
-			Text = subtitleText, Font = Theme.Font, TextSize = 10, TextColor3 = Theme.TextDim,
-			TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
-			BackgroundTransparency = 1, Position = UDim2.new(0, 10, 0, 22), Size = UDim2.new(1, -20, 0, 14), Parent = TopBar,
-		})
-	end
-	local ClockLabel = new("TextLabel", {
-		Text = os.date("%H:%M:%S"), Font = Theme.FontBold, TextSize = 12, TextColor3 = Theme.Active,
-		TextXAlignment = Enum.TextXAlignment.Right, TextYAlignment = Enum.TextYAlignment.Top, BackgroundTransparency = 1,
-		Position = UDim2.new(1, -56, 0, 4), Size = UDim2.new(0, 46, 0, 18), Parent = TopBar,
-	})
-	onAccent(function() if ClockLabel.Parent then ClockLabel.TextColor3 = Theme.Active end end)
-	task.spawn(function() while ClockLabel.Parent do ClockLabel.Text = os.date("%H:%M:%S") task.wait(1) end end)
-
-	-- Fila de pestañas: horizontal, sin barra de scroll visible. Cada
-	-- pestaña se posiciona a mano en CreateTab (Window._tabX).
-	local TabStrip = new("ScrollingFrame", {
-		Name = "TabStrip", Position = UDim2.new(0, 0, 0, HEADER_H), Size = UDim2.new(1, 0, 0, TAB_STRIP_H),
-		BackgroundColor3 = Theme.Panel, BorderSizePixel = 0, ScrollBarThickness = 0, ScrollBarImageTransparency = 1,
-		ScrollingDirection = Enum.ScrollingDirection.X, CanvasSize = UDim2.new(0, 0, 0, 0),
-		ClipsDescendants = true, ZIndex = 3, Parent = Panel,
-	})
-
-	-- Contenido: debajo de la fila de pestañas, vertical, sin barra.
-	local ContentScroll = new("ScrollingFrame", {
-		Name = "Content", Position = UDim2.new(0, 8, 0, HEADER_H + TAB_STRIP_H + 4), Size = UDim2.new(1, -16, 1, -(HEADER_H + TAB_STRIP_H + 12)),
-		BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 3, ScrollBarImageColor3 = Theme.Active,
-		CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, Parent = Panel,
-	})
-	new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, Parent = ContentScroll })
-	onAccent(function() if ContentScroll.Parent then ContentScroll.ScrollBarImageColor3 = Theme.Active end end)
-
-	local EmptyHint = new("TextLabel", {
-		Text = "Sin pestañas. Usá Window:CreateTab({ Name = \"...\" }).", Font = Theme.Font, TextSize = 11,
-		TextColor3 = Theme.TextDim, TextWrapped = true, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), Parent = ContentScroll,
+	-- Contenedor de todas las tarjetas (para mostrar/ocultar de una).
+	-- No tapa el juego: es transparente y no recibe clicks.
+	local Container = new("Frame", {
+		Name = "Container", Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, BorderSizePixel = 0, Parent = ScreenGui,
 	})
 
 	local Window = setmetatable({
-		ScreenGui = ScreenGui, Panel = Panel,
-		TabStrip = TabStrip, ContentScroll = ContentScroll, EmptyHint = EmptyHint,
-		_tabs = {}, _tabX = 8, _connections = {}, _visible = true, _loadId = LOAD_ID,
+		ScreenGui = ScreenGui, Container = Container,
+		_tabs = {}, _connections = {}, _visible = true, _loadId = LOAD_ID,
 		_loadStagger = config.AutoLoadStagger or 0, _loadOrder = config.AutoLoadOrder,
-		W = W, H = H,
+		_cardW = cardW, _sideW = sideW, _pitch = cardW + sideW + TAB_GAP,
+		_startX = startX + (showBrand and (brandW + 10) or 0), _startY = startY,
+		_cursorX = startX + (showBrand and (brandW + 10) or 0), _cursorY = startY,
+		_rowPitch = config.RowPitch or ROW_PITCH, _z = 10,
 	}, UI)
 
-	local function track(conn) table.insert(Window._connections, conn) return conn end
-
-	-- Scroll horizontal de pestañas con la rueda del mouse y arrastre con mouse/dedo.
-	local dragKind, dragStartPos, canvasStartX = nil, Vector2.new(0, 0), 0
-	Window._dragMoved = false
-	track(TabStrip.InputBegan:Connect(function(input)
-		local kind = input.UserInputType
-		if kind ~= Enum.UserInputType.MouseButton1 and kind ~= Enum.UserInputType.Touch then return end
-		Window._dragMoved = false
-		dragKind = kind
-		dragStartPos = Vector2.new(input.Position.X, input.Position.Y)
-		canvasStartX = TabStrip.CanvasPosition.X
-	end))
-	track(UserInputService.InputChanged:Connect(function(input)
-		if not dragKind then return end
-		local kind = input.UserInputType
-		if kind ~= Enum.UserInputType.MouseMovement and kind ~= Enum.UserInputType.Touch then return end
-		local dx = input.Position.X - dragStartPos.X
-		if math.abs(dx) > 6 then Window._dragMoved = true end
-		if dragKind == Enum.UserInputType.MouseButton1 and Window._dragMoved then
-			TabStrip.CanvasPosition = Vector2.new(canvasStartX - dx, 0)
+	-- Tarjetita de marca: título + Badge/ServerName + reloj. Se puede arrastrar.
+	if showBrand then
+		local Brand = new("Frame", {
+			Name = "Brand", Size = UDim2.new(0, brandW, 0, brandH), Position = UDim2.new(0, startX, 0, startY),
+			BackgroundColor3 = Theme.Background, BackgroundTransparency = Theme.Alpha, BorderSizePixel = 0,
+			ZIndex = 5, Parent = Container,
+		}, { corner(14), accentStroke(1.5) })
+		new("TextLabel", {
+			Text = title, Font = Theme.FontTitle, TextSize = 13, TextColor3 = Theme.Text,
+			TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, TextTruncate = Enum.TextTruncate.AtEnd,
+			BackgroundTransparency = 1, Position = UDim2.new(0, 10, 0, 5), Size = UDim2.new(1, -66, 0, 16), Parent = Brand,
+		})
+		if subtitleText ~= "" then
+			new("TextLabel", {
+				Text = subtitleText, Font = Theme.Font, TextSize = 10, TextColor3 = Theme.TextDim,
+				TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
+				BackgroundTransparency = 1, Position = UDim2.new(0, 10, 0, 22), Size = UDim2.new(1, -20, 0, 14), Parent = Brand,
+			})
 		end
-	end))
-	track(UserInputService.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			dragKind = nil
-		end
-	end))
-	track(TabStrip.MouseWheelForward:Connect(function() TabStrip.CanvasPosition = Vector2.new(math.max(0, TabStrip.CanvasPosition.X - 40), 0) end))
-	track(TabStrip.MouseWheelBackward:Connect(function() TabStrip.CanvasPosition = Vector2.new(TabStrip.CanvasPosition.X + 40, 0) end))
+		local ClockLabel = new("TextLabel", {
+			Text = os.date("%H:%M:%S"), Font = Theme.FontMono, TextSize = 11, TextColor3 = Theme.Active,
+			TextXAlignment = Enum.TextXAlignment.Right, TextYAlignment = Enum.TextYAlignment.Top, BackgroundTransparency = 1,
+			Position = UDim2.new(1, -58, 0, 6), Size = UDim2.new(0, 50, 0, 14), Parent = Brand,
+		})
+		onAccent(function() if ClockLabel.Parent then ClockLabel.TextColor3 = Theme.Active end end)
+		task.spawn(function() while ClockLabel.Parent do ClockLabel.Text = os.date("%H:%M:%S") task.wait(1) end end)
+		makeDraggable(Window, Brand, Brand, nil, nil)
+	end
 
 	-- Mostrar/ocultar con una tecla. config.ToggleKey = false/nil desactiva el atajo.
 	local toggleKey = config.ToggleKey
 	if toggleKey == nil then toggleKey = Enum.KeyCode.K end
 	if toggleKey then
-		track(UserInputService.InputBegan:Connect(function(input, gameProcessed)
+		table.insert(Window._connections, UserInputService.InputBegan:Connect(function(input, gameProcessed)
 			if gameProcessed then return end
 			if input.KeyCode == toggleKey then
 				local ok, err = pcall(function() Window:Toggle() end)
@@ -509,11 +496,11 @@ function UI:CreateWindow(config)
 end
 
 function UI:Show()
-	self.Panel.Visible = true
+	self.Container.Visible = true
 	self._visible = true
 end
 function UI:Hide()
-	self.Panel.Visible = false
+	self.Container.Visible = false
 	self._visible = false
 end
 function UI:Toggle() if self._visible then self:Hide() else self:Show() end end
@@ -527,12 +514,9 @@ end
 -- 	NOTIFICACIONES
 -- ============================================================
 -- Window:Notify("Listo") o Window:Notify({ Title = "...", Text = "...",
--- Duration = 3 }). Aparece abajo a la derecha de la pantalla, en una
--- tarjetita redondeada, se queda Duration segundos (3 por defecto) y
--- se va sola con un fundido. Si mandás varias, se apilan: la más
--- nueva queda pegada a la esquina y las anteriores se corren hacia
--- arriba. Es un fundido de entrada y uno de salida nada más — no
--- queda nada corriendo en bucle, así que no cuesta rendimiento.
+-- Duration = 3 }). Aparece abajo a la derecha, en una tarjetita
+-- redondeada, se queda Duration segundos (3 por defecto) y se va sola
+-- con un fundido. Si mandás varias, se apilan.
 function UI:Notify(config)
 	if typeof(config) == "string" then config = { Text = config } end
 	config = config or {}
@@ -569,13 +553,11 @@ function UI:Notify(config)
 	self._notifyCount = (self._notifyCount or 0) + 1
 	local cardH = hasTitle and 54 or 40
 
-	-- CanvasGroup para que el fundido de entrada/salida mueva TODO junto
-	-- (fondo, borde, barrita de acento y texto) con una sola propiedad.
 	local Card = new("CanvasGroup", {
 		Name = "Notification",
 		Size = UDim2.new(1, 0, 0, cardH),
 		BackgroundColor3 = Theme.Panel,
-		GroupTransparency = 1, -- arranca invisible
+		GroupTransparency = 1,
 		ClipsDescendants = true,
 		LayoutOrder = self._notifyCount,
 		ZIndex = 101,
@@ -622,75 +604,209 @@ function UI:Notify(config)
 end
 
 -- ============================================================
--- 	CREATE TAB
+-- 	CREATE TAB — la tarjeta flotante con su lista
 -- ============================================================
 function UI:CreateTab(config)
 	if typeof(config) == "string" then config = { Name = config } end
 	config = config or {}
-	local name = config.Text or config.Name or config.Title or ("Tab " .. (#self._tabs + 1))
-	if self.EmptyHint then self.EmptyHint:Destroy() self.EmptyHint = nil end
+	local window = self
+	local name = tostring(config.Text or config.Name or config.Title or ("Tab " .. (#self._tabs + 1)))
 
-	local collapsedW = math.clamp(#name * 6 + 16, 36, 96)
-	local Pill = new("TextButton", {
-		Text = "", AutoButtonColor = false, BackgroundColor3 = Theme.Field, BackgroundTransparency = 0,
-		Size = UDim2.new(0, collapsedW, 0, 22), Position = UDim2.new(0, self._tabX, 0, 3),
-		ZIndex = 4, Parent = self.TabStrip,
-	}, { corner(10), stroke(Theme.Border, 1) })
-	self._tabX = self._tabX + collapsedW + 6
-	self.TabStrip.CanvasSize = UDim2.new(0, self._tabX + 8, 0, 0)
+	local openW = self._cardW
+	local titleW = textW(name, 12, Theme.FontTitle)
+	local closedW = math.clamp(math.ceil(titleW) + 62, 70, openW)
 
-	new("TextLabel", {
-		Text = name, Font = Theme.FontBold, TextSize = 10, TextColor3 = Theme.Text, TextTruncate = Enum.TextTruncate.AtEnd,
-		BackgroundTransparency = 1, Size = UDim2.new(1, -6, 1, 0), Position = UDim2.new(0, 3, 0, 0), ZIndex = 5, Parent = Pill,
+	-- Posición automática: en fila, cada una con su espacio para las
+	-- píldoras. Si no entra otra en la pantalla, baja a una fila nueva.
+	local x, y = self._cursorX, self._cursorY
+	local cam = workspace.CurrentCamera
+	local vpX = cam and cam.ViewportSize.X or 1280
+	if x > self._startX and x + openW + self._sideW > vpX - 6 then
+		x = self._startX
+		y = y + self._rowPitch
+	end
+	self._cursorX = x + self._pitch
+	self._cursorY = y
+
+	local shouldOpen = config.Open
+	if shouldOpen == nil then shouldOpen = (#self._tabs == 0) end
+
+	self._z = self._z + 1
+	-- Root: punto de anclaje que se arrastra. Nada recorta a nada, así
+	-- las píldoras pueden salirse por el costado de la tarjeta.
+	local Root = new("Frame", {
+		Name = "Tab_" .. name, Size = UDim2.new(0, 0, 0, 0), Position = config.Position or UDim2.new(0, x, 0, y),
+		BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = self._z, Parent = self.Container,
 	})
+
+	local Card = new("Frame", {
+		Name = "Card", Size = UDim2.new(0, closedW, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = Theme.Background, BackgroundTransparency = Theme.Alpha, BorderSizePixel = 0, Parent = Root,
+	}, {
+		corner(14), accentStroke(1.5),
+		new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 0) }),
+	})
+
+	local Header = new("Frame", { Size = UDim2.new(1, 0, 0, HEADER_H), BackgroundTransparency = 1, LayoutOrder = 1, Parent = Card })
+	local Title = new("TextLabel", {
+		Text = name, Font = Theme.FontTitle, TextSize = 12, TextColor3 = Theme.Active,
+		TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, BackgroundTransparency = 1,
+		Position = UDim2.new(0, 10, 0, 0), Size = UDim2.new(1, -60, 1, 0), Parent = Header,
+	})
+	onAccent(function() if Title.Parent then Title.TextColor3 = Theme.Active end end)
+	local Counter = new("TextLabel", {
+		Text = "0 / 0", Font = Theme.FontMono, TextSize = 9, TextColor3 = Theme.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Right, BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -9, 0, 0), Size = UDim2.new(0, 42, 1, 0), Parent = Header,
+	})
+	local HeaderBtn = new("TextButton", { Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Parent = Header })
 
 	local List = new("Frame", {
 		Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1,
-		Visible = false, Parent = self.ContentScroll,
-	}, { new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }) })
+		LayoutOrder = 2, Visible = false, Parent = Card,
+	}, {
+		pad(0, 2, 6, 8, 6),
+		new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }),
+	})
 
-	local Tab = setmetatable({ Window = self, Pill = Pill, List = List, Name = name, _isOpen = false, _rowCount = 0 }, UI)
+	local Tab = setmetatable({
+		Window = self, Root = Root, Card = Card, List = List, Name = name,
+		_isOpen = false, _rowCount = 0, _opts = {},
+	}, UI)
 
-	local hovering = false
-	local function paintPill()
-		if Tab._isOpen then
-			tween(Pill, { BackgroundColor3 = Theme.Border, BackgroundTransparency = 0.12 }, 0.12)
-		else
-			tween(Pill, { BackgroundColor3 = hovering and Theme.LineOpen or Theme.Field, BackgroundTransparency = 0 }, 0.12)
-		end
+	Tab._recount = function()
+		local active = 0
+		for _, o in ipairs(Tab._opts) do if o.Active then active = active + 1 end end
+		Counter.Text = string.format("%d / %d", active, #Tab._opts)
 	end
-	onAccent(function() if Pill.Parent and Tab._isOpen then Pill.BackgroundColor3 = Theme.Border end end)
-	Pill.MouseEnter:Connect(function() hovering = true paintPill() end)
-	Pill.MouseLeave:Connect(function() hovering = false paintPill() end)
+	-- Trae esta tarjeta al frente (para que sus píldoras tapen a las vecinas).
+	Tab._front = function()
+		window._z = window._z + 1
+		Root.ZIndex = window._z
+	end
 
 	local function setOpen(open)
-		if open then
-			for _, other in ipairs(self._tabs) do
-				if other ~= Tab and other._isOpen then
-					other._isOpen = false
-					other.List.Visible = false
-					if other._paint then other._paint() end
-				end
-			end
-			Tab._isOpen = true
-			List.Visible = true
-			paintPill()
-		else
-			Tab._isOpen = false
-			List.Visible = false
-			paintPill()
-		end
+		Tab._isOpen = open
+		List.Visible = open
+		tween(Card, { Size = UDim2.new(0, open and openW or closedW, 0, 0) }, 0.14)
+		if open then Tab._front() end
 	end
-	Tab._paint = paintPill
+	Tab.Open = function() setOpen(true) end
+	Tab.Close = function() setOpen(false) end
+	Tab.SetOpen = function(_, open) setOpen(not not open) end
 
-	Pill.MouseButton1Click:Connect(function()
-		if self._dragMoved then return end
-		setOpen(not Tab._isOpen)
-	end)
+	-- Click en la cabecera abre/cierra; arrastrarla mueve la tarjeta.
+	makeDraggable(self, HeaderBtn, Root, function() setOpen(not Tab._isOpen) end, Tab._front)
 
 	table.insert(self._tabs, Tab)
-	if #self._tabs == 1 then task.defer(function() setOpen(true) end) end
+	setOpen(shouldOpen)
 	return Tab
+end
+
+-- ============================================================
+-- 	OPCIÓN = fila en la lista + píldora lateral
+-- ============================================================
+-- Crea la fila (puntito, nombre, flechita) y la píldora vacía que se
+-- despliega al costado. Cada control llena la píldora a su manera.
+local function makeOption(tab, labelText, pillW)
+	local Row = new("Frame", {
+		Size = UDim2.new(1, 0, 0, ROW_H), BackgroundColor3 = Theme.RowIdle, BorderSizePixel = 0,
+		LayoutOrder = nextOrder(tab), Parent = tab.List,
+	}, { corner(9) })
+
+	local Dot = new("Frame", {
+		Size = UDim2.new(0, 7, 0, 7), AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 9, 0.5, 0),
+		BackgroundColor3 = Theme.Active, BackgroundTransparency = 1, BorderSizePixel = 0, Parent = Row,
+	}, { circle() })
+	local DotStroke = new("UIStroke", { Color = Theme.Active, Thickness = 1.2, Parent = Dot })
+	onAccent(function() if Dot.Parent then Dot.BackgroundColor3 = Theme.Active DotStroke.Color = Theme.Active end end)
+
+	new("TextLabel", {
+		Text = tostring(labelText), Font = Theme.FontBold, TextSize = 10, TextColor3 = Theme.Text,
+		TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, BackgroundTransparency = 1,
+		Position = UDim2.new(0, 23, 0, 0), Size = UDim2.new(1, -50, 1, 0), Parent = Row,
+	})
+
+	local Chev = new("Frame", {
+		Size = UDim2.new(0, 16, 0, 16), AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -5, 0.5, 0),
+		BackgroundColor3 = Theme.Background, BorderSizePixel = 0, Parent = Row,
+	}, { circle(), accentStroke(1) })
+	local ChevText = new("TextLabel", {
+		Text = "›", Font = Theme.FontBold, TextSize = 14, TextColor3 = Theme.Active, BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 1, 0), Position = UDim2.new(0, 0, 0, -1), Parent = Chev,
+	})
+
+	-- La píldora es hija de la fila pero se dibuja afuera de la tarjeta.
+	local Pill = new("Frame", {
+		Name = "Pill", Visible = false, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(1, 4, 0.5, 0),
+		Size = UDim2.new(0, pillW, 0, PILL_H), BackgroundColor3 = Theme.Panel, BorderSizePixel = 0, Parent = Row,
+	}, { corner(PILL_H / 2), accentStroke(1.5) })
+	local PillScale = new("UIScale", { Scale = 1, Parent = Pill })
+
+	local Click = new("TextButton", { Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Parent = Row })
+
+	local opt = { Row = Row, Pill = Pill, Open = false, Active = false }
+	local hovering = false
+
+	local function paintRow()
+		local color = (opt.Open and Theme.LineOpen) or (hovering and Theme.Field) or Theme.RowIdle
+		tween(Row, { BackgroundColor3 = color }, 0.12)
+		if opt.Open then
+			tween(Chev, { BackgroundColor3 = Theme.Active }, 0.12)
+			ChevText.Text = "‹"
+			ChevText.TextColor3 = Color3.new(1, 1, 1)
+		else
+			tween(Chev, { BackgroundColor3 = Theme.Background }, 0.12)
+			ChevText.Text = "›"
+			ChevText.TextColor3 = Theme.Active
+		end
+	end
+	onAccent(function()
+		if not Row.Parent then return end
+		if opt.Open then Chev.BackgroundColor3 = Theme.Active else ChevText.TextColor3 = Theme.Active end
+	end)
+
+	function opt.SetActive(active)
+		active = not not active
+		opt.Active = active
+		tween(Dot, { BackgroundTransparency = active and 0 or 1 }, 0.12)
+		tab._recount()
+	end
+	function opt.Flash()
+		Dot.BackgroundTransparency = 0
+		tween(Dot, { BackgroundTransparency = opt.Active and 0 or 1 }, 0.4)
+	end
+	function opt.SetOpen(open)
+		opt.Open = open
+		Pill.Visible = open
+		if open then
+			PillScale.Scale = 0.7
+			tween(PillScale, { Scale = 1 }, 0.16, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+			tab._front()
+		end
+		paintRow()
+	end
+
+	Click.MouseEnter:Connect(function() hovering = true paintRow() end)
+	Click.MouseLeave:Connect(function() hovering = false paintRow() end)
+	Click.MouseButton1Click:Connect(function() opt.SetOpen(not opt.Open) end)
+
+	table.insert(tab._opts, opt)
+	tab._recount()
+	return opt
+end
+
+-- Botoncito redondo con flecha, para dentro de las píldoras (‹ ›).
+local function stepButton(parent, text, x)
+	local b = new("TextButton", {
+		Text = text, Font = Theme.FontBold, TextSize = 13, TextColor3 = Theme.Active, AutoButtonColor = false,
+		BackgroundColor3 = Theme.Field, BorderSizePixel = 0, Size = UDim2.new(0, 15, 0, 15),
+		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, x, 0.5, 0), Parent = parent,
+	}, { circle(), accentStroke(1) })
+	onAccent(function() if b.Parent then b.TextColor3 = Theme.Active end end)
+	b.MouseEnter:Connect(function() tween(b, { BackgroundColor3 = Theme.LineOpen }, 0.1) end)
+	b.MouseLeave:Connect(function() tween(b, { BackgroundColor3 = Theme.Field }, 0.1) end)
+	return b
 end
 
 -- ============================================================
@@ -703,22 +819,23 @@ function UI:CreateButton(config)
 	local list, window, owner = host(self)
 	if not list then return setmetatable({}, Stub) end
 
+	local opt = makeOption(owner, text, 84)
+	local Pill = opt.Pill
 	local Btn = new("TextButton", {
-		Text = text, Font = Theme.FontBold, TextSize = 11, TextColor3 = Theme.Text, TextTruncate = Enum.TextTruncate.AtEnd,
-		AutoButtonColor = false, BackgroundColor3 = Theme.Field, BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 26), LayoutOrder = nextOrder(owner), Parent = list,
-	}, { corner(8) })
-	hoverField(Btn, Theme.Field)
+		Text = config.ButtonText or "Ejecutar", Font = Theme.FontBold, TextSize = 10, TextColor3 = Theme.Text,
+		AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Parent = Pill,
+	})
 
 	local Button = setmetatable({ Instance = Btn, Callback = callback, _threads = {} }, UI)
 	function Button:Set(...)
-		-- Destello rosa de fondo que se apaga solo.
-		Btn.BackgroundColor3 = Theme.ActiveDim
-		tween(Btn, { BackgroundColor3 = Theme.LineOpen }, 0.3)
-		Btn.TextColor3 = Theme.Active
-		task.delay(0.15, function()
+		-- Destello rosa de la píldora que se apaga solo.
+		Pill.BackgroundColor3 = Theme.Active
+		tween(Pill, { BackgroundColor3 = Theme.Panel }, 0.3)
+		Btn.TextColor3 = Color3.new(1, 1, 1)
+		task.delay(0.2, function()
 			if Btn.Parent then Btn.TextColor3 = Theme.Text end
 		end)
+		opt.Flash()
 		return safeCall(self, self.Callback, ...)
 	end
 	Button.Fire = Button.Set
@@ -738,41 +855,48 @@ function UI:CreateToggle(config)
 	local list, window, owner = host(self)
 	if not list then return setmetatable({}, Stub) end
 
-	local Row = new("Frame", { Size = UDim2.new(1, 0, 0, 26), BackgroundColor3 = Theme.Field, BorderSizePixel = 0, LayoutOrder = nextOrder(owner), Parent = list }, { corner(8) })
-	hoverField(Row, Theme.Field)
-	new("TextLabel", {
-		Text = config.Text or config.Name or "Opción", Font = Theme.Font, TextSize = 11, TextColor3 = Theme.Text,
-		TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, BackgroundTransparency = 1,
-		Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(1, -36, 1, 0), Parent = Row,
-	})
-	-- Apagado: caja clara con bordecito rosa fino para saber dónde
-	-- tocar. Prendido: caja rellena de rosa fuerte, con un saltito y un
-	-- brillo suave al cambiar.
-	local Box = new("Frame", { Size = UDim2.new(0, 12, 0, 12), Position = UDim2.new(1, -20, 0.5, -6), BackgroundColor3 = state and Theme.Active or Theme.Field, BorderSizePixel = 0, Parent = Row }, { corner(4) })
-	local BoxPop = new("UIScale", { Scale = 1, Parent = Box })
-	local BoxGlow = new("UIStroke", { Color = Theme.Active, Thickness = state and 1.6 or 1.3, Transparency = 0, Parent = Box })
+	local opt = makeOption(owner, config.Text or config.Name or "Opción", 70)
+	local Pill = opt.Pill
+	local OFF_POS, ON_POS = UDim2.new(0, 7, 0.5, 0), UDim2.new(1, -7, 0.5, 0)
 
-	local Toggle = setmetatable({ Box = Box, Value = state, Callback = callback, _threads = {} }, UI)
+	local StateLabel = new("TextLabel", {
+		Text = state and "ON" or "OFF", Font = Theme.FontMono, TextSize = 10,
+		TextColor3 = state and Theme.Active or Theme.TextDim, TextXAlignment = Enum.TextXAlignment.Left,
+		BackgroundTransparency = 1, Position = UDim2.new(0, 11, 0, 0), Size = UDim2.new(0, 24, 1, 0), Parent = Pill,
+	})
+	local Track = new("Frame", {
+		Size = UDim2.new(0, 28, 0, 14), AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0),
+		BackgroundColor3 = state and Theme.Active or Theme.Line, BorderSizePixel = 0, Parent = Pill,
+	}, { circle(), accentStroke(1) })
+	local Knob = new("Frame", {
+		Size = UDim2.new(0, 10, 0, 10), AnchorPoint = Vector2.new(0.5, 0.5), Position = state and ON_POS or OFF_POS,
+		BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Parent = Track,
+	}, { circle() })
+
+	local Toggle = setmetatable({ Value = state, Callback = callback, _threads = {} }, UI)
 	onAccent(function()
-		if Box.Parent then
-			Box.BackgroundColor3 = Toggle.Value and Theme.Active or Theme.Field
-			BoxGlow.Color = Theme.Active
+		if Track.Parent then
+			StateLabel.TextColor3 = Toggle.Value and Theme.Active or Theme.TextDim
+			Track.BackgroundColor3 = Toggle.Value and Theme.Active or Theme.Line
 		end
 	end)
 
 	function Toggle:Set(newState)
 		newState = not not newState
 		self.Value = newState
-		tween(Box, { BackgroundColor3 = newState and Theme.Active or Theme.Field })
-		tween(BoxGlow, { Thickness = newState and 1.6 or 1.3 }, 0.18)
-		BoxPop.Scale = 1.4
-		tween(BoxPop, { Scale = 1 }, 0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+		StateLabel.Text = newState and "ON" or "OFF"
+		StateLabel.TextColor3 = newState and Theme.Active or Theme.TextDim
+		tween(Track, { BackgroundColor3 = newState and Theme.Active or Theme.Line }, 0.15)
+		tween(Knob, { Position = newState and ON_POS or OFF_POS }, 0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+		opt.SetActive(newState)
 		setFlagValue(config.Flag, newState)
 		return safeCall(self, self.Callback, newState)
 	end
 	function Toggle:Get() return self.Value end
 	function Toggle:Stop() stopAllThreads(self) end
-	local Click = new("TextButton", { Text = "", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Parent = Row })
+
+	opt.SetActive(state)
+	local Click = new("TextButton", { Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Parent = Pill })
 	table.insert(window._connections, Click.MouseButton1Click:Connect(function() Toggle:Set(not Toggle.Value) end))
 	registerFlag(config.Flag, Toggle, state)
 	return Toggle
@@ -792,52 +916,62 @@ function UI:CreateSlider(config)
 	local function snap(v) v = math.clamp(v, min, max) return math.clamp(min + math.floor((v - min) / step + 0.5) * step, min, max) end
 	local function show(v) if decimals > 0 then return string.format("%." .. decimals .. "f", v) end return tostring(math.floor(v + 0.5)) end
 	local value = snap(config.Default or config.CurrentValue or min)
+	local initial = value
 
 	local list, window, owner = host(self)
 	if not list then return setmetatable({}, Stub) end
 
-	local Row = new("Frame", { Size = UDim2.new(1, 0, 0, 38), BackgroundColor3 = Theme.Field, BorderSizePixel = 0, LayoutOrder = nextOrder(owner), Parent = list }, { corner(8), pad(0, 5, 8, 5, 8) })
-	new("TextLabel", {
-		Text = config.Text or config.Name or "Valor", Font = Theme.Font, TextSize = 11, TextColor3 = Theme.Text,
-		TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, BackgroundTransparency = 1,
-		Size = UDim2.new(1, -46, 0, 14), Parent = Row,
-	})
-	local ValueLabel = new("TextLabel", {
-		Text = show(value), Font = Theme.FontBold, TextSize = 11, TextColor3 = Theme.Active, TextXAlignment = Enum.TextXAlignment.Right,
-		BackgroundTransparency = 1, Size = UDim2.new(0, 42, 0, 14), Position = UDim2.new(1, -42, 0, 0), Parent = Row,
-	})
-	onAccent(function() if ValueLabel.Parent then ValueLabel.TextColor3 = Theme.Active end end)
-	-- Track claro (sin rosa fuerte) + Fill rosa: contraste claro, como un slider normal.
-	local Track = new("Frame", { Size = UDim2.new(1, 0, 0, 4), Position = UDim2.new(0, 0, 1, -8), BackgroundColor3 = Theme.Line, BorderSizePixel = 0, Parent = Row }, { stroke(Theme.Border, 1), corner(2) })
+	local W = 146
+	local opt = makeOption(owner, config.Text or config.Name or "Valor", W)
+	local Pill = opt.Pill
+
+	local Dec = stepButton(Pill, "‹", 5)
+	local Inc = stepButton(Pill, "›", W - 20)
+	local Hit = new("Frame", { Size = UDim2.new(0, 60, 0, 18), Position = UDim2.new(0, 25, 0.5, -9), BackgroundTransparency = 1, Parent = Pill })
+	local Track = new("Frame", {
+		Size = UDim2.new(1, 0, 0, 4), AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0),
+		BackgroundColor3 = Theme.Line, BorderSizePixel = 0, Parent = Hit,
+	}, { corner(2) })
 	local function ratio(v) return (v - min) / (max - min) end
 	local Fill = new("Frame", { Size = UDim2.new(ratio(value), 0, 1, 0), BackgroundColor3 = Theme.Active, BorderSizePixel = 0, Parent = Track }, { corner(2) })
 	onAccent(function() if Fill.Parent then Fill.BackgroundColor3 = Theme.Active end end)
-	local Knob = new("Frame", { Size = UDim2.new(0, 9, 0, 9), Position = UDim2.new(ratio(value), -4, 0.5, -4), BackgroundColor3 = Color3.fromRGB(255, 255, 255), BorderSizePixel = 0, Parent = Track }, { corner(4), stroke(Theme.Border, 1) })
+	local Knob = new("Frame", {
+		Size = UDim2.new(0, 9, 0, 9), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(ratio(value), 0, 0.5, 0),
+		BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Parent = Track,
+	}, { circle(), accentStroke(1.2) })
 	local KnobPop = new("UIScale", { Scale = 1, Parent = Knob })
+	local ValueLabel = new("TextLabel", {
+		Text = show(value), Font = Theme.FontMono, TextSize = 10, TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Center,
+		BackgroundTransparency = 1, Position = UDim2.new(0, 88, 0, 0), Size = UDim2.new(0, 34, 1, 0), Parent = Pill,
+	})
 
 	local Slider = setmetatable({ Track = Track, Fill = Fill, Knob = Knob, Value = value, Min = min, Max = max, Callback = callback, _threads = {} }, UI)
 	local function repaint(v)
 		local r = ratio(v)
 		Fill.Size = UDim2.new(r, 0, 1, 0)
-		Knob.Position = UDim2.new(r, -4, 0.5, -4)
+		Knob.Position = UDim2.new(r, 0, 0.5, 0)
 		ValueLabel.Text = show(v)
 	end
 	function Slider:Set(newValue, whileDragging)
 		newValue = snap(tonumber(newValue) or min)
 		self.Value = newValue
 		repaint(newValue)
+		opt.SetActive(newValue ~= initial)
 		setFlagValue(config.Flag, newValue, whileDragging)
 		return safeCall(self, self.Callback, newValue)
 	end
 	function Slider:Get() return self.Value end
 	function Slider:Stop() stopAllThreads(self) end
 
+	table.insert(window._connections, Dec.MouseButton1Click:Connect(function() Slider:Set(Slider.Value - step) end))
+	table.insert(window._connections, Inc.MouseButton1Click:Connect(function() Slider:Set(Slider.Value + step) end))
+
 	local dragging = false
 	local function setFromX(xPos)
 		local relative = math.clamp((xPos - Track.AbsolutePosition.X) / math.max(Track.AbsoluteSize.X, 1), 0, 1)
 		Slider:Set(min + relative * (max - min), dragging)
 	end
-	table.insert(window._connections, Track.InputBegan:Connect(function(input)
+	table.insert(window._connections, Hit.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			dragging = true
 			tween(KnobPop, { Scale = 1.5 }, 0.1)
@@ -857,6 +991,7 @@ function UI:CreateSlider(config)
 			setFlagValue(config.Flag, Slider.Value)
 		end
 	end))
+	opt.SetActive(false)
 	registerFlag(config.Flag, Slider, value)
 	return Slider
 end
@@ -871,68 +1006,55 @@ function UI:CreateDropdown(config)
 	local wanted = config.Default
 	if wanted == nil then wanted = config.CurrentOption end
 	if wanted ~= nil and isValid(wanted) then selected = wanted end
+	local initial = selected
 
 	local list, window, owner = host(self)
 	if not list then return setmetatable({}, Stub) end
 
-	local Row = new("Frame", { Size = UDim2.new(1, 0, 0, 26), BackgroundColor3 = Theme.Field, BorderSizePixel = 0, ClipsDescendants = true, LayoutOrder = nextOrder(owner), Parent = list }, { corner(8) })
-	new("TextLabel", { Text = config.Text or config.Name or "Opciones", Font = Theme.Font, TextSize = 11, TextColor3 = Theme.TextDim, TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1, Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(0.45, 0, 0, 26), Parent = Row })
-	local SelectedLabel = new("TextLabel", { Text = selected ~= nil and display(selected) or "-", Font = Theme.FontBold, TextSize = 11, TextColor3 = Theme.Active, TextXAlignment = Enum.TextXAlignment.Right, TextTruncate = Enum.TextTruncate.AtEnd, BackgroundTransparency = 1, Position = UDim2.new(0.45, 0, 0, 0), Size = UDim2.new(0.55, -20, 0, 26), Parent = Row })
-	onAccent(function() if SelectedLabel.Parent then SelectedLabel.TextColor3 = Theme.Active end end)
-	local Arrow = new("TextLabel", { Text = "+", Font = Theme.FontBold, TextSize = 12, TextColor3 = Theme.TextDim, BackgroundTransparency = 1, Position = UDim2.new(1, -16, 0, 0), Size = UDim2.new(0, 14, 0, 26), Parent = Row })
-	local ROW_H = 26
-	local ListFrame = new("ScrollingFrame", {
-		Size = UDim2.new(1, -12, 0, math.min(math.max(#options, 1), 5) * 20 + 6), Position = UDim2.new(0, 6, 0, ROW_H),
-		BackgroundColor3 = Theme.Line, BorderSizePixel = 0, ScrollBarThickness = 2, ScrollBarImageColor3 = Theme.Border,
-		CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, Parent = Row,
-	}, { stroke(Theme.Border, 1), pad(3), new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }) })
+	local W = 126
+	local opt = makeOption(owner, config.Text or config.Name or "Opciones", W)
+	local Pill = opt.Pill
+	local Prev = stepButton(Pill, "‹", 5)
+	local Next = stepButton(Pill, "›", W - 20)
+	local SelectedBtn = new("TextButton", {
+		Text = selected ~= nil and display(selected) or "-", Font = Theme.FontMono, TextSize = 10, TextColor3 = Theme.Text,
+		TextTruncate = Enum.TextTruncate.AtEnd, AutoButtonColor = false, BackgroundTransparency = 1,
+		Position = UDim2.new(0, 24, 0, 0), Size = UDim2.new(1, -48, 1, 0), Parent = Pill,
+	})
 
 	local Dropdown = setmetatable({ Value = selected, Options = options, Callback = callback, _threads = {} }, UI)
 	function Dropdown:Set(option)
 		self.Value = option
-		SelectedLabel.Text = display(option)
+		SelectedBtn.Text = display(option)
+		opt.SetActive(option ~= initial)
 		setFlagValue(config.Flag, option)
 		return safeCall(self, self.Callback, option)
 	end
 	function Dropdown:Get() return self.Value end
 	function Dropdown:Stop() stopAllThreads(self) end
-
-	local setOpen
-	local function buildOptions()
-		for _, child in ipairs(ListFrame:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
-		for index, optionValue in ipairs(Dropdown.Options) do
-			local OptionBtn = new("TextButton", {
-				Text = display(optionValue), Font = Theme.Font, TextSize = 10, TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left,
-				TextTruncate = Enum.TextTruncate.AtEnd, AutoButtonColor = false, BackgroundColor3 = Theme.Field, BorderSizePixel = 0,
-				Size = UDim2.new(1, 0, 0, 18), LayoutOrder = index, Parent = ListFrame,
-			}, { corner(5), pad(0, 0, 4, 0, 4) })
-			OptionBtn.MouseEnter:Connect(function() tween(OptionBtn, { BackgroundColor3 = Theme.LineOpen }) end)
-			OptionBtn.MouseLeave:Connect(function() tween(OptionBtn, { BackgroundColor3 = Theme.Field }) end)
-			table.insert(window._connections, OptionBtn.MouseButton1Click:Connect(function()
-				Dropdown:Set(optionValue)
-				if setOpen then setOpen(false) end
-			end))
-		end
-	end
 	function Dropdown:Refresh(newOptions, keepSelection)
 		self.Options = newOptions or {}
 		options = self.Options
-		buildOptions()
-		ListFrame.Size = UDim2.new(1, -12, 0, math.min(math.max(#self.Options, 1), 5) * 20 + 6)
 		if not keepSelection then
 			self.Value = self.Options[1]
-			SelectedLabel.Text = self.Value ~= nil and display(self.Value) or "-"
+			SelectedBtn.Text = self.Value ~= nil and display(self.Value) or "-"
 		end
 	end
 	Dropdown.SetOptions = Dropdown.Refresh
-	buildOptions()
-	local Click = new("TextButton", { Text = "", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, ROW_H), Parent = Row })
-	function setOpen(open)
-		local h = math.min(math.max(#Dropdown.Options, 1), 5) * 20 + 6
-		Row.Size = UDim2.new(1, 0, 0, open and (ROW_H + h + 2) or ROW_H)
-		Arrow.Text = open and "-" or "+"
+
+	-- Las flechas (y tocar el nombre) pasan a la opción anterior/siguiente, dando la vuelta.
+	local function stepBy(dir)
+		local opts = Dropdown.Options
+		if #opts == 0 then return end
+		local idx = table.find(opts, Dropdown.Value) or 0
+		idx = ((idx - 1 + dir) % #opts) + 1
+		Dropdown:Set(opts[idx])
 	end
-	table.insert(window._connections, Click.MouseButton1Click:Connect(function() setOpen(Row.Size.Y.Offset <= ROW_H) end))
+	table.insert(window._connections, Prev.MouseButton1Click:Connect(function() stepBy(-1) end))
+	table.insert(window._connections, Next.MouseButton1Click:Connect(function() stepBy(1) end))
+	table.insert(window._connections, SelectedBtn.MouseButton1Click:Connect(function() stepBy(1) end))
+
+	opt.SetActive(false)
 	registerFlag(config.Flag, Dropdown, selected)
 	return Dropdown
 end
@@ -943,14 +1065,14 @@ function UI:CreateInput(config)
 	local list, window, owner = host(self)
 	if not list then return setmetatable({}, Stub) end
 
-	local Row = new("Frame", { Size = UDim2.new(1, 0, 0, 26), BackgroundColor3 = Theme.Field, BorderSizePixel = 0, LayoutOrder = nextOrder(owner), Parent = list }, { corner(8) })
-	new("TextLabel", { Text = config.Text or config.Name or "Texto", Font = Theme.Font, TextSize = 11, TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1, Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(0.4, 0, 1, 0), Parent = Row })
+	local opt = makeOption(owner, config.Text or config.Name or "Texto", 134)
+	local Pill = opt.Pill
 	local Box = new("TextBox", {
 		Text = tostring(config.Default or config.CurrentValue or ""), PlaceholderText = config.PlaceholderText or config.Placeholder or "...",
-		Font = Theme.Font, TextSize = 10, TextColor3 = Theme.Text, PlaceholderColor3 = Theme.TextDim, TextXAlignment = Enum.TextXAlignment.Left,
-		ClearTextOnFocus = false, ClipsDescendants = true, BackgroundColor3 = Theme.Line, BorderSizePixel = 0,
-		Position = UDim2.new(0.42, 0, 0.5, -8), Size = UDim2.new(0.55, -8, 0, 16), Parent = Row,
-	}, { corner(5), stroke(Theme.Border, 1), pad(0, 0, 6, 0, 6) })
+		Font = Theme.FontMono, TextSize = 10, TextColor3 = Theme.Text, PlaceholderColor3 = Theme.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false, ClipsDescendants = true,
+		BackgroundTransparency = 1, Position = UDim2.new(0, 11, 0, 0), Size = UDim2.new(1, -22, 1, 0), Parent = Pill,
+	})
 
 	local Input = setmetatable({ Instance = Box, Value = Box.Text, Callback = callback, _threads = {} }, UI)
 	function Input:Set(text)
@@ -968,6 +1090,10 @@ function UI:CreateInput(config)
 			safeCall(Input, Input.Callback, Box.Text)
 		end
 	end))
+	table.insert(window._connections, Box:GetPropertyChangedSignal("Text"):Connect(function()
+		opt.SetActive(Box.Text ~= "")
+	end))
+	opt.SetActive(Box.Text ~= "")
 	registerFlag(config.Flag, Input, Box.Text)
 	return Input
 end
@@ -984,13 +1110,11 @@ function UI:CreateKeybind(config)
 	local list, window, owner = host(self)
 	if not list then return setmetatable({}, Stub) end
 
-	local Row = new("Frame", { Size = UDim2.new(1, 0, 0, 26), BackgroundColor3 = Theme.Field, BorderSizePixel = 0, LayoutOrder = nextOrder(owner), Parent = list }, { corner(8) })
-	new("TextLabel", { Text = config.Text or config.Name or "Tecla", Font = Theme.Font, TextSize = 11, TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1, Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(1, -64, 1, 0), Parent = Row })
+	local opt = makeOption(owner, config.Text or config.Name or "Tecla", 96)
 	local KeyButton = new("TextButton", {
-		Text = currentKey.Name, Font = Theme.FontBold, TextSize = 10, TextColor3 = Theme.Text, TextTruncate = Enum.TextTruncate.AtEnd,
-		AutoButtonColor = false, BackgroundColor3 = Theme.Line, BorderSizePixel = 0, Size = UDim2.new(0, 50, 0, 18),
-		Position = UDim2.new(1, -56, 0.5, -9), Parent = Row,
-	}, { corner(5), stroke(Theme.Border, 1) })
+		Text = currentKey.Name, Font = Theme.FontMono, TextSize = 10, TextColor3 = Theme.Text, TextTruncate = Enum.TextTruncate.AtEnd,
+		AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Parent = opt.Pill,
+	})
 
 	local Keybind = setmetatable({ Value = currentKey, Callback = callback, _threads = {} }, UI)
 	function Keybind:Set(keyCode)
@@ -1024,6 +1148,8 @@ function UI:CreateKeybind(config)
 	return Keybind
 end
 
+-- Los siguientes NO llevan píldora ni cuentan en el "x / y": son
+-- texto suelto dentro de la lista de la pestaña.
 function UI:CreateLabel(config)
 	local text = config
 	if typeof(config) == "table" then text = config.Text or config.Name or "" end
@@ -1033,7 +1159,7 @@ function UI:CreateLabel(config)
 		Text = tostring(text), Font = Theme.Font, TextSize = 10, TextColor3 = Theme.TextDim, TextXAlignment = Enum.TextXAlignment.Left,
 		TextWrapped = true, BackgroundTransparency = 1, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0),
 		LayoutOrder = nextOrder(owner), Parent = list,
-	})
+	}, { pad(0, 0, 4, 0, 4) })
 	local controller = setmetatable({ Instance = label }, UI)
 	function controller:Set(newText) label.Text = tostring(newText) end
 	return controller
@@ -1044,9 +1170,12 @@ function UI:CreateSection(config)
 	if typeof(config) == "table" then text = config.Text or config.Name or "Sección" end
 	local list, window, owner = host(self)
 	if not list then return setmetatable({}, Stub) end
-	local holder = new("Frame", { Size = UDim2.new(1, 0, 0, 16), BackgroundTransparency = 1, LayoutOrder = nextOrder(owner), Parent = list })
-	local label = new("TextLabel", { Text = string.upper(tostring(text)), Font = Theme.FontBold, TextSize = 9, TextColor3 = Theme.TextDim, TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Parent = holder })
-	local underline = new("Frame", { Size = UDim2.new(0, 14, 0, 2), Position = UDim2.new(0, 0, 1, -1), BackgroundColor3 = Theme.Active, BorderSizePixel = 0, Parent = holder }, { corner(1) })
+	local holder = new("Frame", { Size = UDim2.new(1, 0, 0, 18), BackgroundTransparency = 1, LayoutOrder = nextOrder(owner), Parent = list })
+	local label = new("TextLabel", {
+		Text = string.upper(tostring(text)), Font = Theme.FontBold, TextSize = 9, TextColor3 = Theme.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1, Position = UDim2.new(0, 4, 0, 0), Size = UDim2.new(1, -4, 1, -3), Parent = holder,
+	})
+	local underline = new("Frame", { Size = UDim2.new(0, 14, 0, 2), Position = UDim2.new(0, 4, 1, -2), BackgroundColor3 = Theme.Active, BorderSizePixel = 0, Parent = holder }, { corner(1) })
 	onAccent(function() if underline.Parent then underline.BackgroundColor3 = Theme.Active end end)
 	local controller = setmetatable({ Instance = label }, UI)
 	function controller:Set(newText) label.Text = string.upper(tostring(newText)) end
@@ -1066,10 +1195,18 @@ function UI:CreateStat(config)
 	config = config or {}
 	local list, window, owner = host(self)
 	if not list then return setmetatable({}, Stub) end
-	local holder = new("Frame", { Size = UDim2.new(1, 0, 0, 32), BackgroundColor3 = Theme.Field, BorderSizePixel = 0, LayoutOrder = nextOrder(owner), Parent = list }, { corner(8), pad(0, 4, 8, 4, 8) })
-	local ValueLabel = new("TextLabel", { Text = tostring(config.Value or "0"), Font = Theme.FontBold, TextSize = 15, TextColor3 = Theme.Active, TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 16), Parent = holder })
+	local holder = new("Frame", { Size = UDim2.new(1, 0, 0, ROW_H), BackgroundColor3 = Theme.RowIdle, BorderSizePixel = 0, LayoutOrder = nextOrder(owner), Parent = list }, { corner(9) })
+	new("TextLabel", {
+		Text = config.Label or config.Text or config.Name or "", Font = Theme.Font, TextSize = 10, TextColor3 = Theme.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, BackgroundTransparency = 1,
+		Position = UDim2.new(0, 10, 0, 0), Size = UDim2.new(0.5, -10, 1, 0), Parent = holder,
+	})
+	local ValueLabel = new("TextLabel", {
+		Text = tostring(config.Value or "0"), Font = Theme.FontMono, TextSize = 11, TextColor3 = Theme.Active,
+		TextXAlignment = Enum.TextXAlignment.Right, TextTruncate = Enum.TextTruncate.AtEnd, BackgroundTransparency = 1,
+		Position = UDim2.new(0.5, 0, 0, 0), Size = UDim2.new(0.5, -10, 1, 0), Parent = holder,
+	})
 	onAccent(function() if ValueLabel.Parent then ValueLabel.TextColor3 = Theme.Active end end)
-	new("TextLabel", { Text = config.Label or config.Text or config.Name or "", Font = Theme.Font, TextSize = 9, TextColor3 = Theme.TextDim, TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 16), Size = UDim2.new(1, 0, 0, 10), Parent = holder })
 	local Stat = setmetatable({ Instance = ValueLabel, Value = config.Value or "0" }, UI)
 	function Stat:Set(newValue) self.Value = newValue ValueLabel.Text = tostring(newValue) end
 	registerFlag(config.Flag, Stat, config.Value)
