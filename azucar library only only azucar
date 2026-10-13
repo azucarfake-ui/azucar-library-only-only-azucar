@@ -15,7 +15,7 @@
 	  • Scroll SIN barrita: con la rueda del mouse o arrastrando (o con el
 	    dedo). Si hay más pestañas de las que entran, la fila se desplaza
 	    de costado (rueda o arrastrando una cabecera). Si una pestaña
-	    tiene más opciones de las que entran (MaxListHeight), su lista se
+	    tiene más opciones de las que entran en la pantalla, su lista se
 	    desplaza para arriba/abajo.
 	  • Tocás una opción (toggle, slider, dropdown, input, tecla o
 	    botón) y se despliega al costado una píldora con el control:
@@ -48,7 +48,7 @@
 			CornerStyle = "Round",   -- "Round" | "Sharp"
 			TabWidth    = 134,       -- ancho de una pestaña abierta
 			SideWidth   = 148,       -- espacio entre pestañas para las píldoras
-			MaxListHeight = 200,     -- alto máximo de cada lista; con más opciones scrollea
+			-- MaxListHeight = 250,  -- opcional: tope de alto de cada lista (por defecto, hasta el borde de la pantalla)
 			Position    = UDim2.new(0, 12, 0, 10), -- dónde arranca todo
 			ShowBrand   = true,
 			AutoSaveConfig  = true,
@@ -106,7 +106,6 @@ local ROW_H    = 24   -- alto de cada opción
 local PILL_H   = 22   -- alto de la píldora lateral
 local START_X, START_Y = 12, 10
 local TAB_PAD  = 4    -- margen interno de la fila de pestañas
-local MAX_LIST_H = 200 -- alto máximo de la lista de una pestaña; con más opciones scrollea (sin barra)
 
 local Stub = {}
 Stub.__index = function()
@@ -481,11 +480,11 @@ function UI:CreateWindow(config)
 
 	-- Franja de pestañas: UNA sola fila arriba. Es un marco que recorta y
 	-- adentro un "Holder" que se desplaza de costado (sin barra).
-	local maxH = config.MaxListHeight or MAX_LIST_H
+	local maxH = config.MaxListHeight -- nil = la lista usa todo el alto disponible de la pantalla
 	local stripX = startX + (showBrand and (brandW + 10) or 0)
-	local bandH = HEADER_H + maxH + 10 + TAB_PAD * 2 + 6
+	local bandH = maxH and (HEADER_H + maxH + 10 + TAB_PAD * 2 + 6) or nil
 	local Clip = new("Frame", {
-		Name = "Strip", Position = UDim2.new(0, stripX, 0, startY - TAB_PAD), Size = UDim2.new(1, -(stripX + startX), 0, bandH),
+		Name = "Strip", Position = UDim2.new(0, stripX, 0, startY - TAB_PAD), Size = bandH and UDim2.new(1, -(stripX + startX), 0, bandH) or UDim2.new(1, -(stripX + startX), 1, -(startY - TAB_PAD)),
 		BackgroundTransparency = 1, BorderSizePixel = 0, ClipsDescendants = true, Parent = Container,
 	})
 	local Holder = new("Frame", { Name = "Holder", Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, BorderSizePixel = 0, Parent = Clip })
@@ -494,7 +493,7 @@ function UI:CreateWindow(config)
 		ScreenGui = ScreenGui, Container = Container, Clip = Clip, Holder = Holder,
 		_tabs = {}, _connections = {}, _visible = true, _loadId = LOAD_ID,
 		_loadStagger = config.AutoLoadStagger or 0, _loadOrder = config.AutoLoadOrder,
-		_cardW = cardW, _sideW = sideW, _pitch = cardW + sideW + TAB_GAP, _maxH = maxH,
+		_cardW = cardW, _sideW = sideW, _pitch = cardW + sideW + TAB_GAP, _maxH = maxH, _startY = startY,
 		_scrollX = 0, _canvasW = 0, _dragMoved = false,
 	}, UI)
 	hookScrolling(Window)
@@ -750,8 +749,14 @@ function UI:CreateTab(config)
 	end
 	local function relayout()
 		local contentH = Layout.AbsoluteContentSize.Y + 10
+		local limit = window._maxH
+		if not limit then
+			local cam = workspace.CurrentCamera
+			local vpY = cam and cam.ViewportSize.Y or 720
+			limit = math.max(120, vpY - window._startY - HEADER_H - TAB_PAD * 2 - 24)
+		end
 		List.CanvasSize = UDim2.new(0, 0, 0, contentH)
-		List.Size = UDim2.new(1, 0, 0, math.min(contentH, window._maxH))
+		List.Size = UDim2.new(1, 0, 0, math.min(contentH, limit))
 	end
 	Layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(relayout)
 	List:GetPropertyChangedSignal("AbsoluteSize"):Connect(placeAll)
