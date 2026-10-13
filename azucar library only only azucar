@@ -8,15 +8,16 @@
 	CÓMO SE VE Y SE USA:
 	  • Cada pestaña es una tarjetita (píldora) con su nombre y un
 	    contador de opciones activas ("Movement  3 / 5"). Van TODAS en
-	    una sola fila arriba, una al lado de la otra, y NADA se puede
-	    arrastrar ni mover de lugar (las pestañas están fijas).
+	    una sola fila arriba, una al lado de la otra. Ninguna se puede
+	    sacar de su lugar, pero la fila entera se desplaza de costado.
 	  • Tocás la cabecera de la pestaña y se abre la lista de opciones.
 	    Tocala de nuevo y se cierra.
-	  • Scroll SIN barrita, solo DENTRO de la lista de cada pestaña:
-	    la rueda del mouse scrollea normal, y también se puede arrastrar
-	    con el click apretado (o con el dedo en celular). Si una pestaña
-	    tiene más opciones de las que entran en la pantalla, scrolleás
-	    su lista para arriba/abajo. La fila de pestañas nunca se mueve.
+	  • Scroll SIN barrita. Si hay más pestañas de las que entran,
+	    arrastrás una cabecera con el click apretado (o el dedo) y la
+	    fila se desplaza de costado. La rueda no toca la fila; si la
+	    querés también con la rueda, WheelScroll = true.
+	  • Dentro de la lista de cada pestaña el scroll es normal: rueda del
+	    mouse, click apretado arrastrando, o dedo en celular.
 	  • Tocás una opción (toggle, slider, dropdown, input, tecla o
 	    botón) y se despliega al costado una píldora con el control:
 	        Toggle   -> interruptor ON / OFF
@@ -48,6 +49,7 @@
 			CornerStyle = "Round",   -- "Round" | "Sharp"
 			TabWidth    = 134,       -- ancho de una pestaña abierta
 			SideWidth   = 148,       -- espacio entre pestañas para las píldoras
+			-- WheelScroll = true,   -- opcional: la rueda también mueve la FILA de pestañas (por defecto NO; las listas siempre scrollean con la rueda)
 			-- MinListHeight = 160,  -- opcional: alto mínimo de cada lista (la alarga aunque tenga pocas opciones)
 			-- MaxListHeight = 250,  -- opcional: tope de alto de cada lista (por defecto, hasta el borde de la pantalla)
 			Position    = UDim2.new(0, 12, 0, 10), -- dónde arranca todo
@@ -347,46 +349,92 @@ local function cleanupOldWindows(guiParent)
 end
 
 -- ============================================================
--- 	SCROLL SIN BARRA — solo DENTRO de cada pestaña
+-- 	SCROLL SIN BARRA
 -- ============================================================
--- Las pestañas están fijas y NUNCA se mueven. Lo único que scrollea
--- es la lista de opciones de cada pestaña (vertical, sin barra):
---   • rueda del mouse y dedo: los maneja el ScrollingFrame solo;
---   • click apretado + arrastrar con el mouse: lo hacemos acá.
-local function beginDrag(window, tab, input)
+-- Las tarjetas están fijas. Se desplaza:
+--   • la fila de pestañas (horizontal): arrastrando una cabecera con
+--     el click apretado / el dedo (la rueda solo si WheelScroll = true);
+--   • la lista de opciones de cada pestaña (vertical): rueda normal,
+--     dedo, o click apretado arrastrando sobre la lista.
+-- Ninguna de las dos muestra barra de scroll.
+local function setScrollX(window, x)
+	local maxX = math.max(0, window._canvasW - window.Clip.AbsoluteSize.X)
+	window._scrollX = math.clamp(x, 0, maxX)
+	window.Holder.Position = UDim2.new(0, -window._scrollX, 0, 0)
+end
+
+local function beginDrag(window, kind, tab, input, onClick)
 	window._drag = {
-		tab = tab, moved = false,
+		kind = kind, tab = tab, onClick = onClick, moved = false,
 		start = Vector2.new(input.Position.X, input.Position.Y),
-		canvasY = tab.List.CanvasPosition.Y,
+		scrollX = window._scrollX,
+		canvasY = tab and tab.List.CanvasPosition.Y or 0,
 	}
 end
 
+local function pointerInGui(window)
+	local p = UserInputService:GetMouseLocation()
+	if not window.ScreenGui.IgnoreGuiInset then
+		p = p - GuiService:GetGuiInset()
+	end
+	return p
+end
+local function pointInside(frame, p)
+	local a, s = frame.AbsolutePosition, frame.AbsoluteSize
+	return p.X >= a.X and p.X <= a.X + s.X and p.Y >= a.Y and p.Y <= a.Y + s.Y
+end
 local function listOverflows(tab)
 	return tab.List.CanvasSize.Y.Offset > tab.List.AbsoluteSize.Y + 1
 end
 
--- Se llama una vez por ventana: engancha el arrastre con mouse.
+-- Se llama una vez por ventana: engancha el arrastre (y la rueda
+-- sobre la fila, si WheelScroll = true).
 local function hookScrolling(window)
 	table.insert(window._connections, UserInputService.InputChanged:Connect(function(input)
+		local kind = input.UserInputType
+
+		-- La rueda sobre una lista la maneja el ScrollingFrame solo.
+		-- Acá solo mueve la fila de pestañas, si WheelScroll = true.
+		if kind == Enum.UserInputType.MouseWheel then
+			if not window._visible or not window._wheel then return end
+			local p = pointerInGui(window)
+			for _, tab in ipairs(window._tabs) do
+				if tab._isOpen and listOverflows(tab) and pointInside(tab.List, p) then return end
+			end
+			if pointInside(window.Clip, p) then
+				setScrollX(window, window._scrollX - input.Position.Z * 70)
+			end
+			return
+		end
+
 		local d = window._drag
 		if not d then return end
-		if input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+		if kind ~= Enum.UserInputType.MouseMovement and kind ~= Enum.UserInputType.Touch then return end
+		-- El scroll vertical con el dedo ya lo hace el ScrollingFrame.
+		if d.kind == "y" and kind == Enum.UserInputType.Touch then return end
 		local delta = Vector2.new(input.Position.X, input.Position.Y) - d.start
 		if not d.moved and delta.Magnitude > 6 then d.moved = true end
 		if d.moved then
-			d.tab.List.CanvasPosition = Vector2.new(0, d.canvasY - delta.Y)
+			if d.kind == "x" then
+				setScrollX(window, d.scrollX - delta.X)
+			else
+				d.tab.List.CanvasPosition = Vector2.new(0, d.canvasY - delta.Y)
+			end
 		end
 	end))
 
 	table.insert(window._connections, UserInputService.InputEnded:Connect(function(input)
 		local d = window._drag
 		if not d then return end
-		if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+		local kind = input.UserInputType
+		if kind ~= Enum.UserInputType.MouseButton1 and kind ~= Enum.UserInputType.Touch then return end
 		window._drag = nil
 		if d.moved then
 			-- Frenó un arrastre: que el click de soltar no active nada.
 			window._dragMoved = true
 			task.delay(0.15, function() window._dragMoved = false end)
+		elseif d.onClick then
+			d.onClick()
 		end
 	end))
 end
@@ -434,7 +482,8 @@ function UI:CreateWindow(config)
 		Name = "Container", Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, BorderSizePixel = 0, Parent = ScreenGui,
 	})
 
-	-- Franja de pestañas: UNA sola fila arriba, fija (no se desplaza).
+	-- Franja de pestañas: UNA sola fila arriba. Es un marco que recorta y
+	-- adentro un "Holder" que se desplaza de costado (sin barra).
 	local maxH = config.MaxListHeight -- nil = la lista usa todo el alto disponible de la pantalla
 	local stripX = startX + (showBrand and (brandW + 10) or 0)
 	local bandH = maxH and (HEADER_H + maxH + 10 + TAB_PAD * 2 + 6) or nil
@@ -448,8 +497,8 @@ function UI:CreateWindow(config)
 		ScreenGui = ScreenGui, Container = Container, Clip = Clip, Holder = Holder,
 		_tabs = {}, _connections = {}, _visible = true, _loadId = LOAD_ID,
 		_loadStagger = config.AutoLoadStagger or 0, _loadOrder = config.AutoLoadOrder,
-		_cardW = cardW, _sideW = sideW, _pitch = cardW + sideW + TAB_GAP, _maxH = maxH, _minH = config.MinListHeight or 0, _startY = startY,
-		_canvasW = 0, _dragMoved = false,
+		_cardW = cardW, _sideW = sideW, _pitch = cardW + sideW + TAB_GAP, _maxH = maxH, _minH = config.MinListHeight or 0, _wheel = config.WheelScroll == true, _startY = startY,
+		_scrollX = 0, _canvasW = 0, _dragMoved = false,
 	}, UI)
 	hookScrolling(Window)
 
@@ -734,17 +783,20 @@ function UI:CreateTab(config)
 	Tab.Close = function() setOpen(false) end
 	Tab.SetOpen = function(_, open) setOpen(not not open) end
 
-	-- Click en la cabecera abre/cierra. Las pestañas no se arrastran ni
-	-- se mueven: solo se abre o se cierra la lista.
-	table.insert(self._connections, HeaderBtn.MouseButton1Click:Connect(function()
-		setOpen(not Tab._isOpen)
+	-- Click en la cabecera abre/cierra. Arrastrarla NO mueve la tarjeta:
+	-- desplaza la fila de pestañas.
+	table.insert(self._connections, HeaderBtn.InputBegan:Connect(function(input)
+		local k = input.UserInputType
+		if k ~= Enum.UserInputType.MouseButton1 and k ~= Enum.UserInputType.Touch then return end
+		beginDrag(window, "x", nil, input, function() setOpen(not Tab._isOpen) end)
 	end))
-	-- Arrastrar con el mouse sobre la lista la scrollea (rueda y dedo
-	-- los maneja el ScrollingFrame de forma nativa).
+	-- Arrastrar sobre la lista la scrollea (rueda y dedo los maneja el
+	-- ScrollingFrame; el click apretado lo hacemos acá). Si no hay nada
+	-- que scrollear, arrastrar desplaza la fila de pestañas.
 	Tab._listDrag = function(input)
-		if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
-		if not listOverflows(Tab) then return end
-		beginDrag(window, Tab, input)
+		local k = input.UserInputType
+		if k ~= Enum.UserInputType.MouseButton1 and k ~= Enum.UserInputType.Touch then return end
+		beginDrag(window, listOverflows(Tab) and "y" or "x", Tab, input, nil)
 	end
 	table.insert(self._connections, List.InputBegan:Connect(Tab._listDrag))
 
