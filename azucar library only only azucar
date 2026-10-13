@@ -17,8 +17,9 @@
 	    arrastras una cabecera y la fila se desplaza de costado. Si una
 	    pestaña tiene más opciones de las que entran en la pantalla,
 	    arrastras sobre su lista y se desplaza para arriba/abajo.
-	    La rueda del mouse NO scrollea (así no choca con el zoom de la
-	    cámara); si la quieres, WheelScroll = true.
+	    Dentro de una lista la rueda del mouse SÍ scrollea normal. La
+	    fila de pestañas, en cambio, solo se mueve arrastrando (la rueda
+	    no la toca); si la quieres también con la rueda, WheelScroll = true.
 	  • Tocás una opción (toggle, slider, dropdown, input, tecla o
 	    botón) y se despliega al costado una píldora con el control:
 	        Toggle   -> interruptor ON / OFF
@@ -50,7 +51,7 @@
 			CornerStyle = "Round",   -- "Round" | "Sharp"
 			TabWidth    = 134,       -- ancho de una pestaña abierta
 			SideWidth   = 148,       -- espacio entre pestañas para las píldoras
-			-- WheelScroll = true,   -- opcional: scrollear también con la rueda (por defecto NO, para no mover la cámara)
+			-- WheelScroll = true,   -- opcional: la rueda también mueve la FILA de pestañas (por defecto NO; las listas siempre scrollean con la rueda)
 			-- MinListHeight = 160,  -- opcional: alto mínimo de cada lista (la alarga aunque tenga pocas opciones)
 			-- MaxListHeight = 250,  -- opcional: tope de alto de cada lista (por defecto, hasta el borde de la pantalla)
 			Position    = UDim2.new(0, 12, 0, 10), -- dónde arranca todo
@@ -353,10 +354,9 @@ end
 -- 	SCROLL SIN BARRA — NADA se mueve de lugar
 -- ============================================================
 -- Las tarjetas están fijas. Lo único que se desplaza es:
---   • la fila de pestañas (horizontal): arrastrando con el mouse (la rueda es opcional, WheelScroll),
---     o arrastrando
---     una cabecera / el dedo;
---   • la lista de opciones de una pestaña (vertical): rueda, o
+--   • la fila de pestañas (horizontal): arrastrando una cabecera con
+--     el mouse / el dedo (la rueda solo si WheelScroll = true);
+--   • la lista de opciones de una pestaña (vertical): rueda normal, o
 --     arrastrando sobre la lista / el dedo.
 -- Ninguna de las dos muestra barra de scroll.
 local function setScrollX(window, x)
@@ -394,7 +394,7 @@ local function hookScrolling(window)
 	table.insert(window._connections, UserInputService.InputChanged:Connect(function(input)
 		local kind = input.UserInputType
 		if kind == Enum.UserInputType.MouseWheel then
-			if not window._wheel or not window._visible then return end
+			if not window._visible then return end
 			local p = pointerInGui(window)
 			local z = input.Position.Z
 			for i = #window._tabs, 1, -1 do
@@ -404,7 +404,7 @@ local function hookScrolling(window)
 					return
 				end
 			end
-			if pointInside(window.Clip, p) then
+			if window._wheel and pointInside(window.Clip, p) then
 				setScrollX(window, window._scrollX - z * 70)
 			end
 			return
