@@ -48,7 +48,7 @@
 			Theme       = "Fresa",   -- "Fresa" | "Chicle" | "Uva" | "Menta"
 			CornerStyle = "Round",   -- "Round" | "Sharp"
 			TabWidth    = 134,       -- ancho de una pestaña abierta
-			SideWidth   = 148,       -- espacio entre pestañas para las píldoras
+			SideWidth   = 128,       -- espacio entre pestañas para las píldoras
 			-- WheelScroll = true,   -- opcional: la rueda también mueve la FILA de pestañas (por defecto NO; las listas siempre scrollean con la rueda)
 			-- MinListHeight = 160,  -- opcional: alto mínimo de cada lista (la alarga aunque tenga pocas opciones)
 			-- MaxListHeight = 250,  -- opcional: tope de alto de cada lista (por defecto, hasta el borde de la pantalla)
@@ -102,8 +102,8 @@ end
 -- 	NÚMEROS QUE PODÉS TOCAR
 -- ============================================================
 local CARD_W   = 134  -- ancho de una pestaña abierta
-local SIDE_W   = 148  -- espacio a la derecha de cada pestaña para sus píldoras
-local TAB_GAP  = 8    -- aire extra entre una pestaña y la siguiente
+local SIDE_W   = 128  -- espacio a la derecha de cada pestaña para sus píldoras
+local TAB_GAP  = 6    -- aire extra entre una pestaña y la siguiente
 local HEADER_H = 28   -- alto de la cabecera de cada pestaña
 local ROW_H    = 24   -- alto de cada opción
 local PILL_H   = 22   -- alto de la píldora lateral
@@ -900,6 +900,11 @@ local function makeOption(tab, labelText, pillW)
 	end
 	function opt.SetOpen(open)
 		opt.Open = open
+		-- La pestaña con una píldora abierta se dibuja por encima de la
+		-- vecina, así la píldora nunca queda tapada aunque estén juntas.
+		local anyOpen = false
+		for _, o in ipairs(tab._opts) do if o.Open then anyOpen = true break end end
+		tab.Root.ZIndex = anyOpen and 2 or 1
 		place()
 		if open and Pill.Visible then
 			PillScale.Scale = 0.7
