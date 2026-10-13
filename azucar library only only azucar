@@ -12,11 +12,13 @@
 	    arrastrar ni mover de lugar.
 	  • Tocás la cabecera de la pestaña y se abre la lista de opciones.
 	    Tocala de nuevo y se cierra.
-	  • Scroll SIN barrita: con la rueda del mouse o arrastrando (o con el
-	    dedo). Si hay más pestañas de las que entran, la fila se desplaza
-	    de costado (rueda o arrastrando una cabecera). Si una pestaña
-	    tiene más opciones de las que entran en la pantalla, su lista se
-	    desplaza para arriba/abajo.
+	  • Scroll SIN barrita y CON EL MOUSE: se arrastra con el click
+	    apretado (o con el dedo). Si hay más pestañas de las que entran,
+	    arrastras una cabecera y la fila se desplaza de costado. Si una
+	    pestaña tiene más opciones de las que entran en la pantalla,
+	    arrastras sobre su lista y se desplaza para arriba/abajo.
+	    La rueda del mouse NO scrollea (así no choca con el zoom de la
+	    cámara); si la quieres, WheelScroll = true.
 	  • Tocás una opción (toggle, slider, dropdown, input, tecla o
 	    botón) y se despliega al costado una píldora con el control:
 	        Toggle   -> interruptor ON / OFF
@@ -48,6 +50,8 @@
 			CornerStyle = "Round",   -- "Round" | "Sharp"
 			TabWidth    = 134,       -- ancho de una pestaña abierta
 			SideWidth   = 148,       -- espacio entre pestañas para las píldoras
+			-- WheelScroll = true,   -- opcional: scrollear también con la rueda (por defecto NO, para no mover la cámara)
+			-- MinListHeight = 160,  -- opcional: alto mínimo de cada lista (la alarga aunque tenga pocas opciones)
 			-- MaxListHeight = 250,  -- opcional: tope de alto de cada lista (por defecto, hasta el borde de la pantalla)
 			Position    = UDim2.new(0, 12, 0, 10), -- dónde arranca todo
 			ShowBrand   = true,
@@ -349,7 +353,8 @@ end
 -- 	SCROLL SIN BARRA — NADA se mueve de lugar
 -- ============================================================
 -- Las tarjetas están fijas. Lo único que se desplaza es:
---   • la fila de pestañas (horizontal): rueda del mouse, o arrastrando
+--   • la fila de pestañas (horizontal): arrastrando con el mouse (la rueda es opcional, WheelScroll),
+--     o arrastrando
 --     una cabecera / el dedo;
 --   • la lista de opciones de una pestaña (vertical): rueda, o
 --     arrastrando sobre la lista / el dedo.
@@ -389,7 +394,7 @@ local function hookScrolling(window)
 	table.insert(window._connections, UserInputService.InputChanged:Connect(function(input)
 		local kind = input.UserInputType
 		if kind == Enum.UserInputType.MouseWheel then
-			if not window._visible then return end
+			if not window._wheel or not window._visible then return end
 			local p = pointerInGui(window)
 			local z = input.Position.Z
 			for i = #window._tabs, 1, -1 do
@@ -493,7 +498,7 @@ function UI:CreateWindow(config)
 		ScreenGui = ScreenGui, Container = Container, Clip = Clip, Holder = Holder,
 		_tabs = {}, _connections = {}, _visible = true, _loadId = LOAD_ID,
 		_loadStagger = config.AutoLoadStagger or 0, _loadOrder = config.AutoLoadOrder,
-		_cardW = cardW, _sideW = sideW, _pitch = cardW + sideW + TAB_GAP, _maxH = maxH, _startY = startY,
+		_cardW = cardW, _sideW = sideW, _pitch = cardW + sideW + TAB_GAP, _maxH = maxH, _minH = config.MinListHeight or 0, _wheel = config.WheelScroll == true, _startY = startY,
 		_scrollX = 0, _canvasW = 0, _dragMoved = false,
 	}, UI)
 	hookScrolling(Window)
@@ -756,7 +761,7 @@ function UI:CreateTab(config)
 			limit = math.max(120, vpY - window._startY - HEADER_H - TAB_PAD * 2 - 24)
 		end
 		List.CanvasSize = UDim2.new(0, 0, 0, contentH)
-		List.Size = UDim2.new(1, 0, 0, math.min(contentH, limit))
+		List.Size = UDim2.new(1, 0, 0, math.min(math.max(contentH, window._minH), limit))
 	end
 	Layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(relayout)
 	List:GetPropertyChangedSignal("AbsoluteSize"):Connect(placeAll)
