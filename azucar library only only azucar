@@ -6,10 +6,17 @@
 	es el LAYOUT.)
 
 	CÓMO SE VE Y SE USA:
-	  • Cada pestaña es una tarjetita flotante (píldora) con su nombre y
-	    un contador de opciones activas ("Movement  3 / 5").
+	  • Cada pestaña es una tarjetita (píldora) con su nombre y un
+	    contador de opciones activas ("Movement  3 / 5"). Van TODAS en
+	    una sola fila arriba, una al lado de la otra, y NADA se puede
+	    arrastrar ni mover de lugar.
 	  • Tocás la cabecera de la pestaña y se abre la lista de opciones.
-	    Tocala de nuevo y se cierra. Si la arrastrás, la movés de lugar.
+	    Tocala de nuevo y se cierra.
+	  • Scroll SIN barrita: con la rueda del mouse o arrastrando (o con el
+	    dedo). Si hay más pestañas de las que entran, la fila se desplaza
+	    de costado (rueda o arrastrando una cabecera). Si una pestaña
+	    tiene más opciones de las que entran (MaxListHeight), su lista se
+	    desplaza para arriba/abajo.
 	  • Tocás una opción (toggle, slider, dropdown, input, tecla o
 	    botón) y se despliega al costado una píldora con el control:
 	        Toggle   -> interruptor ON / OFF
@@ -41,6 +48,7 @@
 			CornerStyle = "Round",   -- "Round" | "Sharp"
 			TabWidth    = 134,       -- ancho de una pestaña abierta
 			SideWidth   = 148,       -- espacio entre pestañas para las píldoras
+			MaxListHeight = 200,     -- alto máximo de cada lista; con más opciones scrollea
 			Position    = UDim2.new(0, 12, 0, 10), -- dónde arranca todo
 			ShowBrand   = true,
 			AutoSaveConfig  = true,
@@ -64,6 +72,7 @@ local TweenService     = game:GetService("TweenService")
 local Players          = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TextService      = game:GetService("TextService")
+local GuiService       = game:GetService("GuiService")
 
 local UI = {}
 UI.__index = UI
@@ -96,7 +105,8 @@ local HEADER_H = 28   -- alto de la cabecera de cada pestaña
 local ROW_H    = 24   -- alto de cada opción
 local PILL_H   = 22   -- alto de la píldora lateral
 local START_X, START_Y = 12, 10
-local ROW_PITCH = 260 -- salto vertical cuando las pestañas no entran en una fila
+local TAB_PAD  = 4    -- margen interno de la fila de pestañas
+local MAX_LIST_H = 200 -- alto máximo de la lista de una pestaña; con más opciones scrollea (sin barra)
 
 local Stub = {}
 Stub.__index = function()
@@ -337,37 +347,91 @@ local function cleanupOldWindows(guiParent)
 end
 
 -- ============================================================
--- 	ARRASTRAR TARJETAS
+-- 	SCROLL SIN BARRA — NADA se mueve de lugar
 -- ============================================================
--- handle = lo que recibe el toque; target = lo que se mueve.
--- Si el dedo/mouse casi no se movió, cuenta como click (onClick).
-local function makeDraggable(window, handle, target, onClick, onPress)
-	local dragging, moved = false, false
-	local startInput, startPos
-	table.insert(window._connections, handle.InputBegan:Connect(function(input)
-		local k = input.UserInputType
-		if k ~= Enum.UserInputType.MouseButton1 and k ~= Enum.UserInputType.Touch then return end
-		dragging, moved = true, false
-		startInput = Vector2.new(input.Position.X, input.Position.Y)
-		startPos = target.Position
-		if onPress then onPress() end
-	end))
+-- Las tarjetas están fijas. Lo único que se desplaza es:
+--   • la fila de pestañas (horizontal): rueda del mouse, o arrastrando
+--     una cabecera / el dedo;
+--   • la lista de opciones de una pestaña (vertical): rueda, o
+--     arrastrando sobre la lista / el dedo.
+-- Ninguna de las dos muestra barra de scroll.
+local function setScrollX(window, x)
+	local maxX = math.max(0, window._canvasW - window.Clip.AbsoluteSize.X)
+	window._scrollX = math.clamp(x, 0, maxX)
+	window.Holder.Position = UDim2.new(0, -window._scrollX, 0, 0)
+end
+
+local function beginDrag(window, kind, tab, input, onClick)
+	window._drag = {
+		kind = kind, tab = tab, onClick = onClick, moved = false,
+		start = Vector2.new(input.Position.X, input.Position.Y),
+		scrollX = window._scrollX,
+		canvasY = tab and tab.List.CanvasPosition.Y or 0,
+	}
+end
+
+local function pointerInGui(window)
+	local p = UserInputService:GetMouseLocation()
+	if not window.ScreenGui.IgnoreGuiInset then
+		p = p - GuiService:GetGuiInset()
+	end
+	return p
+end
+local function pointInside(frame, p)
+	local a, s = frame.AbsolutePosition, frame.AbsoluteSize
+	return p.X >= a.X and p.X <= a.X + s.X and p.Y >= a.Y and p.Y <= a.Y + s.Y
+end
+local function listOverflows(tab)
+	return tab.List.CanvasSize.Y.Offset > tab.List.AbsoluteSize.Y + 1
+end
+
+-- Se llama una vez por ventana: engancha la rueda y el arrastre.
+local function hookScrolling(window)
 	table.insert(window._connections, UserInputService.InputChanged:Connect(function(input)
-		if not dragging then return end
-		local k = input.UserInputType
-		if k ~= Enum.UserInputType.MouseMovement and k ~= Enum.UserInputType.Touch then return end
-		local d = Vector2.new(input.Position.X, input.Position.Y) - startInput
-		if not moved and d.Magnitude > 5 then moved = true end
-		if moved then
-			target.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
+		local kind = input.UserInputType
+		if kind == Enum.UserInputType.MouseWheel then
+			if not window._visible then return end
+			local p = pointerInGui(window)
+			local z = input.Position.Z
+			for i = #window._tabs, 1, -1 do
+				local tab = window._tabs[i]
+				if tab._isOpen and listOverflows(tab) and pointInside(tab.List, p) then
+					tab.List.CanvasPosition = Vector2.new(0, tab.List.CanvasPosition.Y - z * 32)
+					return
+				end
+			end
+			if pointInside(window.Clip, p) then
+				setScrollX(window, window._scrollX - z * 70)
+			end
+			return
+		end
+
+		local d = window._drag
+		if not d then return end
+		if kind ~= Enum.UserInputType.MouseMovement and kind ~= Enum.UserInputType.Touch then return end
+		local delta = Vector2.new(input.Position.X, input.Position.Y) - d.start
+		if not d.moved and delta.Magnitude > 6 then d.moved = true end
+		if d.moved then
+			if d.kind == "x" then
+				setScrollX(window, d.scrollX - delta.X)
+			else
+				d.tab.List.CanvasPosition = Vector2.new(0, d.canvasY - delta.Y)
+			end
 		end
 	end))
+
 	table.insert(window._connections, UserInputService.InputEnded:Connect(function(input)
-		if not dragging then return end
-		local k = input.UserInputType
-		if k == Enum.UserInputType.MouseButton1 or k == Enum.UserInputType.Touch then
-			dragging = false
-			if not moved and onClick then onClick() end
+		local d = window._drag
+		if not d then return end
+		local kind = input.UserInputType
+		if kind ~= Enum.UserInputType.MouseButton1 and kind ~= Enum.UserInputType.Touch then return end
+		window._drag = nil
+		if d.moved then
+			-- Frenó un arrastre: que el click de soltar no active nada.
+			window._dragMoved = true
+			task.delay(0.15, function() window._dragMoved = false end)
+		elseif d.onClick then
+			d.onClick()
 		end
 	end))
 end
@@ -415,17 +479,27 @@ function UI:CreateWindow(config)
 		Name = "Container", Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, BorderSizePixel = 0, Parent = ScreenGui,
 	})
 
+	-- Franja de pestañas: UNA sola fila arriba. Es un marco que recorta y
+	-- adentro un "Holder" que se desplaza de costado (sin barra).
+	local maxH = config.MaxListHeight or MAX_LIST_H
+	local stripX = startX + (showBrand and (brandW + 10) or 0)
+	local bandH = HEADER_H + maxH + 10 + TAB_PAD * 2 + 6
+	local Clip = new("Frame", {
+		Name = "Strip", Position = UDim2.new(0, stripX, 0, startY - TAB_PAD), Size = UDim2.new(1, -(stripX + startX), 0, bandH),
+		BackgroundTransparency = 1, BorderSizePixel = 0, ClipsDescendants = true, Parent = Container,
+	})
+	local Holder = new("Frame", { Name = "Holder", Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, BorderSizePixel = 0, Parent = Clip })
+
 	local Window = setmetatable({
-		ScreenGui = ScreenGui, Container = Container,
+		ScreenGui = ScreenGui, Container = Container, Clip = Clip, Holder = Holder,
 		_tabs = {}, _connections = {}, _visible = true, _loadId = LOAD_ID,
 		_loadStagger = config.AutoLoadStagger or 0, _loadOrder = config.AutoLoadOrder,
-		_cardW = cardW, _sideW = sideW, _pitch = cardW + sideW + TAB_GAP,
-		_startX = startX + (showBrand and (brandW + 10) or 0), _startY = startY,
-		_cursorX = startX + (showBrand and (brandW + 10) or 0), _cursorY = startY,
-		_rowPitch = config.RowPitch or ROW_PITCH, _z = 10,
+		_cardW = cardW, _sideW = sideW, _pitch = cardW + sideW + TAB_GAP, _maxH = maxH,
+		_scrollX = 0, _canvasW = 0, _dragMoved = false,
 	}, UI)
+	hookScrolling(Window)
 
-	-- Tarjetita de marca: título + Badge/ServerName + reloj. Se puede arrastrar.
+	-- Tarjetita de marca: título + Badge/ServerName + reloj. Fija, no se mueve.
 	if showBrand then
 		local Brand = new("Frame", {
 			Name = "Brand", Size = UDim2.new(0, brandW, 0, brandH), Position = UDim2.new(0, startX, 0, startY),
@@ -451,7 +525,6 @@ function UI:CreateWindow(config)
 		})
 		onAccent(function() if ClockLabel.Parent then ClockLabel.TextColor3 = Theme.Active end end)
 		task.spawn(function() while ClockLabel.Parent do ClockLabel.Text = os.date("%H:%M:%S") task.wait(1) end end)
-		makeDraggable(Window, Brand, Brand, nil, nil)
 	end
 
 	-- Mostrar/ocultar con una tecla. config.ToggleKey = false/nil desactiva el atajo.
@@ -604,7 +677,7 @@ function UI:Notify(config)
 end
 
 -- ============================================================
--- 	CREATE TAB — la tarjeta flotante con su lista
+-- 	CREATE TAB — la tarjeta fija con su lista
 -- ============================================================
 function UI:CreateTab(config)
 	if typeof(config) == "string" then config = { Name = config } end
@@ -616,27 +689,20 @@ function UI:CreateTab(config)
 	local titleW = textW(name, 12, Theme.FontTitle)
 	local closedW = math.clamp(math.ceil(titleW) + 62, 70, openW)
 
-	-- Posición automática: en fila, cada una con su espacio para las
-	-- píldoras. Si no entra otra en la pantalla, baja a una fila nueva.
-	local x, y = self._cursorX, self._cursorY
-	local cam = workspace.CurrentCamera
-	local vpX = cam and cam.ViewportSize.X or 1280
-	if x > self._startX and x + openW + self._sideW > vpX - 6 then
-		x = self._startX
-		y = y + self._rowPitch
-	end
-	self._cursorX = x + self._pitch
-	self._cursorY = y
+	-- Todas las pestañas van en UNA sola fila arriba, una al lado de la
+	-- otra, cada una con su espacio para las píldoras. Si no entran en
+	-- la pantalla, la fila se desplaza (sin barra); nunca baja.
+	local x = TAB_PAD + #self._tabs * self._pitch
+	self._canvasW = x + openW + self._sideW + TAB_PAD
 
 	local shouldOpen = config.Open
 	if shouldOpen == nil then shouldOpen = (#self._tabs == 0) end
 
-	self._z = self._z + 1
-	-- Root: punto de anclaje que se arrastra. Nada recorta a nada, así
-	-- las píldoras pueden salirse por el costado de la tarjeta.
+	-- Root: punto fijo de la tarjeta. Nada recorta a nada acá, y las
+	-- píldoras viven en PillLayer (afuera de la lista que scrollea).
 	local Root = new("Frame", {
-		Name = "Tab_" .. name, Size = UDim2.new(0, 0, 0, 0), Position = config.Position or UDim2.new(0, x, 0, y),
-		BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = self._z, Parent = self.Container,
+		Name = "Tab_" .. name, Size = UDim2.new(0, 0, 0, 0), Position = UDim2.new(0, x, 0, TAB_PAD),
+		BackgroundTransparency = 1, BorderSizePixel = 0, Parent = self.Holder,
 	})
 
 	local Card = new("Frame", {
@@ -661,42 +727,66 @@ function UI:CreateTab(config)
 	})
 	local HeaderBtn = new("TextButton", { Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Parent = Header })
 
-	local List = new("Frame", {
-		Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1,
-		LayoutOrder = 2, Visible = false, Parent = Card,
-	}, {
-		pad(0, 2, 6, 8, 6),
-		new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }),
+	-- La lista: scrollea (rueda / arrastre / dedo) pero SIN barra. Su
+	-- alto crece con las opciones hasta MaxListHeight y de ahí scrollea.
+	local Layout = new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder })
+	local List = new("ScrollingFrame", {
+		Size = UDim2.new(1, 0, 0, 0), BackgroundTransparency = 1, BorderSizePixel = 0, LayoutOrder = 2, Visible = false,
+		ScrollBarThickness = 0, ScrollBarImageTransparency = 1, ScrollingEnabled = false,
+		CanvasSize = UDim2.new(0, 0, 0, 0), Parent = Card,
+	}, { pad(0, 2, 6, 8, 6), Layout })
+
+	local PillLayer = new("Frame", {
+		Name = "Pills", Size = UDim2.new(0, 0, 0, 0), BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 3, Parent = Root,
 	})
 
 	local Tab = setmetatable({
-		Window = self, Root = Root, Card = Card, List = List, Name = name,
-		_isOpen = false, _rowCount = 0, _opts = {},
+		Window = self, Root = Root, Card = Card, List = List, PillLayer = PillLayer, Name = name,
+		_isOpen = false, _rowCount = 0, _opts = {}, _openW = openW,
 	}, UI)
+
+	local function placeAll()
+		for _, o in ipairs(Tab._opts) do o.Place() end
+	end
+	local function relayout()
+		local contentH = Layout.AbsoluteContentSize.Y + 10
+		List.CanvasSize = UDim2.new(0, 0, 0, contentH)
+		List.Size = UDim2.new(1, 0, 0, math.min(contentH, window._maxH))
+	end
+	Layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(relayout)
+	List:GetPropertyChangedSignal("AbsoluteSize"):Connect(placeAll)
 
 	Tab._recount = function()
 		local active = 0
 		for _, o in ipairs(Tab._opts) do if o.Active then active = active + 1 end end
 		Counter.Text = string.format("%d / %d", active, #Tab._opts)
 	end
-	-- Trae esta tarjeta al frente (para que sus píldoras tapen a las vecinas).
-	Tab._front = function()
-		window._z = window._z + 1
-		Root.ZIndex = window._z
-	end
 
 	local function setOpen(open)
 		Tab._isOpen = open
 		List.Visible = open
 		tween(Card, { Size = UDim2.new(0, open and openW or closedW, 0, 0) }, 0.14)
-		if open then Tab._front() end
+		task.defer(placeAll)
 	end
 	Tab.Open = function() setOpen(true) end
 	Tab.Close = function() setOpen(false) end
 	Tab.SetOpen = function(_, open) setOpen(not not open) end
 
-	-- Click en la cabecera abre/cierra; arrastrarla mueve la tarjeta.
-	makeDraggable(self, HeaderBtn, Root, function() setOpen(not Tab._isOpen) end, Tab._front)
+	-- Click en la cabecera abre/cierra. Arrastrarla NO mueve la tarjeta:
+	-- desplaza la fila de pestañas.
+	table.insert(self._connections, HeaderBtn.InputBegan:Connect(function(input)
+		local k = input.UserInputType
+		if k ~= Enum.UserInputType.MouseButton1 and k ~= Enum.UserInputType.Touch then return end
+		beginDrag(window, "x", nil, input, function() setOpen(not Tab._isOpen) end)
+	end))
+	-- Arrastrar sobre la lista la scrollea (si no hay nada que scrollear,
+	-- desplaza la fila de pestañas).
+	Tab._listDrag = function(input)
+		local k = input.UserInputType
+		if k ~= Enum.UserInputType.MouseButton1 and k ~= Enum.UserInputType.Touch then return end
+		beginDrag(window, listOverflows(Tab) and "y" or "x", Tab, input, nil)
+	end
+	table.insert(self._connections, List.InputBegan:Connect(Tab._listDrag))
 
 	table.insert(self._tabs, Tab)
 	setOpen(shouldOpen)
@@ -707,8 +797,11 @@ end
 -- 	OPCIÓN = fila en la lista + píldora lateral
 -- ============================================================
 -- Crea la fila (puntito, nombre, flechita) y la píldora vacía que se
--- despliega al costado. Cada control llena la píldora a su manera.
+-- despliega al costado. Cada control llena la píldora a su manera. La
+-- píldora NO es hija de la fila (la lista scrollea y recortaría): vive
+-- en PillLayer y se acomoda a la altura de su fila.
 local function makeOption(tab, labelText, pillW)
+	local window = tab.Window
 	local Row = new("Frame", {
 		Size = UDim2.new(1, 0, 0, ROW_H), BackgroundColor3 = Theme.RowIdle, BorderSizePixel = 0,
 		LayoutOrder = nextOrder(tab), Parent = tab.List,
@@ -736,10 +829,9 @@ local function makeOption(tab, labelText, pillW)
 		Size = UDim2.new(1, 0, 1, 0), Position = UDim2.new(0, 0, 0, -1), Parent = Chev,
 	})
 
-	-- La píldora es hija de la fila pero se dibuja afuera de la tarjeta.
 	local Pill = new("Frame", {
-		Name = "Pill", Visible = false, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(1, 4, 0.5, 0),
-		Size = UDim2.new(0, pillW, 0, PILL_H), BackgroundColor3 = Theme.Panel, BorderSizePixel = 0, Parent = Row,
+		Name = "Pill", Visible = false, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, tab._openW - 2, 0, 0),
+		Size = UDim2.new(0, pillW, 0, PILL_H), BackgroundColor3 = Theme.Panel, BorderSizePixel = 0, Parent = tab.PillLayer,
 	}, { corner(PILL_H / 2), accentStroke(1.5) })
 	local PillScale = new("UIScale", { Scale = 1, Parent = Pill })
 
@@ -747,6 +839,24 @@ local function makeOption(tab, labelText, pillW)
 
 	local opt = { Row = Row, Pill = Pill, Open = false, Active = false }
 	local hovering = false
+
+	-- Acomoda la píldora a la altura de su fila. Si la fila quedó
+	-- scrolleada fuera de la vista (o la pestaña está cerrada), se oculta.
+	local function place()
+		if not (opt.Open and tab._isOpen) then
+			Pill.Visible = false
+			return
+		end
+		local list = tab.List
+		local center = Row.AbsolutePosition.Y + ROW_H / 2
+		local top = list.AbsolutePosition.Y
+		Pill.Position = UDim2.new(0, tab._openW - 2, 0, center - tab.Root.AbsolutePosition.Y)
+		Pill.Visible = center >= top and center <= top + list.AbsoluteSize.Y
+	end
+	opt.Place = place
+	Row:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
+		if opt.Open then place() end
+	end)
 
 	local function paintRow()
 		local color = (opt.Open and Theme.LineOpen) or (hovering and Theme.Field) or Theme.RowIdle
@@ -778,18 +888,23 @@ local function makeOption(tab, labelText, pillW)
 	end
 	function opt.SetOpen(open)
 		opt.Open = open
-		Pill.Visible = open
-		if open then
+		place()
+		if open and Pill.Visible then
 			PillScale.Scale = 0.7
 			tween(PillScale, { Scale = 1 }, 0.16, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-			tab._front()
 		end
 		paintRow()
 	end
 
 	Click.MouseEnter:Connect(function() hovering = true paintRow() end)
 	Click.MouseLeave:Connect(function() hovering = false paintRow() end)
-	Click.MouseButton1Click:Connect(function() opt.SetOpen(not opt.Open) end)
+	Click.InputBegan:Connect(tab._listDrag)
+	Click.MouseButton1Click:Connect(function()
+		-- Si venía de un arrastre (scroll), no abre/cierra la píldora.
+		local d = window._drag
+		if window._dragMoved or (d and d.moved) then return end
+		opt.SetOpen(not opt.Open)
+	end)
 
 	table.insert(tab._opts, opt)
 	tab._recount()
