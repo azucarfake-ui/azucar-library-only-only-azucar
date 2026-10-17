@@ -1,11 +1,16 @@
 --[[
-	AzucarDulce  v2.2  —  "Píldoras"
+	AzucarDulce  v2.3  —  "Píldoras"
 	================================
 	(Antes: v1.1 con un rectángulo único. Misma lógica por dentro:
 	Flags, Callbacks, Logic, guardado de config, Notify. Lo que cambió
 	es el LAYOUT.)
 
-	NOVEDAD v2.2: los sabores Uva, Menta y Chicle ahora son temas NEGROS con el
+	NOVEDAD v2.3: cambiar de sabor EN CALIENTE (UI:SetAccentColor("Uva"), un dropdown, etc.)
+	ahora repinta TODA la interfaz (fondos, filas, bordes, textos), no solo el acento. Antes,
+	al elegir Uva/Menta/Chicle después de crear la ventana, el fondo seguía blanco. El nombre
+	del sabor ya no distingue mayúsculas ("uva" funciona). También: Window:SetTheme("Uva").
+
+	v2.2: los sabores Uva, Menta y Chicle ahora son temas NEGROS con el
 	color del sabor (como Troll), Chicle pasó de rosa a celeste, y la lista de la
 	derecha usa el color del tema (antes era siempre naranja).
 
@@ -53,8 +58,8 @@
 
 	Sabores: "Fresa" (por defecto) es rosa sobre fondo claro. "Uva" (violeta), "Menta"
 	(verde) y "Chicle" (celeste) son temas NEGROS con ese color. "Troll" es verde musgo
-	oscuro con acento naranja. Elegí el sabor con Theme = "..." al crear la ventana
-	(los fondos oscuros no se repintan si lo cambiás después).
+	oscuro con acento naranja. Elegí el sabor con Theme = "..." al crear la ventana, o
+	cambialo cuando quieras con UI:SetAccentColor("Uva") (repinta todo en vivo).
 
 	Uso:
 		local UI = loadstring(game:HttpGet("...AzucarDulce.lua"))()
@@ -98,7 +103,7 @@ local GuiService       = game:GetService("GuiService")
 
 local UI = {}
 UI.__index = UI
-UI.Version    = "2.2"
+UI.Version    = "2.3"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -176,8 +181,8 @@ local BaseTheme = {}
 for _, k in ipairs({ "Background", "Panel", "Field", "RowIdle", "Line", "LineOpen", "Border", "Text", "TextDim", "Active", "ActiveDim" }) do BaseTheme[k] = Theme[k] end
 
 -- Sabores: Fresa cambia SOLO el acento (fondo claro); Uva, Menta, Chicle y Troll
--- cambian todo el tema. Se elige con config.Theme al crear la ventana
--- (o con UI:SetAccentColor(...), que no repinta los fondos ya dibujados).
+-- cambian todo el tema. Se elige con config.Theme al crear la ventana o en
+-- vivo con UI:SetAccentColor(...), que repinta todo lo ya dibujado.
 -- Tema oscuro: negro con un toque del color del sabor (fondo, filas, bordes).
 local function darkTheme(accent)
 	local black, white = Color3.new(0, 0, 0), Color3.new(1, 1, 1)
@@ -222,13 +227,61 @@ local function onAccent(fn)
 	return fn
 end
 
+-- Repintado en vivo: al cambiar de sabor se recorre toda la UI ya dibujada y
+-- cada color que era "del tema viejo" pasa a ser el color equivalente del tema
+-- nuevo (fondo -> fondo, texto -> texto, acento -> acento...).
+local THEME_KEYS = { "Background", "Panel", "Field", "RowIdle", "Line", "LineOpen", "Border", "Text", "TextDim", "Active", "ActiveDim" }
+local KEYS_NORMAL = { "Background", "Panel", "Field", "RowIdle", "Line", "LineOpen", "Text", "TextDim", "Active", "ActiveDim", "Border" }
+local KEYS_STROKE = { "Border", "Background", "Panel", "Field", "RowIdle", "Line", "LineOpen", "Text", "TextDim", "Active", "ActiveDim" }
+
+local function themeSnapshot()
+	local snap = {}
+	for _, k in ipairs(THEME_KEYS) do snap[k] = Theme[k] end
+	return snap
+end
+local function sameColor(a, b)
+	return math.abs(a.R - b.R) < 0.0025 and math.abs(a.G - b.G) < 0.0025 and math.abs(a.B - b.B) < 0.0025
+end
+local function remapColor(c, old, new, keys)
+	for _, k in ipairs(keys) do
+		if old[k] and new[k] and sameColor(old[k], c) then return new[k] end
+	end
+	return nil
+end
+local function rethemeTree(root, old, new)
+	local function fix(inst, prop, keys)
+		local ok, c = pcall(function() return inst[prop] end)
+		if ok and typeof(c) == "Color3" then
+			local nc = remapColor(c, old, new, keys)
+			if nc then pcall(function() inst[prop] = nc end) end
+		end
+	end
+	for _, inst in ipairs(root:GetDescendants()) do
+		if inst:IsA("UIStroke") then
+			fix(inst, "Color", KEYS_STROKE)
+		elseif inst:IsA("GuiObject") then
+			fix(inst, "BackgroundColor3", KEYS_NORMAL)
+			if inst:IsA("TextLabel") or inst:IsA("TextButton") or inst:IsA("TextBox") then
+				fix(inst, "TextColor3", KEYS_NORMAL)
+				if inst:IsA("TextBox") then fix(inst, "PlaceholderColor3", KEYS_NORMAL) end
+			end
+		end
+	end
+end
+
 function UI:SetAccentColor(paletteName)
-	local p = Palettes[paletteName]
+	local key, p = paletteName, Palettes[paletteName]
+	if p == nil and typeof(paletteName) == "string" then
+		for name, pal in pairs(Palettes) do
+			if name:lower() == paletteName:lower() then key, p = name, pal break end
+		end
+	end
 	if not p then
 		warn("[AzucarDulce] Sabor desconocido: " .. tostring(paletteName) .. ". Usá Fresa, Chicle, Uva, Menta o Troll.")
 		return
 	end
-	UI.CurrentPalette = paletteName
+	local old = themeSnapshot()
+	UI.CurrentPalette = key
 	for k, v in pairs(BaseTheme) do Theme[k] = v end
 	if typeof(p) == "table" then
 		for k, v in pairs(p) do Theme[k] = v end
@@ -237,8 +290,14 @@ function UI:SetAccentColor(paletteName)
 		Theme.Border, Theme.Active = p, p
 		Theme.ActiveDim = p:Lerp(Color3.new(0, 0, 0), 0.22)
 	end
+	local new = themeSnapshot()
+	for _, w in ipairs(UI.Windows) do
+		if w.ScreenGui and w.ScreenGui.Parent then pcall(rethemeTree, w.ScreenGui, old, new) end
+		if w._activeGui and w._activeGui.Parent then pcall(rethemeTree, w._activeGui, old, new) end
+	end
 	for _, fn in ipairs(accentListeners) do pcall(fn) end
 end
+UI.SetTheme = UI.SetAccentColor
 
 -- ============================================================
 -- 	HELPERS DE CONSTRUCCIÓN
