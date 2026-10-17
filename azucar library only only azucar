@@ -35,6 +35,9 @@
 	  • Arriba a la izquierda hay una tarjetita con el título, el
 	    Badge/ServerName y el reloj (se apaga con ShowBrand = false).
 
+	Lista de activos: Window:SetActiveList(true) (o ActiveList = true al crear la ventana) pega al borde derecho una etiquetita por pestaña,
+	ordenadas de más a menos opciones activas; la de nombre más largo sobresale más.
+
 	Paleta de "sabores": Fresa (por defecto), Chicle, Uva y Menta cambian SOLO el
 	acento. "Troll" cambia todo el tema (verde musgo oscuro con acento naranja).
 
@@ -589,6 +592,8 @@ function UI:CreateWindow(config)
 		end
 	end
 
+	if config.ActiveList == true then Window:SetActiveList(true) end
+
 	return Window
 end
 
@@ -601,9 +606,84 @@ function UI:Hide()
 	self._visible = false
 end
 function UI:Toggle() if self._visible then self:Hide() else self:Show() end end
+-- ============================================================
+-- 	LISTA DE ACTIVOS (pegada al borde derecho de la pantalla)
+-- ============================================================
+-- Window:SetActiveList(true/false). Una etiquetita por pestaña, pegada
+-- al borde derecho: arriba la que más opciones activas tiene y abajo la
+-- que menos. Cada una mide lo que mide su nombre, así la de nombre más
+-- largo sobresale más. También: CreateWindow({ ActiveList = true }).
+function UI:SetActiveList(on)
+	local window = self
+	on = not not on
+	if window._activeGui then
+		window._activeGui.Enabled = on
+		if on and window._activeRefresh then window._activeRefresh() end
+		return
+	end
+	if not on then return end
+
+	local OVER, TAG_H = 12, 20 -- OVER: parte de la etiqueta escondida fuera de la pantalla (así no se ve redondeada contra el borde)
+	local gui = new("ScreenGui", {
+		Name = "AzucarActiveList", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 997,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling, Parent = window.ScreenGui.Parent,
+	})
+	window._activeGui = gui
+	local holder = new("Frame", {
+		Name = "List", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, OVER, 0.5, 0),
+		Size = UDim2.new(0, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.XY,
+		BackgroundTransparency = 1, BorderSizePixel = 0, Parent = gui,
+	}, {
+		new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Right }),
+	})
+
+	local rows = {}
+	local function getRow(i)
+		if rows[i] then return rows[i] end
+		local tag = new("Frame", {
+			Size = UDim2.new(0, 60, 0, TAG_H), BackgroundColor3 = Theme.Background, BackgroundTransparency = Theme.Alpha,
+			BorderSizePixel = 0, LayoutOrder = i, Parent = holder,
+		}, { corner(8), accentStroke(1.2) })
+		local nm = new("TextLabel", {
+			BackgroundTransparency = 1, Font = Theme.FontBold, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left,
+			Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(1, -8, 1, 0), Parent = tag,
+		})
+		local ct = new("TextLabel", {
+			BackgroundTransparency = 1, Font = Theme.FontMono, TextSize = 10, TextXAlignment = Enum.TextXAlignment.Right,
+			AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -OVER - 6, 0, 0), Size = UDim2.new(0, 22, 1, 0), Parent = tag,
+		})
+		rows[i] = { tag = tag, nm = nm, ct = ct }
+		return rows[i]
+	end
+
+	local function refresh()
+		if not gui.Parent then return end
+		local list = {}
+		for _, tab in ipairs(window._tabs) do
+			local a = 0
+			for _, o in ipairs(tab._opts) do if o.Active then a = a + 1 end end
+			list[#list + 1] = { name = tab.Name, a = a }
+		end
+		table.sort(list, function(x, y) if x.a ~= y.a then return x.a > y.a end return x.name < y.name end)
+		for i, d in ipairs(list) do
+			local r = getRow(i)
+			r.tag.Visible = true; r.tag.LayoutOrder = i
+			r.tag.BackgroundColor3 = Theme.Background
+			r.nm.Text = d.name; r.nm.TextColor3 = d.a > 0 and Theme.Text or Theme.TextDim
+			r.ct.Text = tostring(d.a); r.ct.TextColor3 = d.a > 0 and Theme.Active or Theme.TextDim
+			r.tag.Size = UDim2.new(0, math.ceil(textW(d.name, 11, Theme.FontBold)) + 8 + 22 + OVER + 12, 0, TAG_H)
+		end
+		for i = #list + 1, #rows do rows[i].tag.Visible = false end
+	end
+	window._activeRefresh = refresh
+	onAccent(function() pcall(refresh) end)
+	refresh()
+end
+
 function UI:Destroy()
 	for _, conn in ipairs(self._connections or {}) do pcall(function() conn:Disconnect() end) end
 	if self.ScreenGui then pcall(function() self.ScreenGui:Destroy() end) end
+	if self._activeGui then pcall(function() self._activeGui:Destroy() end) end
 	for i, w in ipairs(UI.Windows) do if w == self then table.remove(UI.Windows, i) break end end
 end
 
@@ -792,6 +872,7 @@ function UI:CreateTab(config)
 		local active = 0
 		for _, o in ipairs(Tab._opts) do if o.Active then active = active + 1 end end
 		Counter.Text = string.format("%d / %d", active, #Tab._opts)
+		if window._activeRefresh then window._activeRefresh() end
 	end
 
 	local function setOpen(open)
