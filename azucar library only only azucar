@@ -37,6 +37,8 @@
 
 	Lista de activos: Window:SetActiveList(true) (se activa sola; apagala con ActiveList = false al crear la ventana) pega al borde derecho una etiquetita por pestaña,
 	ordenadas de más a menos opciones activas; la de nombre más largo sobresale más.
+	Tocás una etiqueta y esa pestaña se ABRE y la fila se desplaza hasta
+	dejarla a la vista (si ya estaba abierta y a la vista, la cierra).
 
 	Paleta de "sabores": Fresa (por defecto), Chicle, Uva y Menta cambian SOLO el
 	acento. "Troll" cambia todo el tema (verde musgo oscuro con acento naranja).
@@ -411,6 +413,36 @@ local function listOverflows(tab)
 	return tab.List.CanvasSize.Y.Offset > tab.List.AbsoluteSize.Y + 1
 end
 
+-- Trae una pestaña a la vista: desplaza la fila de pestañas (con una
+-- animación corta) hasta que la tarjeta y el espacio de sus píldoras
+-- queden dentro de la pantalla.
+local function tabSpan(window, tab)
+	local left = tab.Root.Position.X.Offset - TAB_PAD
+	return left, left + tab._openW
+end
+local function tabInView(window, tab)
+	local left, right = tabSpan(window, tab)
+	local viewL = window._scrollX
+	local viewR = viewL + window.Clip.AbsoluteSize.X
+	return left >= viewL - 1 and right <= viewR + 1
+end
+local function revealTab(window, tab)
+	local clipW = window.Clip.AbsoluteSize.X
+	local left, right = tabSpan(window, tab)
+	right = right + window._sideW + TAB_PAD -- deja lugar para sus píldoras
+	local target = window._scrollX
+	if right - left > clipW then
+		target = left                        -- no entra todo: que se vea al menos la tarjeta
+	elseif left < target then
+		target = left
+	elseif right > target + clipW then
+		target = right - clipW
+	end
+	target = math.clamp(target, 0, math.max(0, window._canvasW - clipW))
+	window._scrollX = target
+	tween(window.Holder, { Position = UDim2.new(0, -target, 0, 0) }, 0.25)
+end
+
 -- Se llama una vez por ventana: engancha el arrastre (y la rueda
 -- sobre la fila, si WheelScroll = true).
 local function hookScrolling(window)
@@ -609,7 +641,9 @@ function UI:Toggle() if self._visible then self:Hide() else self:Show() end end
 -- ============================================================
 -- 	LISTA DE ACTIVOS (pegada al borde derecho de la pantalla)
 -- ============================================================
--- Window:SetActiveList(true/false). Tocás una etiqueta y se abre/cierra esa pestaña. Una etiquetita por pestaña, pegada
+-- Window:SetActiveList(true/false). Tocás una etiqueta y esa pestaña se
+-- ABRE (y la fila se desplaza hasta dejarla a la vista; si ya estaba
+-- abierta y a la vista, el toque la cierra). Una etiquetita por pestaña, pegada
 -- al borde derecho: arriba la que más opciones activas tiene y abajo la
 -- que menos. Cada una mide lo que mide su nombre, así la de nombre más
 -- largo sobresale más. Viene prendida por defecto; CreateWindow({ ActiveList = false }) la apaga.
@@ -659,7 +693,14 @@ function UI:SetActiveList(on)
 			local tb = r.tab
 			if not tb then return end
 			if not window._visible then window:Show() end
-			tb:SetOpen(not tb._isOpen)
+			-- Abre la pestaña y la trae a la vista (por si estaba fuera de
+			-- pantalla). Si ya estaba abierta y a la vista, la cierra.
+			if tb._isOpen and tabInView(window, tb) then
+				tb:SetOpen(false)
+			else
+				tb:SetOpen(true)
+				revealTab(window, tb)
+			end
 		end)
 		rows[i] = r
 		return r
