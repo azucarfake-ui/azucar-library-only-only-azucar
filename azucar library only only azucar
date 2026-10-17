@@ -58,6 +58,7 @@
 			-- WheelScroll = true,   -- opcional: la rueda también mueve la FILA de pestañas (por defecto NO; las listas siempre scrollean con la rueda)
 			-- MinListHeight = 160,  -- opcional: alto mínimo de cada lista (la alarga aunque tenga pocas opciones)
 			-- MaxListHeight = 250,  -- opcional: tope de alto de cada lista (por defecto, hasta el borde de la pantalla)
+			-- ActiveListLength = 44, -- opcional: cuánto más largas son las etiquetas de la lista de la derecha (0 = como antes)
 			Position    = UDim2.new(0, 12, 0, 10), -- dónde arranca todo
 			ShowBrand   = true,
 			AutoSaveConfig  = true,
@@ -554,7 +555,7 @@ function UI:CreateWindow(config)
 		ScreenGui = ScreenGui, Container = Container, Clip = Clip, Holder = Holder,
 		_tabs = {}, _connections = {}, _visible = true, _loadId = LOAD_ID,
 		_loadStagger = config.AutoLoadStagger or 0, _loadOrder = config.AutoLoadOrder,
-		_cardW = cardW, _sideW = sideW, _pitch = cardW + sideW + TAB_GAP, _maxH = maxH, _minH = config.MinListHeight or 0, _wheel = config.WheelScroll == true, _startY = startY,
+		_cardW = cardW, _sideW = sideW, _pitch = cardW + sideW + TAB_GAP, _maxH = maxH, _minH = config.MinListHeight or 0, _wheel = config.WheelScroll == true, _startY = startY, _activeExtra = config.ActiveListLength or 44,
 		_scrollX = 0, _canvasW = 0, _dragMoved = false,
 	}, UI)
 	hookScrolling(Window)
@@ -728,7 +729,7 @@ function UI:SetActiveList(on)
 			r.nm.Text = d.name; r.nm.TextColor3 = d.a > 0 and Theme.Text or Theme.TextDim
 			r.ar.Text = d.tab._isOpen and "<" or ">"; r.ar.TextColor3 = d.tab._isOpen and Theme.Active or Theme.TextDim
 			r.ct.Text = tostring(d.a); r.ct.TextColor3 = d.a > 0 and Theme.Active or Theme.TextDim
-			r.tag.Size = UDim2.new(0, math.ceil(textW(d.name, 11, Theme.FontBold)) + 20 + 22 + OVER + 12, 0, TAG_H)
+			r.tag.Size = UDim2.new(0, math.ceil(textW(d.name, 11, Theme.FontBold)) + 20 + 22 + OVER + 12 + (window._activeExtra or 44), 0, TAG_H)
 		end
 		for i = #list + 1, #rows do rows[i].tag.Visible = false end
 	end
