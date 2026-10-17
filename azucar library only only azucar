@@ -11,7 +11,8 @@
 	    una sola fila arriba, una al lado de la otra. Ninguna se puede
 	    sacar de su lugar, pero la fila entera se desplaza de costado.
 	  • Tocás la cabecera de la pestaña y se abre la lista de opciones.
-	    Tocala de nuevo y se cierra.
+	    Tocala de nuevo y se cierra. Una flechita al final de la cabecera
+	    lo indica: > = cerrada, < = abierta (también en la lista de la derecha).
 	  • Scroll SIN barrita. Si hay más pestañas de las que entran,
 	    arrastrás una cabecera con el click apretado (o el dedo) y la
 	    fila se desplaza de costado. La rueda no toca la fila; si la
@@ -681,13 +682,17 @@ function UI:SetActiveList(on)
 		}, { corner(8), accentStroke(1.2) })
 		local nm = new("TextLabel", {
 			BackgroundTransparency = 1, Font = Theme.FontBold, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left,
-			Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(1, -8, 1, 0), Parent = tag,
+			Position = UDim2.new(0, 20, 0, 0), Size = UDim2.new(1, -20, 1, 0), Parent = tag,
 		})
 		local ct = new("TextLabel", {
 			BackgroundTransparency = 1, Font = Theme.FontMono, TextSize = 10, TextXAlignment = Enum.TextXAlignment.Right,
 			AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -OVER - 6, 0, 0), Size = UDim2.new(0, 22, 1, 0), Parent = tag,
 		})
-		local r = { tag = tag, nm = nm, ct = ct }
+		local ar = new("TextLabel", {
+			Text = ">", BackgroundTransparency = 1, Font = Theme.FontBold, TextSize = 12,
+			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 6, 0.5, 0), Size = UDim2.new(0, 12, 1, 0), Parent = tag,
+		})
+		local r = { tag = tag, nm = nm, ct = ct, ar = ar }
 		local btn = new("TextButton", { Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), ZIndex = 5, Parent = tag })
 		btn.MouseButton1Click:Connect(function()
 			local tb = r.tab
@@ -721,8 +726,9 @@ function UI:SetActiveList(on)
 			r.tag.Visible = true; r.tag.LayoutOrder = i
 			r.tag.BackgroundColor3 = Theme.Background
 			r.nm.Text = d.name; r.nm.TextColor3 = d.a > 0 and Theme.Text or Theme.TextDim
+			r.ar.Text = d.tab._isOpen and "<" or ">"; r.ar.TextColor3 = d.tab._isOpen and Theme.Active or Theme.TextDim
 			r.ct.Text = tostring(d.a); r.ct.TextColor3 = d.a > 0 and Theme.Active or Theme.TextDim
-			r.tag.Size = UDim2.new(0, math.ceil(textW(d.name, 11, Theme.FontBold)) + 8 + 22 + OVER + 12, 0, TAG_H)
+			r.tag.Size = UDim2.new(0, math.ceil(textW(d.name, 11, Theme.FontBold)) + 20 + 22 + OVER + 12, 0, TAG_H)
 		end
 		for i = #list + 1, #rows do rows[i].tag.Visible = false end
 	end
@@ -842,7 +848,7 @@ function UI:CreateTab(config)
 
 	local openW = self._cardW
 	local titleW = textW(name, 12, Theme.FontTitle)
-	local closedW = math.clamp(math.ceil(titleW) + 62, 70, openW)
+	local closedW = math.clamp(math.ceil(titleW) + 76, 70, openW)
 
 	-- Todas las pestañas van en UNA sola fila arriba, una al lado de la
 	-- otra, cada una con su espacio para las píldoras. Están fijas.
@@ -871,13 +877,18 @@ function UI:CreateTab(config)
 	local Title = new("TextLabel", {
 		Text = name, Font = Theme.FontTitle, TextSize = 12, TextColor3 = Theme.Active,
 		TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, BackgroundTransparency = 1,
-		Position = UDim2.new(0, 10, 0, 0), Size = UDim2.new(1, -60, 1, 0), Parent = Header,
+		Position = UDim2.new(0, 10, 0, 0), Size = UDim2.new(1, -74, 1, 0), Parent = Header,
 	})
 	onAccent(function() if Title.Parent then Title.TextColor3 = Theme.Active end end)
 	local Counter = new("TextLabel", {
 		Text = "0 / 0", Font = Theme.FontMono, TextSize = 9, TextColor3 = Theme.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Right, BackgroundTransparency = 1,
-		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -9, 0, 0), Size = UDim2.new(0, 42, 1, 0), Parent = Header,
+		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -24, 0, 0), Size = UDim2.new(0, 42, 1, 0), Parent = Header,
+	})
+	-- Flechita: > = cerrada, < = abierta.
+	local Arrow = new("TextLabel", {
+		Text = ">", Font = Theme.FontBold, TextSize = 13, TextColor3 = Theme.TextDim, BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -9, 0.5, 0), Size = UDim2.new(0, 12, 1, 0), Parent = Header,
 	})
 	local HeaderBtn = new("TextButton", { Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Parent = Header })
 
@@ -926,11 +937,19 @@ function UI:CreateTab(config)
 		if window._activeRefresh then window._activeRefresh() end
 	end
 
+	local function paintArrow()
+		Arrow.Text = Tab._isOpen and "<" or ">"
+		Arrow.TextColor3 = Tab._isOpen and Theme.Active or Theme.TextDim
+	end
+	onAccent(function() if Arrow.Parent then paintArrow() end end)
+
 	local function setOpen(open)
 		Tab._isOpen = open
 		List.Visible = open
+		paintArrow()
 		tween(Card, { Size = UDim2.new(0, open and openW or closedW, 0, 0) }, 0.14)
 		task.defer(placeAll)
+		if window._activeRefresh then window._activeRefresh() end -- la lista de la derecha también muestra la flechita
 	end
 	Tab.Open = function() setOpen(true) end
 	Tab.Close = function() setOpen(false) end
