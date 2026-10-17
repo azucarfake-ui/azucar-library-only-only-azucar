@@ -38,7 +38,7 @@
 
 	Lista de activos: Window:SetActiveList(true) (se activa sola; apagala con ActiveList = false al crear la ventana) pega al borde derecho una etiquetita por pestaña,
 	ordenadas de más a menos opciones activas; la de nombre más largo sobresale más.
-	La flechita > < y el número de activas van en un naranja brillante.
+	La flechita > < y el número de activas van en un naranja que brilla (halo que late).
 	Tocás una etiqueta y esa pestaña se ABRE y la fila se desplaza hasta
 	dejarla a la vista (si ya estaba abierta y a la vista, la cierra).
 
@@ -118,7 +118,7 @@ local PILL_H   = 22   -- alto de la píldora lateral
 local START_X, START_Y = 12, 10
 local TAB_PAD  = 4    -- margen interno de la fila de pestañas
 local ACTIVE_LIST_EXTRA = 90 -- cuánto más largas son las etiquetas de la lista de la derecha
-local ACTIVE_ORANGE = Color3.fromRGB(255, 145, 38) -- naranja brillante de la flechita y el número (lista de la derecha)
+local ACTIVE_ORANGE = Color3.fromRGB(255, 168, 48) -- naranja de la flechita y el número (lista de la derecha); brilla con un halo que pulsa
 
 local Stub = {}
 Stub.__index = function()
@@ -651,8 +651,8 @@ function UI:Toggle() if self._visible then self:Hide() else self:Show() end end
 -- abierta y a la vista, el toque la cierra). Una etiquetita por pestaña, pegada
 -- al borde derecho: arriba la que más opciones activas tiene y abajo la
 -- que menos. Cada una mide lo que mide su nombre, así la de nombre más
--- largo sobresale más. La flechita y el número van en naranja brillante
--- (ACTIVE_ORANGE). Viene prendida por defecto; CreateWindow({ ActiveList = false }) la apaga.
+-- largo sobresale más. La flechita y el número van en naranja con un
+-- halo que late (ACTIVE_ORANGE). Viene prendida por defecto; CreateWindow({ ActiveList = false }) la apaga.
 function UI:SetActiveList(on)
 	local window = self
 	on = not not on
@@ -692,12 +692,14 @@ function UI:SetActiveList(on)
 		local ct = new("TextLabel", {
 			BackgroundTransparency = 1, Font = Theme.FontMono, TextSize = 10, TextXAlignment = Enum.TextXAlignment.Right,
 			AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -OVER - 6, 0, 0), Size = UDim2.new(0, 22, 1, 0), Parent = tag,
+			TextStrokeColor3 = ACTIVE_ORANGE, TextStrokeTransparency = 0.6,
 		})
 		local ar = new("TextLabel", {
 			Text = ">", BackgroundTransparency = 1, Font = Theme.FontBold, TextSize = 12,
 			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 6, 0.5, 0), Size = UDim2.new(0, 12, 1, 0), Parent = tag,
+			TextStrokeColor3 = ACTIVE_ORANGE, TextStrokeTransparency = 0.6,
 		})
-		local r = { tag = tag, nm = nm, ct = ct, ar = ar }
+		local r = { tag = tag, nm = nm, ct = ct, ar = ar, glowCt = false }
 		local btn = new("TextButton", { Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), ZIndex = 5, Parent = tag })
 		btn.MouseButton1Click:Connect(function()
 			local tb = r.tab
@@ -733,6 +735,8 @@ function UI:SetActiveList(on)
 			r.nm.Text = d.name; r.nm.TextColor3 = d.a > 0 and Theme.Text or Theme.TextDim
 			r.ar.Text = d.tab._isOpen and "<" or ">"; r.ar.TextColor3 = ACTIVE_ORANGE
 			r.ct.Text = tostring(d.a); r.ct.TextColor3 = d.a > 0 and ACTIVE_ORANGE or Theme.TextDim
+			r.glowCt = d.a > 0
+			if not r.glowCt then r.ct.TextStrokeTransparency = 1 end
 			r.tag.Size = UDim2.new(0, math.ceil(textW(d.name, 11, Theme.FontBold)) + 20 + 22 + OVER + 12 + (window._activeExtra or ACTIVE_LIST_EXTRA), 0, TAG_H)
 		end
 		for i = #list + 1, #rows do rows[i].tag.Visible = false end
@@ -740,6 +744,24 @@ function UI:SetActiveList(on)
 	window._activeRefresh = refresh
 	onAccent(function() pcall(refresh) end)
 	refresh()
+
+	-- Brillo: el halo naranja de la flechita y del número late despacito.
+	task.spawn(function()
+		local bright = true
+		while gui.Parent do
+			local goal = bright and 0.15 or 0.7
+			for _, r in ipairs(rows) do
+				if r.tag.Visible then
+					tween(r.ar, { TextStrokeTransparency = goal }, 0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+					if r.glowCt then
+						tween(r.ct, { TextStrokeTransparency = goal }, 0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+					end
+				end
+			end
+			bright = not bright
+			task.wait(0.9)
+		end
+	end)
 end
 
 function UI:Destroy()
