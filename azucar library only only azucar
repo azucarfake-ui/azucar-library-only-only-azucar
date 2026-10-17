@@ -1,9 +1,14 @@
 --[[
-	AzucarDulce  v2.0  —  "Píldoras"
+	AzucarDulce  v2.1  —  "Píldoras"
 	================================
 	(Antes: v1.1 con un rectángulo único. Misma lógica por dentro:
 	Flags, Callbacks, Logic, guardado de config, Notify. Lo que cambió
 	es el LAYOUT.)
+
+	NOVEDAD v2.1: ÍCONOS DE PESTAÑA REDISEÑADOS. Más grandes (20 px),
+	dibujados en escala (sin decimales perdidos) y en estilo línea. Se
+	pasan con Icon = "Eye" (o segundo argumento: CreateTab("Visual", "Eye")).
+	Si escribís mal el nombre de un ícono, avisa por consola.
 
 	CÓMO SE VE Y SE USA:
 	  • Cada pestaña es una tarjetita (píldora) con su nombre y un
@@ -87,7 +92,7 @@ local GuiService       = game:GetService("GuiService")
 
 local UI = {}
 UI.__index = UI
-UI.Version    = "2.0"
+UI.Version    = "2.1"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -881,86 +886,150 @@ end
 -- ============================================================
 -- 	ÍCONOS DE PESTAÑA
 -- ============================================================
--- CreateTab({ Name = "Combat", Icon = "Swords" }). Los íconos se dibujan
--- con formas (no dependen de ninguna letra) y toman el color del tema.
+-- CreateTab({ Name = "Combat", Icon = "Swords" }) o CreateTab("Combat", "Swords").
+-- Los íconos se dibujan con formas (no dependen de ninguna letra) y toman
+-- el color del tema.
 -- Nombres: Swords, Eye, Book, Rings, Heart, Diamond, Moon, Skull, Star
 -- (también valen Sword, Target, Circles, Gem). Icon también acepta:
 --   • un id de imagen (número o "rbxassetid://123") -> imagen propia;
 --   • cualquier otro texto o emoji ("★", "🔥") -> se muestra tal cual.
 -- Después de crear la pestaña: Tab:SetIcon("Eye") (o nil para quitarlo).
-local ICON_SIZE, ICON_W = 18, 22
+--
+-- Tamaño: ICON_SIZE (px). Todo el dibujo está en una cuadrícula de 20x20
+-- y se escala solo; si lo cambiás, poné ICON_W = ICON_SIZE + 5.
+local ICON_SIZE, ICON_W = 20, 25
+local GRID = 20
 local Icons = {}
 UI.Icons = Icons
 
--- Una pieza del dibujo, con coordenadas del centro dentro de un cuadro de 18x18.
--- fill = relleno del color del tema; stroke = solo contorno; cut = "agujero"
--- (pinta del color del fondo de la tarjeta).
+-- Una pieza del dibujo: centro (cx, cy) y tamaño (w, h), en unidades de la
+-- cuadrícula. Todo va en ESCALA (no en píxeles sueltos), así no se pierden
+-- los decimales. fill = relleno del color del tema; stroke = solo contorno
+-- (grosor); cut = "agujero" (pinta del color del fondo); round = esquinas
+-- (true = círculo, número = radio); rot = giro en grados.
 local function part(root, st, cx, cy, w, h, o)
 	o = o or {}
 	local fr = new("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, cx, 0, cy), Size = UDim2.new(0, w, 0, h),
-		Rotation = o.rot or 0, BorderSizePixel = 0, BackgroundTransparency = (o.fill or o.cut) and 0 or 1, Parent = root,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(cx / GRID, cy / GRID),
+		Size = UDim2.fromScale(w / GRID, h / GRID),
+		Rotation = o.rot or 0,
+		BorderSizePixel = 0,
+		BackgroundTransparency = (o.fill or o.cut) and 0 or 1,
+		Parent = root,
 	})
 	if o.round ~= nil then
-		new("UICorner", { CornerRadius = o.round == true and UDim.new(1, 0) or UDim.new(0, o.round), Parent = fr })
+		local r = 0.5
+		if o.round ~= true then r = math.clamp(o.round / math.min(w, h), 0, 0.5) end
+		new("UICorner", { CornerRadius = UDim.new(r, 0), Parent = fr })
 	end
 	if o.fill then table.insert(st.fills, fr) end
 	if o.cut then table.insert(st.cuts, fr) end
 	if o.stroke then
-		table.insert(st.strokes, new("UIStroke", { Thickness = o.stroke, Color = Theme.Active, Parent = fr }))
+		table.insert(st.strokes, new("UIStroke", {
+			Thickness = o.stroke * ICON_SIZE / GRID, Color = Theme.Active, Parent = fr,
+		}))
 	end
 	return fr
 end
 
+-- Trazo con puntas redondas entre dos puntos de la cuadrícula.
+local function line(root, st, x1, y1, x2, y2, thick)
+	local dx, dy = x2 - x1, y2 - y1
+	local len = math.sqrt(dx * dx + dy * dy)
+	local fr = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale((x1 + x2) / 2 / GRID, (y1 + y2) / 2 / GRID),
+		Size = UDim2.fromScale((len + thick) / GRID, thick / GRID),
+		Rotation = math.deg(math.atan2(dy, dx)),
+		BorderSizePixel = 0,
+		Parent = root,
+	})
+	new("UICorner", { CornerRadius = UDim.new(0.5, 0), Parent = fr })
+	table.insert(st.fills, fr)
+	return fr
+end
+
 Icons.swords = function(root, st) -- dos espadas cruzadas
-	for _, sgn in ipairs({ 1, -1 }) do
-		part(root, st, 9, 9, 2.4, 17, { rot = 45 * sgn, fill = true, round = 1 })           -- hoja
-		part(root, st, 9 - 3.4 * sgn, 9 + 3.4, 8, 2, { rot = 45 * sgn, fill = true, round = 1 }) -- guarda
+	for _, s in ipairs({ 1, -1 }) do
+		local function X(x) return s == 1 and x or (GRID - x) end
+		line(root, st, X(3.5), 3.5, X(13.5), 13.5, 2.2)      -- hoja
+		line(root, st, X(10.2), 14.2, X(14.2), 10.2, 2)       -- guarda
+		line(root, st, X(14.2), 14.2, X(16.5), 16.5, 2.2)    -- mango
+		part(root, st, X(17.3), 17.3, 3, 3, { round = true, fill = true }) -- pomo
 	end
 end
+
 Icons.eye = function(root, st) -- ojo
-	part(root, st, 9, 9, 18, 10, { round = true, stroke = 1.6 })
-	part(root, st, 9, 9, 6.5, 6.5, { round = true, fill = true })
-	part(root, st, 10.6, 7.5, 2, 2, { round = true, cut = true })
+	part(root, st, 10, 10, 18, 11, { round = true, stroke = 1.7 })
+	part(root, st, 10, 10, 7.5, 7.5, { round = true, fill = true })
+	part(root, st, 10, 10, 3.2, 3.2, { round = true, cut = true })
 end
+
 Icons.book = function(root, st) -- libro abierto
-	part(root, st, 4.9, 9, 8, 13, { round = 2, stroke = 1.5 })
-	part(root, st, 13.1, 9, 8, 13, { round = 2, stroke = 1.5 })
-	for _, y in ipairs({ 6.5, 9.5 }) do
-		part(root, st, 4.9, y, 4, 1, { fill = true })
-		part(root, st, 13.1, y, 4, 1, { fill = true })
+	part(root, st, 5.6, 10, 8, 13, { round = 2, stroke = 1.6 })
+	part(root, st, 14.4, 10, 8, 13, { round = 2, stroke = 1.6 })
+	for _, y in ipairs({ 7, 10, 13 }) do
+		part(root, st, 5.6, y, 4, 1.2, { round = true, fill = true })
+		part(root, st, 14.4, y, 4, 1.2, { round = true, fill = true })
 	end
 end
-Icons.rings = function(root, st) -- círculo con círculos adentro
-	part(root, st, 9, 9, 17, 17, { round = true, stroke = 1.5 })
-	part(root, st, 9, 9, 11, 11, { round = true, stroke = 1.5 })
-	part(root, st, 9, 9, 5, 5, { round = true, fill = true })
+
+Icons.rings = function(root, st) -- blanco: anillos concéntricos
+	part(root, st, 10, 10, 17.5, 17.5, { round = true, stroke = 1.7 })
+	part(root, st, 10, 10, 11, 11, { round = true, stroke = 1.7 })
+	part(root, st, 10, 10, 4.6, 4.6, { round = true, fill = true })
 end
-Icons.heart = function(root, st) -- corazón
-	part(root, st, 9, 10, 9, 9, { rot = 45, fill = true })
-	part(root, st, 5.8, 6.8, 9, 9, { round = true, fill = true })
-	part(root, st, 12.2, 6.8, 9, 9, { round = true, fill = true })
+
+Icons.heart = function(root, st) -- corazón (cuadrado girado + dos círculos)
+	part(root, st, 10, 9.9, 9.6, 9.6, { rot = 45, fill = true })
+	part(root, st, 6.61, 6.51, 9.6, 9.6, { round = true, fill = true })
+	part(root, st, 13.39, 6.51, 9.6, 9.6, { round = true, fill = true })
 end
-Icons.diamond = function(root, st) -- gema
-	part(root, st, 9, 9, 11, 11, { rot = 45, stroke = 1.6 })
-	part(root, st, 9, 9, 5, 5, { rot = 45, fill = true })
+
+Icons.diamond = function(root, st) -- gema con facetas
+	local T = 1.7
+	line(root, st, 6, 4.5, 14, 4.5, T)          -- tapa
+	line(root, st, 6, 4.5, 2.2, 8.5, T)         -- lados de arriba
+	line(root, st, 14, 4.5, 17.8, 8.5, T)
+	line(root, st, 2.2, 8.5, 17.8, 8.5, T)      -- cintura
+	line(root, st, 2.2, 8.5, 10, 16.8, T)       -- lados de abajo
+	line(root, st, 17.8, 8.5, 10, 16.8, T)
+	line(root, st, 7.2, 8.5, 10, 4.5, 1.2)      -- facetas
+	line(root, st, 12.8, 8.5, 10, 4.5, 1.2)
 end
-Icons.moon = function(root, st) -- luna
-	part(root, st, 9, 9, 15, 15, { round = true, fill = true })
-	part(root, st, 12, 7, 11, 11, { round = true, cut = true })
+
+Icons.moon = function(root, st) -- luna creciente con estrellita
+	part(root, st, 9.5, 10.5, 15, 15, { round = true, fill = true })
+	part(root, st, 13.2, 7.6, 12, 12, { round = true, cut = true })
+	part(root, st, 16.2, 4.2, 2.4, 2.4, { round = true, fill = true })
 end
+
 Icons.skull = function(root, st) -- calavera
-	part(root, st, 9, 7.5, 13, 12, { round = true, fill = true })
-	part(root, st, 9, 14, 7, 5, { round = 2, fill = true })
-	part(root, st, 6.2, 8, 3.2, 3.2, { round = true, cut = true })
-	part(root, st, 11.8, 8, 3.2, 3.2, { round = true, cut = true })
-	part(root, st, 7.6, 14.5, 1, 3, { cut = true })
-	part(root, st, 10.4, 14.5, 1, 3, { cut = true })
+	part(root, st, 10, 8.3, 14.5, 13.5, { round = true, fill = true })     -- cráneo
+	part(root, st, 10, 14.6, 8, 6, { round = 2, fill = true })              -- mandíbula
+	part(root, st, 6.9, 8.6, 3.8, 3.8, { round = true, cut = true })        -- ojos
+	part(root, st, 13.1, 8.6, 3.8, 3.8, { round = true, cut = true })
+	part(root, st, 10, 12.2, 1.8, 2, { rot = 45, cut = true })              -- nariz
+	for _, x in ipairs({ 8.3, 10, 11.7 }) do
+		part(root, st, x, 16, 1, 3, { cut = true })                          -- dientes
+	end
 end
-Icons.star = function(root, st) -- estrella de 8 puntas
-	part(root, st, 9, 9, 10.5, 10.5, { fill = true })
-	part(root, st, 9, 9, 10.5, 10.5, { rot = 45, fill = true })
+
+Icons.star = function(root, st) -- estrella de 5 puntas (contorno)
+	local cx, cy, R, r = 10, 10.8, 9, 3.9
+	local pts = {}
+	for i = 0, 9 do
+		local a = math.rad(-90 + i * 36)
+		local rad = (i % 2 == 0) and R or r
+		pts[i + 1] = { cx + rad * math.cos(a), cy + rad * math.sin(a) }
+	end
+	for i = 1, 10 do
+		local p, q = pts[i], pts[i % 10 + 1]
+		line(root, st, p[1], p[2], q[1], q[2], 1.7)
+	end
 end
+
 local IconLookup = {
 	swords = Icons.swords, sword = Icons.swords, eye = Icons.eye, book = Icons.book,
 	rings = Icons.rings, target = Icons.rings, circles = Icons.rings, heart = Icons.heart,
@@ -974,6 +1043,9 @@ local function buildIcon(parent, spec)
 	})
 	local paint
 	local builder = typeof(spec) == "string" and IconLookup[spec:lower()] or nil
+	if typeof(spec) == "string" and not builder and spec:match("^%a%a%a+$") then
+		warn("[AzucarDulce] Ícono desconocido: '" .. spec .. "'. Usá Swords, Eye, Book, Rings, Heart, Diamond, Moon, Skull o Star.")
+	end
 	if builder then
 		local st = { fills = {}, cuts = {}, strokes = {} }
 		builder(holder, st)
@@ -1003,9 +1075,11 @@ end
 -- ============================================================
 -- 	CREATE TAB — la tarjeta fija con su lista
 -- ============================================================
-function UI:CreateTab(config)
+function UI:CreateTab(config, icon)
 	if typeof(config) == "string" then config = { Name = config } end
 	config = config or {}
+	if icon ~= nil then config.Icon = icon end
+	if config.Icon == nil then config.Icon = config.IconName or config.Image end
 	local window = self
 	local name = tostring(config.Text or config.Name or config.Title or ("Tab " .. (#self._tabs + 1)))
 
