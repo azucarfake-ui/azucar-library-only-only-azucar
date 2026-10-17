@@ -35,7 +35,7 @@
 	  • Arriba a la izquierda hay una tarjetita con el título, el
 	    Badge/ServerName y el reloj (se apaga con ShowBrand = false).
 
-	Lista de activos: Window:SetActiveList(true) (o ActiveList = true al crear la ventana) pega al borde derecho una etiquetita por pestaña,
+	Lista de activos: Window:SetActiveList(true) (se activa sola; apagala con ActiveList = false al crear la ventana) pega al borde derecho una etiquetita por pestaña,
 	ordenadas de más a menos opciones activas; la de nombre más largo sobresale más.
 
 	Paleta de "sabores": Fresa (por defecto), Chicle, Uva y Menta cambian SOLO el
@@ -592,7 +592,7 @@ function UI:CreateWindow(config)
 		end
 	end
 
-	if config.ActiveList == true then Window:SetActiveList(true) end
+	if config.ActiveList ~= false then Window:SetActiveList(true) end
 
 	return Window
 end
@@ -612,7 +612,7 @@ function UI:Toggle() if self._visible then self:Hide() else self:Show() end end
 -- Window:SetActiveList(true/false). Una etiquetita por pestaña, pegada
 -- al borde derecho: arriba la que más opciones activas tiene y abajo la
 -- que menos. Cada una mide lo que mide su nombre, así la de nombre más
--- largo sobresale más. También: CreateWindow({ ActiveList = true }).
+-- largo sobresale más. Viene prendida por defecto; CreateWindow({ ActiveList = false }) la apaga.
 function UI:SetActiveList(on)
 	local window = self
 	on = not not on
