@@ -38,6 +38,7 @@
 
 	Lista de activos: Window:SetActiveList(true) (se activa sola; apagala con ActiveList = false al crear la ventana) pega al borde derecho una etiquetita por pestaña,
 	ordenadas de más a menos opciones activas; la de nombre más largo sobresale más.
+	La flechita > < y el número de activas van en un naranja brillante.
 	Tocás una etiqueta y esa pestaña se ABRE y la fila se desplaza hasta
 	dejarla a la vista (si ya estaba abierta y a la vista, la cierra).
 
@@ -58,7 +59,7 @@
 			-- WheelScroll = true,   -- opcional: la rueda también mueve la FILA de pestañas (por defecto NO; las listas siempre scrollean con la rueda)
 			-- MinListHeight = 160,  -- opcional: alto mínimo de cada lista (la alarga aunque tenga pocas opciones)
 			-- MaxListHeight = 250,  -- opcional: tope de alto de cada lista (por defecto, hasta el borde de la pantalla)
-			-- ActiveListLength = 44, -- opcional: cuánto más largas son las etiquetas de la lista de la derecha (0 = como antes)
+			-- ActiveListLength = 90, -- opcional: cuánto más largas son las etiquetas de la lista de la derecha (0 = lo mínimo)
 			Position    = UDim2.new(0, 12, 0, 10), -- dónde arranca todo
 			ShowBrand   = true,
 			AutoSaveConfig  = true,
@@ -116,6 +117,8 @@ local ROW_H    = 24   -- alto de cada opción
 local PILL_H   = 22   -- alto de la píldora lateral
 local START_X, START_Y = 12, 10
 local TAB_PAD  = 4    -- margen interno de la fila de pestañas
+local ACTIVE_LIST_EXTRA = 90 -- cuánto más largas son las etiquetas de la lista de la derecha
+local ACTIVE_ORANGE = Color3.fromRGB(255, 145, 38) -- naranja brillante de la flechita y el número (lista de la derecha)
 
 local Stub = {}
 Stub.__index = function()
@@ -555,7 +558,7 @@ function UI:CreateWindow(config)
 		ScreenGui = ScreenGui, Container = Container, Clip = Clip, Holder = Holder,
 		_tabs = {}, _connections = {}, _visible = true, _loadId = LOAD_ID,
 		_loadStagger = config.AutoLoadStagger or 0, _loadOrder = config.AutoLoadOrder,
-		_cardW = cardW, _sideW = sideW, _pitch = cardW + sideW + TAB_GAP, _maxH = maxH, _minH = config.MinListHeight or 0, _wheel = config.WheelScroll == true, _startY = startY, _activeExtra = config.ActiveListLength or 44,
+		_cardW = cardW, _sideW = sideW, _pitch = cardW + sideW + TAB_GAP, _maxH = maxH, _minH = config.MinListHeight or 0, _wheel = config.WheelScroll == true, _startY = startY, _activeExtra = config.ActiveListLength or ACTIVE_LIST_EXTRA,
 		_scrollX = 0, _canvasW = 0, _dragMoved = false,
 	}, UI)
 	hookScrolling(Window)
@@ -648,7 +651,8 @@ function UI:Toggle() if self._visible then self:Hide() else self:Show() end end
 -- abierta y a la vista, el toque la cierra). Una etiquetita por pestaña, pegada
 -- al borde derecho: arriba la que más opciones activas tiene y abajo la
 -- que menos. Cada una mide lo que mide su nombre, así la de nombre más
--- largo sobresale más. Viene prendida por defecto; CreateWindow({ ActiveList = false }) la apaga.
+-- largo sobresale más. La flechita y el número van en naranja brillante
+-- (ACTIVE_ORANGE). Viene prendida por defecto; CreateWindow({ ActiveList = false }) la apaga.
 function UI:SetActiveList(on)
 	local window = self
 	on = not not on
@@ -727,9 +731,9 @@ function UI:SetActiveList(on)
 			r.tag.Visible = true; r.tag.LayoutOrder = i
 			r.tag.BackgroundColor3 = Theme.Background
 			r.nm.Text = d.name; r.nm.TextColor3 = d.a > 0 and Theme.Text or Theme.TextDim
-			r.ar.Text = d.tab._isOpen and "<" or ">"; r.ar.TextColor3 = d.tab._isOpen and Theme.Active or Theme.TextDim
-			r.ct.Text = tostring(d.a); r.ct.TextColor3 = d.a > 0 and Theme.Active or Theme.TextDim
-			r.tag.Size = UDim2.new(0, math.ceil(textW(d.name, 11, Theme.FontBold)) + 20 + 22 + OVER + 12 + (window._activeExtra or 44), 0, TAG_H)
+			r.ar.Text = d.tab._isOpen and "<" or ">"; r.ar.TextColor3 = ACTIVE_ORANGE
+			r.ct.Text = tostring(d.a); r.ct.TextColor3 = d.a > 0 and ACTIVE_ORANGE or Theme.TextDim
+			r.tag.Size = UDim2.new(0, math.ceil(textW(d.name, 11, Theme.FontBold)) + 20 + 22 + OVER + 12 + (window._activeExtra or ACTIVE_LIST_EXTRA), 0, TAG_H)
 		end
 		for i = #list + 1, #rows do rows[i].tag.Visible = false end
 	end
