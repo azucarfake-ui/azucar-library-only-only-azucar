@@ -363,7 +363,7 @@ local function cleanupOldWindows(guiParent)
 	for _, place in ipairs(places) do
 		pcall(function()
 			for _, child in ipairs(place:GetChildren()) do
-				if child:IsA("ScreenGui") and child.Name == "AzucarDulce"
+				if child:IsA("ScreenGui") and (child.Name == "AzucarDulce" or child.Name == "AzucarActiveList")
 					and child:GetAttribute("AzucarLoadId") ~= LOAD_ID then
 					child:Destroy()
 				end
@@ -609,7 +609,7 @@ function UI:Toggle() if self._visible then self:Hide() else self:Show() end end
 -- ============================================================
 -- 	LISTA DE ACTIVOS (pegada al borde derecho de la pantalla)
 -- ============================================================
--- Window:SetActiveList(true/false). Una etiquetita por pestaña, pegada
+-- Window:SetActiveList(true/false). Tocás una etiqueta y se abre/cierra esa pestaña. Una etiquetita por pestaña, pegada
 -- al borde derecho: arriba la que más opciones activas tiene y abajo la
 -- que menos. Cada una mide lo que mide su nombre, así la de nombre más
 -- largo sobresale más. Viene prendida por defecto; CreateWindow({ ActiveList = false }) la apaga.
@@ -629,6 +629,7 @@ function UI:SetActiveList(on)
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling, Parent = window.ScreenGui.Parent,
 	})
 	window._activeGui = gui
+	gui:SetAttribute("AzucarLoadId", LOAD_ID)
 	local holder = new("Frame", {
 		Name = "List", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, OVER, 0.5, 0),
 		Size = UDim2.new(0, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.XY,
@@ -652,8 +653,16 @@ function UI:SetActiveList(on)
 			BackgroundTransparency = 1, Font = Theme.FontMono, TextSize = 10, TextXAlignment = Enum.TextXAlignment.Right,
 			AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -OVER - 6, 0, 0), Size = UDim2.new(0, 22, 1, 0), Parent = tag,
 		})
-		rows[i] = { tag = tag, nm = nm, ct = ct }
-		return rows[i]
+		local r = { tag = tag, nm = nm, ct = ct }
+		local btn = new("TextButton", { Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), ZIndex = 5, Parent = tag })
+		btn.MouseButton1Click:Connect(function()
+			local tb = r.tab
+			if not tb then return end
+			if not window._visible then window:Show() end
+			tb:SetOpen(not tb._isOpen)
+		end)
+		rows[i] = r
+		return r
 	end
 
 	local function refresh()
@@ -662,11 +671,12 @@ function UI:SetActiveList(on)
 		for _, tab in ipairs(window._tabs) do
 			local a = 0
 			for _, o in ipairs(tab._opts) do if o.Active then a = a + 1 end end
-			list[#list + 1] = { name = tab.Name, a = a }
+			list[#list + 1] = { name = tab.Name, a = a, tab = tab }
 		end
 		table.sort(list, function(x, y) if x.a ~= y.a then return x.a > y.a end return x.name < y.name end)
 		for i, d in ipairs(list) do
 			local r = getRow(i)
+			r.tab = d.tab
 			r.tag.Visible = true; r.tag.LayoutOrder = i
 			r.tag.BackgroundColor3 = Theme.Background
 			r.nm.Text = d.name; r.nm.TextColor3 = d.a > 0 and Theme.Text or Theme.TextDim
