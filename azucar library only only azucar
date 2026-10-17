@@ -67,7 +67,7 @@
 			AutoLoadOrder   = {"M", "F", "A"},
 			AutoSaveIgnore  = {"MiniPekka"},
 		})
-		local Movement = Window:CreateTab({ Name = "Movement" })
+		local Movement = Window:CreateTab({ Name = "Movement", Icon = "Swords" }) -- Icon opcional: Swords, Eye, Book, Rings, Heart, Diamond, Moon, Skull, Star, un id de imagen o un emoji
 		Movement:CreateSlider({ Text = "Walk Speed", Range = {16, 300}, Default = 16,
 			Callback = function(v) ... end })
 		Movement:CreateToggle({ Text = "Fly", Flag = "Fly",
@@ -879,6 +879,128 @@ function UI:Notify(config)
 end
 
 -- ============================================================
+-- 	ÍCONOS DE PESTAÑA
+-- ============================================================
+-- CreateTab({ Name = "Combat", Icon = "Swords" }). Los íconos se dibujan
+-- con formas (no dependen de ninguna letra) y toman el color del tema.
+-- Nombres: Swords, Eye, Book, Rings, Heart, Diamond, Moon, Skull, Star
+-- (también valen Sword, Target, Circles, Gem). Icon también acepta:
+--   • un id de imagen (número o "rbxassetid://123") -> imagen propia;
+--   • cualquier otro texto o emoji ("★", "🔥") -> se muestra tal cual.
+-- Después de crear la pestaña: Tab:SetIcon("Eye") (o nil para quitarlo).
+local ICON_SIZE, ICON_W = 18, 22
+local Icons = {}
+UI.Icons = Icons
+
+-- Una pieza del dibujo, con coordenadas del centro dentro de un cuadro de 18x18.
+-- fill = relleno del color del tema; stroke = solo contorno; cut = "agujero"
+-- (pinta del color del fondo de la tarjeta).
+local function part(root, st, cx, cy, w, h, o)
+	o = o or {}
+	local fr = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, cx, 0, cy), Size = UDim2.new(0, w, 0, h),
+		Rotation = o.rot or 0, BorderSizePixel = 0, BackgroundTransparency = (o.fill or o.cut) and 0 or 1, Parent = root,
+	})
+	if o.round ~= nil then
+		new("UICorner", { CornerRadius = o.round == true and UDim.new(1, 0) or UDim.new(0, o.round), Parent = fr })
+	end
+	if o.fill then table.insert(st.fills, fr) end
+	if o.cut then table.insert(st.cuts, fr) end
+	if o.stroke then
+		table.insert(st.strokes, new("UIStroke", { Thickness = o.stroke, Color = Theme.Active, Parent = fr }))
+	end
+	return fr
+end
+
+Icons.swords = function(root, st) -- dos espadas cruzadas
+	for _, sgn in ipairs({ 1, -1 }) do
+		part(root, st, 9, 9, 2.4, 17, { rot = 45 * sgn, fill = true, round = 1 })           -- hoja
+		part(root, st, 9 - 3.4 * sgn, 9 + 3.4, 8, 2, { rot = 45 * sgn, fill = true, round = 1 }) -- guarda
+	end
+end
+Icons.eye = function(root, st) -- ojo
+	part(root, st, 9, 9, 18, 10, { round = true, stroke = 1.6 })
+	part(root, st, 9, 9, 6.5, 6.5, { round = true, fill = true })
+	part(root, st, 10.6, 7.5, 2, 2, { round = true, cut = true })
+end
+Icons.book = function(root, st) -- libro abierto
+	part(root, st, 4.9, 9, 8, 13, { round = 2, stroke = 1.5 })
+	part(root, st, 13.1, 9, 8, 13, { round = 2, stroke = 1.5 })
+	for _, y in ipairs({ 6.5, 9.5 }) do
+		part(root, st, 4.9, y, 4, 1, { fill = true })
+		part(root, st, 13.1, y, 4, 1, { fill = true })
+	end
+end
+Icons.rings = function(root, st) -- círculo con círculos adentro
+	part(root, st, 9, 9, 17, 17, { round = true, stroke = 1.5 })
+	part(root, st, 9, 9, 11, 11, { round = true, stroke = 1.5 })
+	part(root, st, 9, 9, 5, 5, { round = true, fill = true })
+end
+Icons.heart = function(root, st) -- corazón
+	part(root, st, 9, 10, 9, 9, { rot = 45, fill = true })
+	part(root, st, 5.8, 6.8, 9, 9, { round = true, fill = true })
+	part(root, st, 12.2, 6.8, 9, 9, { round = true, fill = true })
+end
+Icons.diamond = function(root, st) -- gema
+	part(root, st, 9, 9, 11, 11, { rot = 45, stroke = 1.6 })
+	part(root, st, 9, 9, 5, 5, { rot = 45, fill = true })
+end
+Icons.moon = function(root, st) -- luna
+	part(root, st, 9, 9, 15, 15, { round = true, fill = true })
+	part(root, st, 12, 7, 11, 11, { round = true, cut = true })
+end
+Icons.skull = function(root, st) -- calavera
+	part(root, st, 9, 7.5, 13, 12, { round = true, fill = true })
+	part(root, st, 9, 14, 7, 5, { round = 2, fill = true })
+	part(root, st, 6.2, 8, 3.2, 3.2, { round = true, cut = true })
+	part(root, st, 11.8, 8, 3.2, 3.2, { round = true, cut = true })
+	part(root, st, 7.6, 14.5, 1, 3, { cut = true })
+	part(root, st, 10.4, 14.5, 1, 3, { cut = true })
+end
+Icons.star = function(root, st) -- estrella de 8 puntas
+	part(root, st, 9, 9, 10.5, 10.5, { fill = true })
+	part(root, st, 9, 9, 10.5, 10.5, { rot = 45, fill = true })
+end
+local IconLookup = {
+	swords = Icons.swords, sword = Icons.swords, eye = Icons.eye, book = Icons.book,
+	rings = Icons.rings, target = Icons.rings, circles = Icons.rings, heart = Icons.heart,
+	diamond = Icons.diamond, gem = Icons.diamond, moon = Icons.moon, skull = Icons.skull, star = Icons.star,
+}
+
+local function buildIcon(parent, spec)
+	local holder = new("Frame", {
+		Name = "Icon", BackgroundTransparency = 1, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 9, 0.5, 0), Size = UDim2.new(0, ICON_SIZE, 0, ICON_SIZE), Parent = parent,
+	})
+	local paint
+	local builder = typeof(spec) == "string" and IconLookup[spec:lower()] or nil
+	if builder then
+		local st = { fills = {}, cuts = {}, strokes = {} }
+		builder(holder, st)
+		paint = function(c)
+			for _, fr in ipairs(st.fills) do fr.BackgroundColor3 = c end
+			for _, sk in ipairs(st.strokes) do sk.Color = c end
+			for _, fr in ipairs(st.cuts) do fr.BackgroundColor3 = Theme.Background end
+		end
+	elseif typeof(spec) == "number" or (typeof(spec) == "string" and spec:find("^rbxasset")) then
+		new("ImageLabel", {
+			BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0),
+			Image = typeof(spec) == "number" and ("rbxassetid://" .. spec) or spec, Parent = holder,
+		})
+		paint = function() end
+	else
+		local lbl = new("TextLabel", {
+			Text = tostring(spec), Font = Theme.FontBold, TextSize = 15, BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 1, 0), Parent = holder,
+		})
+		paint = function(c) lbl.TextColor3 = c end
+	end
+	paint(Theme.Active)
+	onAccent(function() if holder.Parent then paint(Theme.Active) end end)
+	return holder
+end
+
+-- ============================================================
 -- 	CREATE TAB — la tarjeta fija con su lista
 -- ============================================================
 function UI:CreateTab(config)
@@ -889,7 +1011,9 @@ function UI:CreateTab(config)
 
 	local openW = self._cardW
 	local titleW = textW(name, 12, Theme.FontTitle)
-	local closedW = math.clamp(math.ceil(titleW) + 76, 70, openW)
+	local iconSpec = config.Icon
+	local function calcClosed(hasIcon) return math.clamp(math.ceil(titleW) + 76 + (hasIcon and ICON_W or 0), 70, openW) end
+	local closedW = calcClosed(iconSpec ~= nil and iconSpec ~= false)
 
 	-- Todas las pestañas van en UNA sola fila arriba, una al lado de la
 	-- otra, cada una con su espacio para las píldoras. Están fijas.
@@ -932,6 +1056,19 @@ function UI:CreateTab(config)
 		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -9, 0.5, 0), Size = UDim2.new(0, 12, 1, 0), Parent = Header,
 	})
 	local HeaderBtn = new("TextButton", { Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Parent = Header })
+
+	-- Ícono opcional a la izquierda del nombre.
+	local IconHolder
+	local function applyIcon(spec)
+		if IconHolder then IconHolder:Destroy() IconHolder = nil end
+		local has = spec ~= nil and spec ~= false and tostring(spec) ~= ""
+		iconSpec = has and spec or nil
+		Title.Position = UDim2.new(0, 10 + (has and ICON_W or 0), 0, 0)
+		Title.Size = UDim2.new(1, -74 - (has and ICON_W or 0), 1, 0)
+		closedW = calcClosed(has)
+		if has then IconHolder = buildIcon(Header, spec) end
+	end
+	applyIcon(iconSpec)
 
 	-- La lista: scrollea normal (rueda / arrastre / dedo) pero SIN barra.
 	-- Su alto crece con las opciones hasta MaxListHeight y de ahí scrollea.
@@ -995,6 +1132,7 @@ function UI:CreateTab(config)
 	Tab.Open = function() setOpen(true) end
 	Tab.Close = function() setOpen(false) end
 	Tab.SetOpen = function(_, open) setOpen(not not open) end
+	Tab.SetIcon = function(_, spec) applyIcon(spec) setOpen(Tab._isOpen) end
 
 	-- Click en la cabecera abre/cierra. Arrastrarla NO mueve la tarjeta:
 	-- desplaza la fila de pestañas.
