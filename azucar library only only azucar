@@ -1,11 +1,15 @@
 --[[
-	AzucarDulce  v2.1  —  "Píldoras"
+	AzucarDulce  v2.2  —  "Píldoras"
 	================================
 	(Antes: v1.1 con un rectángulo único. Misma lógica por dentro:
 	Flags, Callbacks, Logic, guardado de config, Notify. Lo que cambió
 	es el LAYOUT.)
 
-	NOVEDAD v2.1: ÍCONOS DE PESTAÑA REDISEÑADOS. Más grandes (20 px),
+	NOVEDAD v2.2: los sabores Uva, Menta y Chicle ahora son temas NEGROS con el
+	color del sabor (como Troll), Chicle pasó de rosa a celeste, y la lista de la
+	derecha usa el color del tema (antes era siempre naranja).
+
+	v2.1: ÍCONOS DE PESTAÑA REDISEÑADOS. Más grandes (20 px),
 	dibujados en escala (sin decimales perdidos) y en estilo línea. Se
 	pasan con Icon = "Eye" (o segundo argumento: CreateTab("Visual", "Eye")).
 	Si escribís mal el nombre de un ícono, avisa por consola.
@@ -43,12 +47,14 @@
 
 	Lista de activos: Window:SetActiveList(true) (se activa sola; apagala con ActiveList = false al crear la ventana) pega al borde derecho una etiquetita por pestaña,
 	ordenadas de más a menos opciones activas; la de nombre más largo sobresale más.
-	Cuando una pestaña está ABIERTA, toda su etiqueta (nombre, flechita, número y borde) se pone naranja fuerte con un halo que late; cerrada vuelve al color del tema.
+	Cuando una pestaña está ABIERTA, toda su etiqueta (nombre, flechita, número y borde) se pone del color del tema (el acento) con un halo que late; cerrada vuelve a lo normal.
 	Tocás una etiqueta y esa pestaña se ABRE y la fila se desplaza hasta
 	dejarla a la vista (si ya estaba abierta y a la vista, la cierra).
 
-	Paleta de "sabores": Fresa (por defecto), Chicle, Uva y Menta cambian SOLO el
-	acento. "Troll" cambia todo el tema (verde musgo oscuro con acento naranja).
+	Sabores: "Fresa" (por defecto) es rosa sobre fondo claro. "Uva" (violeta), "Menta"
+	(verde) y "Chicle" (celeste) son temas NEGROS con ese color. "Troll" es verde musgo
+	oscuro con acento naranja. Elegí el sabor con Theme = "..." al crear la ventana
+	(los fondos oscuros no se repintan si lo cambiás después).
 
 	Uso:
 		local UI = loadstring(game:HttpGet("...AzucarDulce.lua"))()
@@ -92,7 +98,7 @@ local GuiService       = game:GetService("GuiService")
 
 local UI = {}
 UI.__index = UI
-UI.Version    = "2.1"
+UI.Version    = "2.2"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -123,7 +129,7 @@ local PILL_H   = 22   -- alto de la píldora lateral
 local START_X, START_Y = 12, 10
 local TAB_PAD  = 4    -- margen interno de la fila de pestañas
 local ACTIVE_LIST_EXTRA = 90 -- cuánto más largas son las etiquetas de la lista de la derecha
-local ACTIVE_ORANGE = Color3.fromRGB(255, 120, 0) -- naranja puro y fuerte de la etiqueta de la lista de la derecha cuando su pestaña está abierta
+local ACTIVE_LIST_COLOR = nil -- color de la etiqueta de la derecha cuando su pestaña está abierta. nil = el acento del tema; o poné un Color3 fijo
 
 local Stub = {}
 Stub.__index = function()
@@ -164,17 +170,36 @@ local Theme = {
 	FontMono   = Enum.Font.Code,
 }
 UI.Theme = Theme
+local function openColor() return ACTIVE_LIST_COLOR or Theme.Active end
 
 local BaseTheme = {}
 for _, k in ipairs({ "Background", "Panel", "Field", "RowIdle", "Line", "LineOpen", "Border", "Text", "TextDim", "Active", "ActiveDim" }) do BaseTheme[k] = Theme[k] end
 
--- Paleta: cambia SOLO el acento, no el fondo. Se elige con
--- config.Theme al crear la ventana o en caliente con UI:SetAccentColor(...).
+-- Sabores: Fresa cambia SOLO el acento (fondo claro); Uva, Menta, Chicle y Troll
+-- cambian todo el tema. Se elige con config.Theme al crear la ventana
+-- (o con UI:SetAccentColor(...), que no repinta los fondos ya dibujados).
+-- Tema oscuro: negro con un toque del color del sabor (fondo, filas, bordes).
+local function darkTheme(accent)
+	local black, white = Color3.new(0, 0, 0), Color3.new(1, 1, 1)
+	return {
+		Background = black:Lerp(accent, 0.05),
+		Panel      = black:Lerp(accent, 0.09),
+		Field      = black:Lerp(accent, 0.12),
+		RowIdle    = black:Lerp(accent, 0.07),
+		Line       = black:Lerp(accent, 0.11),
+		LineOpen   = black:Lerp(accent, 0.2),
+		Border     = black:Lerp(accent, 0.8),
+		Text       = white:Lerp(accent, 0.08),
+		TextDim    = Color3.fromRGB(150, 150, 158):Lerp(accent, 0.25),
+		Active     = accent,
+	}
+end
+
 local Palettes = {
-	Fresa  = Color3.fromRGB(255, 105, 150),
-	Chicle = Color3.fromRGB(255, 153, 204),
-	Uva    = Color3.fromRGB(186, 130, 230),
-	Menta  = Color3.fromRGB(110, 210, 180),
+	Fresa  = Color3.fromRGB(255, 105, 150),                 -- rosa sobre fondo claro
+	Chicle = darkTheme(Color3.fromRGB(64, 156, 255)),       -- celeste sobre negro (cambiá el color acá)
+	Uva    = darkTheme(Color3.fromRGB(176, 110, 255)),      -- violeta sobre negro
+	Menta  = darkTheme(Color3.fromRGB(70, 220, 160)),       -- verde menta sobre negro
 	Troll  = {
 		Background = Color3.fromRGB(47, 59, 42),
 		Panel      = Color3.fromRGB(58, 72, 52),
@@ -657,7 +682,8 @@ function UI:Toggle() if self._visible then self:Hide() else self:Show() end end
 -- al borde derecho: arriba la que más opciones activas tiene y abajo la
 -- que menos. Cada una mide lo que mide su nombre, así la de nombre más
 -- largo sobresale más. Cuando la pestaña está abierta, toda su etiqueta
--- (nombre, flechita, número, borde) se pone naranja fuerte (ACTIVE_ORANGE). Viene prendida por defecto; CreateWindow({ ActiveList = false }) la apaga.
+-- (nombre, flechita, número, borde) se pone del color del tema (openColor; si querés un color
+-- fijo, ACTIVE_LIST_COLOR arriba del archivo). Viene prendida por defecto; CreateWindow({ ActiveList = false }) la apaga.
 function UI:SetActiveList(on)
 	local window = self
 	on = not not on
@@ -697,12 +723,12 @@ function UI:SetActiveList(on)
 		local ct = new("TextLabel", {
 			BackgroundTransparency = 1, Font = Theme.FontMono, TextSize = 10, TextXAlignment = Enum.TextXAlignment.Right,
 			AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -OVER - 6, 0, 0), Size = UDim2.new(0, 22, 1, 0), Parent = tag,
-			TextStrokeColor3 = ACTIVE_ORANGE, TextStrokeTransparency = 0.6,
+			TextStrokeColor3 = openColor(), TextStrokeTransparency = 0.6,
 		})
 		local ar = new("TextLabel", {
 			Text = ">", BackgroundTransparency = 1, Font = Theme.FontBold, TextSize = 12,
 			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 6, 0.5, 0), Size = UDim2.new(0, 12, 1, 0), Parent = tag,
-			TextStrokeColor3 = ACTIVE_ORANGE, TextStrokeTransparency = 0.6,
+			TextStrokeColor3 = openColor(), TextStrokeTransparency = 0.6,
 		})
 		local r = { tag = tag, nm = nm, ct = ct, ar = ar, glow = false }
 		local btn = new("TextButton", { Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), ZIndex = 5, Parent = tag })
@@ -742,17 +768,19 @@ function UI:SetActiveList(on)
 			r.ar.Text = open and "<" or ">"
 			r.ct.Text = tostring(d.a)
 			if open then
-				-- Pestaña abierta: toda la etiqueta en naranja.
-				r.nm.TextColor3 = ACTIVE_ORANGE
-				r.ar.TextColor3 = ACTIVE_ORANGE
-				r.ct.TextColor3 = ACTIVE_ORANGE
+				-- Pestaña abierta: toda la etiqueta del color del tema.
+				r.nm.TextColor3 = openColor()
+				r.ar.TextColor3 = openColor()
+				r.ct.TextColor3 = openColor()
+				r.ar.TextStrokeColor3 = openColor()
+				r.ct.TextStrokeColor3 = openColor()
 			else
 				r.nm.TextColor3 = d.a > 0 and Theme.Text or Theme.TextDim
 				r.ar.TextColor3 = Theme.TextDim
 				r.ct.TextColor3 = d.a > 0 and Theme.Active or Theme.TextDim
 			end
 			local tagStroke = r.tag:FindFirstChildOfClass("UIStroke")
-			if tagStroke then tagStroke.Color = open and ACTIVE_ORANGE or Theme.Border end
+			if tagStroke then tagStroke.Color = open and openColor() or Theme.Border end
 			r.glow = open
 			if not open then
 				r.ar.TextStrokeTransparency = 1
