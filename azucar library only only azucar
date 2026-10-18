@@ -105,9 +105,9 @@ local GuiService       = game:GetService("GuiService")
 
 local UI = {}
 UI.__index = UI
-UI.Version    = "2.8"
+UI.Version    = "2.9"
 UI.Windows    = {}
-warn("[SugarUI] Libreria v2.8 cargada (Troll / Troll Oscuro)")
+warn("[SugarUI] Libreria v2.9 cargada (Troll / Troll Oscuro)")
 UI.Flags      = {}
 UI.FlagValues = {}
 UI.ConfigFolder = "AzucarDulce"
@@ -199,7 +199,7 @@ local Palettes = {
 		TextDim    = Color3.fromRGB(150, 165, 130),
 		Active     = Color3.fromRGB(217, 130, 43),
 	},
-	-- Troll Oscuro: piedra negra con tinte morado, sangre y hueso (esquinas filosas).
+	-- Troll Oscuro: piedra negra con tinte morado, sangre y hueso (esquinas redondeadas).
 	["Troll Oscuro"] = {
 		Background = Color3.fromRGB(10, 8, 14),
 		Panel      = Color3.fromRGB(18, 14, 24),
@@ -277,7 +277,6 @@ function UI:SetAccentColor(paletteName)
 	end
 	local old = themeSnapshot()
 	UI.CurrentPalette = key
-	pcall(function() UI:SetCornerStyle(key == "Troll Oscuro" and "Sharp" or "Round") end)
 	for k, v in pairs(BaseTheme) do Theme[k] = v end
 	if typeof(p) == "table" then
 		for k, v in pairs(p) do Theme[k] = v end
