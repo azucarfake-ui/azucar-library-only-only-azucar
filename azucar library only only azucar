@@ -1197,10 +1197,24 @@ function UI:CreateTab(config, icon)
 		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -24, 0, 0), Size = UDim2.new(0, 42, 1, 0), Parent = Header,
 	})
 	-- Flechita: > = cerrada, < = abierta.
-	local Arrow = new("TextLabel", {
-		Text = ">", Font = Theme.FontBold, TextSize = 13, TextColor3 = Theme.TextDim, BackgroundTransparency = 1,
-		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -9, 0.5, 0), Size = UDim2.new(0, 12, 1, 0), Parent = Header,
+	local ArrowBox = new("Frame", {
+		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -9, 0.5, 0), Size = UDim2.new(0, 12, 0, 12),
+		BackgroundTransparency = 1, BorderSizePixel = 0, Parent = Header,
 	})
+	local ArrowBars = {}
+	for _, rot in ipairs({ 45, -45 }) do
+		table.insert(ArrowBars, new("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.new(0, 6, 0, 1.6), BorderSizePixel = 0,
+			BackgroundColor3 = Theme.TextDim, Rotation = rot,
+			Position = UDim2.new(0.5, 0, 0.5, rot > 0 and -2.12 or 2.12), Parent = ArrowBox,
+		}, { circle() }))
+	end
+	local Arrow = { Parent = true }
+	setmetatable(Arrow, { __newindex = function(_, k, v)
+		if k == "Text" then ArrowBox.Rotation = (v == "<") and 180 or 0
+		elseif k == "TextColor3" then for _, bar in ipairs(ArrowBars) do bar.BackgroundColor3 = v end end
+	end })
+
 	local HeaderBtn = new("TextButton", { Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Parent = Header })
 
 	-- Ícono opcional a la izquierda del nombre.
@@ -1341,9 +1355,9 @@ local function makeOption(tab, labelText, pillW)
 	local ChevBars = {}
 	for _, rot in ipairs({ 45, -45 }) do
 		table.insert(ChevBars, new("Frame", {
-			AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.new(0, 6, 0, 1.6), BorderSizePixel = 0,
+			AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.new(0, 7, 0, 1.8), BorderSizePixel = 0,
 			BackgroundColor3 = Theme.Active, Rotation = rot,
-			Position = UDim2.new(0.5, 0, 0.5, rot > 0 and -2.12 or 2.12), Parent = ChevIcon,
+			Position = UDim2.new(0.5, 0, 0.5, rot > 0 and -2.47 or 2.47), Parent = ChevIcon,
 		}, { circle() }))
 	end
 	local ChevText = setmetatable({}, { __newindex = function(_, k, v)
