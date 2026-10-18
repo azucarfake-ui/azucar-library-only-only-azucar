@@ -1,11 +1,16 @@
 --[[
-	AzucarDulce  v2.3  —  "Píldoras"
+	AzucarDulce  v2.4  —  "Píldoras"
 	================================
 	(Antes: v1.1 con un rectángulo único. Misma lógica por dentro:
 	Flags, Callbacks, Logic, guardado de config, Notify. Lo que cambió
 	es el LAYOUT.)
 
-	NOVEDAD v2.3: cambiar de sabor EN CALIENTE (UI:SetAccentColor("Uva"), un dropdown, etc.)
+	NOVEDAD v2.4: queda SOLO el tema Troll (verde musgo con acento naranja), que ahora es el
+	de siempre (no hace falta pasar Theme). Se quitaron Fresa, Chicle, Uva y Menta. Toda la
+	letra de la UI usa la fuente Antique (se agranda sola para que se lea bien); los números
+	y las teclas siguen en fuente de código.
+
+	(Nota v2.3, histórica:) cambiar de sabor EN CALIENTE (UI:SetAccentColor("Uva"), un dropdown, etc.)
 	ahora repinta TODA la interfaz (fondos, filas, bordes, textos), no solo el acento. Antes,
 	al elegir Uva/Menta/Chicle después de crear la ventana, el fondo seguía blanco. El nombre
 	del sabor ya no distingue mayúsculas ("uva" funciona). También: Window:SetTheme("Uva").
@@ -56,10 +61,7 @@
 	Tocás una etiqueta y esa pestaña se ABRE y la fila se desplaza hasta
 	dejarla a la vista (si ya estaba abierta y a la vista, la cierra).
 
-	Sabores: "Fresa" (por defecto) es rosa sobre fondo claro. "Uva" (violeta), "Menta"
-	(verde) y "Chicle" (celeste) son temas NEGROS con ese color. "Troll" es verde musgo
-	oscuro con acento naranja. Elegí el sabor con Theme = "..." al crear la ventana, o
-	cambialo cuando quieras con UI:SetAccentColor("Uva") (repinta todo en vivo).
+	Tema: solo "Troll" (verde musgo oscuro con acento naranja). Es el único y el de siempre.
 
 	Uso:
 		local UI = loadstring(game:HttpGet("...AzucarDulce.lua"))()
@@ -68,7 +70,7 @@
 			Badge       = "NAH ID ADAPT",
 			ServerName  = "NAH ID ADAPT",
 			ToggleKey   = Enum.KeyCode.K,
-			Theme       = "Fresa",   -- "Fresa" | "Chicle" | "Uva" | "Menta" | "Troll"
+			Theme       = "Troll",   -- opcional: Troll es el único tema
 			CornerStyle = "Round",   -- "Round" | "Sharp"
 			TabWidth    = 134,       -- ancho de una pestaña abierta
 			SideWidth   = 128,       -- espacio entre pestañas para las píldoras
@@ -103,7 +105,7 @@ local GuiService       = game:GetService("GuiService")
 
 local UI = {}
 UI.__index = UI
-UI.Version    = "2.3"
+UI.Version    = "2.4"
 UI.Windows    = {}
 UI.Flags      = {}
 UI.FlagValues = {}
@@ -151,27 +153,28 @@ local function safeFont(names, fallback)
 	end
 	return fallback
 end
-local FONT_TITLE = safeFont({ "FredokaOne", "GrandstanderBold", "Nunito" }, Enum.Font.GothamBold)
+local FONT_UI = safeFont({ "Antique" }, Enum.Font.GothamBold)
+local FONT_SCALE = 1.3 -- Antique se ve más chica que las otras fuentes: se agranda
 
 -- ============================================================
 -- 	TEMA: DULCE (rosa pastel + blanco, esquinas redonditas)
 -- ============================================================
 local Theme = {
-	Background = Color3.fromRGB(255, 240, 246),
-	Panel      = Color3.fromRGB(255, 232, 240),
-	Field      = Color3.fromRGB(255, 225, 236),
-	RowIdle    = Color3.fromRGB(255, 238, 244),
-	Line       = Color3.fromRGB(255, 220, 232),
-	LineOpen   = Color3.fromRGB(255, 206, 223),
-	Border     = Color3.fromRGB(255, 122, 170),
-	Text       = Color3.fromRGB(100, 45, 65),
-	TextDim    = Color3.fromRGB(180, 125, 145),
-	Active     = Color3.fromRGB(255, 105, 150),
-	ActiveDim  = Color3.fromRGB(214, 74, 115),
+	Background = Color3.fromRGB(47, 59, 42),
+	Panel      = Color3.fromRGB(58, 72, 52),
+	Field      = Color3.fromRGB(66, 82, 58),
+	RowIdle    = Color3.fromRGB(53, 66, 47),
+	Line       = Color3.fromRGB(74, 92, 66),
+	LineOpen   = Color3.fromRGB(88, 110, 76),
+	Border     = Color3.fromRGB(107, 143, 78),
+	Text       = Color3.fromRGB(226, 232, 208),
+	TextDim    = Color3.fromRGB(150, 165, 130),
+	Active     = Color3.fromRGB(217, 130, 43),
+	ActiveDim  = Color3.fromRGB(170, 101, 33),
 	Alpha      = 0.04, -- transparencia del fondo de las tarjetas (0 = sólido)
-	FontTitle  = FONT_TITLE,
-	Font       = Enum.Font.GothamMedium,
-	FontBold   = Enum.Font.GothamBold,
+	FontTitle  = FONT_UI,
+	Font       = FONT_UI,
+	FontBold   = FONT_UI,
 	FontMono   = Enum.Font.Code,
 }
 UI.Theme = Theme
@@ -180,32 +183,9 @@ local function openColor() return ACTIVE_LIST_COLOR or Theme.Active end
 local BaseTheme = {}
 for _, k in ipairs({ "Background", "Panel", "Field", "RowIdle", "Line", "LineOpen", "Border", "Text", "TextDim", "Active", "ActiveDim" }) do BaseTheme[k] = Theme[k] end
 
--- Sabores: Fresa cambia SOLO el acento (fondo claro); Uva, Menta, Chicle y Troll
--- cambian todo el tema. Se elige con config.Theme al crear la ventana o en
--- vivo con UI:SetAccentColor(...), que repinta todo lo ya dibujado.
--- Tema oscuro: negro con un toque del color del sabor (fondo, filas, bordes).
-local function darkTheme(accent)
-	local black, white = Color3.new(0, 0, 0), Color3.new(1, 1, 1)
-	return {
-		Background = black:Lerp(accent, 0.05),
-		Panel      = black:Lerp(accent, 0.09),
-		Field      = black:Lerp(accent, 0.12),
-		RowIdle    = black:Lerp(accent, 0.07),
-		Line       = black:Lerp(accent, 0.11),
-		LineOpen   = black:Lerp(accent, 0.2),
-		Border     = black:Lerp(accent, 0.8),
-		Text       = white:Lerp(accent, 0.08),
-		TextDim    = Color3.fromRGB(150, 150, 158):Lerp(accent, 0.25),
-		Active     = accent,
-	}
-end
-
+-- Único tema: Troll (los colores ya están arriba en Theme).
 local Palettes = {
-	Fresa  = Color3.fromRGB(255, 105, 150),                 -- rosa sobre fondo claro
-	Chicle = darkTheme(Color3.fromRGB(64, 156, 255)),       -- celeste sobre negro (cambiá el color acá)
-	Uva    = darkTheme(Color3.fromRGB(176, 110, 255)),      -- violeta sobre negro
-	Menta  = darkTheme(Color3.fromRGB(70, 220, 160)),       -- verde menta sobre negro
-	Troll  = {
+	Troll = {
 		Background = Color3.fromRGB(47, 59, 42),
 		Panel      = Color3.fromRGB(58, 72, 52),
 		Field      = Color3.fromRGB(66, 82, 58),
@@ -219,7 +199,7 @@ local Palettes = {
 	},
 }
 UI.Palettes = Palettes
-UI.CurrentPalette = "Fresa"
+UI.CurrentPalette = "Troll"
 
 local accentListeners = {}
 local function onAccent(fn)
@@ -277,7 +257,7 @@ function UI:SetAccentColor(paletteName)
 		end
 	end
 	if not p then
-		warn("[AzucarDulce] Sabor desconocido: " .. tostring(paletteName) .. ". Usá Fresa, Chicle, Uva, Menta o Troll.")
+		warn("[AzucarDulce] Sabor desconocido: " .. tostring(paletteName) .. ". El único tema es Troll.")
 		return
 	end
 	local old = themeSnapshot()
@@ -305,6 +285,9 @@ UI.SetTheme = UI.SetAccentColor
 local function new(class, props, children)
 	local inst = Instance.new(class)
 	for prop, value in pairs(props or {}) do inst[prop] = value end
+	if (class == "TextLabel" or class == "TextButton" or class == "TextBox") and inst.Font == FONT_UI then
+		inst.TextSize = math.floor(inst.TextSize * FONT_SCALE + 0.5)
+	end
 	for _, child in ipairs(children or {}) do child.Parent = inst end
 	return inst
 end
@@ -348,6 +331,7 @@ local function tween(inst, props, time, style, dir)
 	return inst
 end
 local function textW(text, size, font)
+	if font == FONT_UI then size = math.floor(size * FONT_SCALE + 0.5) end
 	local ok, w = pcall(function() return TextService:GetTextSize(text, size, font, Vector2.new(1000, 100)).X end)
 	if ok and w then return w end
 	return #text * size * 0.6
