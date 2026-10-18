@@ -1,3 +1,4 @@
+local SquareUI = (function()
 local Players          = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService     = game:GetService("TweenService")
@@ -448,3 +449,36 @@ function SquareUI:CreateWindow(config)
 end
 
 return SquareUI
+end)()
+
+local Window = SquareUI:CreateWindow({
+	Title = "Square Hub Lite",
+	Size = Vector2.new(440, 340),
+	ToggleKey = Enum.KeyCode.K,
+	Theme = "Troll",
+})
+
+local Combat = Window:CreateTab("combat")
+local Visuals = Window:CreateTab("visuals")
+local Misc = Window:CreateTab("misc")
+
+local Aim = Combat:CreateGroupbox("Camera Aim", "Right")
+Aim:AddToggle("Enable Camera Aim", { Flag = "CamAim", Callback = function(v) print("CamAim", v) end })
+Aim:AddSlider("Aim Speed", { Min = 1, Max = 100, Default = 35, Flag = "AimSpeed" })
+Aim:AddDropdown("Aim Part", { Options = { "Auto", "Head", "Torso" }, Default = "Auto", Flag = "AimPart" })
+
+local Anti = Combat:CreateGroupbox("Anti Aim", "Left")
+Anti:AddToggle("Enable", { Flag = "AntiAim" })
+Anti:AddDropdown("Yaw", { Options = { "none", "spin", "jitter" }, Flag = "Yaw" })
+Anti:AddSlider("Custom Angle", { Min = 0, Max = 360, Default = 0, Suffix = "°", Flag = "Angle" })
+Anti:AddDivider()
+Anti:AddButton("Reset", function() SquareUI.Flags.Angle:Set(0) end)
+
+local Esp = Visuals:CreateGroupbox("ESP", "Left")
+Esp:AddToggle("Boxes", { Flag = "Boxes" })
+Esp:AddToggle("Names", { Flag = "Names" })
+Esp:AddInput("Tag", { Placeholder = "texto...", Flag = "Tag" })
+
+local Info = Misc:CreateGroupbox("Info", "Left")
+Info:AddLabel("Square UI " .. SquareUI.Version)
+Info:AddButton("Notificar", function() Window:Notify("Hola desde Square UI", 3) end)
