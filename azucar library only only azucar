@@ -8,19 +8,35 @@ local SquareUI = {
 	Flags   = {},
 	Windows = {},
 	Theme   = {
-		Back     = Color3.fromRGB(10, 10, 10),
-		Title    = Color3.fromRGB(16, 16, 16),
-		Group    = Color3.fromRGB(14, 14, 14),
-		Field    = Color3.fromRGB(26, 26, 26),
-		Border   = Color3.fromRGB(210, 210, 210),
-		Dim      = Color3.fromRGB(70, 70, 70),
-		Text     = Color3.fromRGB(240, 240, 240),
-		TextDim  = Color3.fromRGB(150, 150, 150),
-		Accent   = Color3.fromRGB(255, 255, 255),
+		Back     = Color3.fromRGB(47, 59, 42),
+		Title    = Color3.fromRGB(36, 46, 32),
+		Group    = Color3.fromRGB(53, 66, 47),
+		Field    = Color3.fromRGB(66, 82, 58),
+		Border   = Color3.fromRGB(107, 143, 78),
+		Dim      = Color3.fromRGB(74, 92, 66),
+		Text     = Color3.fromRGB(226, 232, 208),
+		TextDim  = Color3.fromRGB(150, 165, 130),
+		Accent   = Color3.fromRGB(217, 130, 43),
+		OnAccent = Color3.fromRGB(24, 30, 20),
 		Font     = Enum.Font.Code,
-		TextSize = 13,
+		TextSize = 12,
+	},
+	Themes  = {
+		["Troll"] = {
+			Back = Color3.fromRGB(47, 59, 42), Title = Color3.fromRGB(36, 46, 32), Group = Color3.fromRGB(53, 66, 47),
+			Field = Color3.fromRGB(66, 82, 58), Border = Color3.fromRGB(107, 143, 78), Dim = Color3.fromRGB(74, 92, 66),
+			Text = Color3.fromRGB(226, 232, 208), TextDim = Color3.fromRGB(150, 165, 130),
+			Accent = Color3.fromRGB(217, 130, 43), OnAccent = Color3.fromRGB(24, 30, 20),
+		},
+		["Troll Oscuro"] = {
+			Back = Color3.fromRGB(8, 11, 21), Title = Color3.fromRGB(5, 7, 14), Group = Color3.fromRGB(14, 20, 36),
+			Field = Color3.fromRGB(21, 31, 52), Border = Color3.fromRGB(58, 108, 196), Dim = Color3.fromRGB(32, 46, 76),
+			Text = Color3.fromRGB(220, 230, 245), TextDim = Color3.fromRGB(118, 138, 170),
+			Accent = Color3.fromRGB(64, 148, 255), OnAccent = Color3.fromRGB(5, 10, 20),
+		},
 	},
 }
+
 
 local Theme = SquareUI.Theme
 
@@ -125,6 +141,8 @@ function Group:AddToggle(name, opts)
 	end
 	function obj:Get() return obj.Value end
 	btn.MouseButton1Click:Connect(function() obj:Set(not obj.Value) end)
+	btn.MouseEnter:Connect(function() box.BackgroundColor3 = Theme.Dim end)
+	btn.MouseLeave:Connect(function() box.BackgroundColor3 = Theme.Field end)
 	if opts.Default then obj:Set(true) end
 	return self:_register(opts.Flag, obj)
 end
@@ -282,7 +300,7 @@ function Tab:CreateGroupbox(title, side)
 		LayoutOrder = #column:GetChildren(), Parent = column,
 	}, { stroke(Theme.Border, 1) })
 	label({
-		Text = " " .. tostring(title) .. " ", BackgroundTransparency = 0, BackgroundColor3 = Theme.Back,
+		Text = " " .. tostring(title) .. " ", TextColor3 = Theme.Accent, BackgroundTransparency = 0, BackgroundColor3 = Theme.Back,
 		AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.new(0, 0, 0, 14), Position = UDim2.new(0, 8, 0, -8), ZIndex = 5, Parent = frame,
 	})
 	local body = new("Frame", {
@@ -312,8 +330,9 @@ function Window:SelectTab(tab)
 	for _, t in ipairs(self._tabs) do
 		local on = (t == tab)
 		t._page.Visible = on
+		t._on = on
 		t._btn.BackgroundColor3 = on and Theme.Accent or Theme.Field
-		t._btn.TextColor3 = on and Color3.new(0, 0, 0) or Theme.Text
+		t._btn.TextColor3 = on and Theme.OnAccent or Theme.Text
 	end
 end
 
@@ -335,6 +354,8 @@ function Window:CreateTab(name)
 	local tab = setmetatable({ _page = page, _btn = btn, _left = column(0), _right = column(0.5), _window = self }, Tab)
 	table.insert(self._tabs, tab)
 	btn.MouseButton1Click:Connect(function() self:SelectTab(tab) end)
+	btn.MouseEnter:Connect(function() if not tab._on then btn.BackgroundColor3 = Theme.Dim end end)
+	btn.MouseLeave:Connect(function() if not tab._on then btn.BackgroundColor3 = Theme.Field end end)
 	self:_layoutTabs()
 	if #self._tabs == 1 then self:SelectTab(tab) end
 	return tab
@@ -364,8 +385,10 @@ end
 
 function SquareUI:CreateWindow(config)
 	config = config or {}
+	local preset = SquareUI.Themes[config.Theme or "Troll"]
+	if preset then for k, v in pairs(preset) do Theme[k] = v end end
 	if config.Accent then Theme.Accent = config.Accent end
-	local size = config.Size or Vector2.new(560, 440)
+	local size = config.Size or Vector2.new(440, 340)
 	local self = setmetatable({ _tabs = {}, _conns = {}, _visible = true }, Window)
 
 	local gui = new("ScreenGui", { Name = "SquareUI", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, IgnoreGuiInset = true })
@@ -380,8 +403,10 @@ function SquareUI:CreateWindow(config)
 	self._main = main
 
 	local titlebar = new("Frame", { BackgroundColor3 = Theme.Title, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 22), Parent = main })
-	label({ Text = tostring(config.Title or "Square UI"), Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(1, -16, 1, 0), Parent = titlebar })
-	new("Frame", { BackgroundColor3 = Theme.Border, BorderSizePixel = 0, Position = UDim2.new(0, 0, 1, -1), Size = UDim2.new(1, 0, 0, 1), Parent = titlebar })
+	new("Frame", { BackgroundColor3 = Theme.Accent, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.new(0, 8, 0, 8), Parent = titlebar })
+	label({ Text = tostring(config.Title or "Square UI"), Position = UDim2.new(0, 22, 0, 0), Size = UDim2.new(1, -90, 1, 0), Parent = titlebar })
+	label({ Text = "v" .. SquareUI.Version, TextColor3 = Theme.TextDim, TextXAlignment = Enum.TextXAlignment.Right, Position = UDim2.new(1, -58, 0, 0), Size = UDim2.new(0, 50, 1, 0), Parent = titlebar })
+	new("Frame", { BackgroundColor3 = Theme.Accent, BorderSizePixel = 0, Position = UDim2.new(0, 0, 1, -1), Size = UDim2.new(1, 0, 0, 1), Parent = titlebar })
 
 	local dragging, dragStart, startPos = false, nil, nil
 	titlebar.InputBegan:Connect(function(i)
@@ -395,18 +420,25 @@ function SquareUI:CreateWindow(config)
 	end)
 	self:_connect(UserInputService.InputEnded, function(i) if isClick(i) then dragging = false end end)
 
+	new("Frame", {
+		BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.new(0, 3, 0, 52), Size = UDim2.new(1, -6, 1, -72), Parent = main,
+	}, { stroke(Theme.Dim, 1) })
 	self._tabbar = new("Frame", {
 		BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.new(0, 6, 0, 28), Size = UDim2.new(1, -12, 0, 20), Parent = main,
 	})
 	self._content = new("Frame", {
-		BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.new(0, 6, 0, 54), Size = UDim2.new(1, -12, 1, -60), Parent = main,
+		BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.new(0, 8, 0, 58), Size = UDim2.new(1, -16, 1, -84), Parent = main,
 	})
 	self._notes = new("Frame", {
 		BackgroundTransparency = 1, BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -10, 1, -10),
 		Size = UDim2.new(0, 220, 0, 200), Parent = gui,
 	}, { new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Bottom }) })
 
-	local toggleKey = config.ToggleKey or Enum.KeyCode.RightShift
+	local toggleKey = config.ToggleKey or Enum.KeyCode.K
+	local footer = new("Frame", { BackgroundColor3 = Theme.Title, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 18), Parent = main })
+	new("Frame", { BackgroundColor3 = Theme.Dim, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 1), Parent = footer })
+	label({ Text = "[" .. toggleKey.Name .. "] mostrar / ocultar", TextColor3 = Theme.TextDim, TextSize = 11, Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(0.6, 0, 1, 0), Parent = footer })
+	label({ Text = tostring(config.Theme or "Troll"), TextColor3 = Theme.Accent, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Right, Position = UDim2.new(0.5, 0, 0, 0), Size = UDim2.new(0.5, -8, 1, 0), Parent = footer })
 	self:_connect(UserInputService.InputBegan, function(i, processed)
 		if not processed and i.KeyCode == toggleKey then self:Toggle() end
 	end)
