@@ -1333,10 +1333,24 @@ local function makeOption(tab, labelText, pillW)
 		Size = UDim2.new(0, 16, 0, 16), AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -5, 0.5, 0),
 		BackgroundColor3 = Theme.Background, BorderSizePixel = 0, Parent = Row,
 	}, { circle(), accentStroke(1) })
-	local ChevText = new("TextLabel", {
-		Text = "›", Font = Theme.FontBold, TextSize = 14, TextColor3 = Theme.Active, BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 1, 0), Position = UDim2.new(0, 0, 0, -1), Parent = Chev,
+	-- Flechita dibujada (2 barras) para que quede perfectamente centrada en el circulo.
+	local ChevIcon = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 16, 0, 16),
+		BackgroundTransparency = 1, BorderSizePixel = 0, Parent = Chev,
 	})
+	local ChevBars = {}
+	for _, rot in ipairs({ 45, -45 }) do
+		table.insert(ChevBars, new("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.new(0, 6, 0, 1.6), BorderSizePixel = 0,
+			BackgroundColor3 = Theme.Active, Rotation = rot,
+			Position = UDim2.new(0.5, 0, 0.5, rot > 0 and -2.12 or 2.12), Parent = ChevIcon,
+		}, { circle() }))
+	end
+	local ChevText = setmetatable({}, { __newindex = function(_, k, v)
+		if k == "Text" then ChevIcon.Rotation = (v == "‹") and 180 or 0
+		elseif k == "TextColor3" then for _, bar in ipairs(ChevBars) do bar.BackgroundColor3 = v end end
+	end })
+
 
 	local Pill = new("Frame", {
 		Name = "Pill", Visible = false, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, tab._openW - 2, 0, 0),
