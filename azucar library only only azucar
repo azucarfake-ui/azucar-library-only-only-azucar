@@ -105,9 +105,9 @@ local GuiService       = game:GetService("GuiService")
 
 local UI = {}
 UI.__index = UI
-UI.Version    = "2.7"
+UI.Version    = "2.8"
 UI.Windows    = {}
-warn("[SugarUI] Libreria v2.7 cargada (Troll / Troll Oscuro)")
+warn("[SugarUI] Libreria v2.8 cargada (Troll / Troll Oscuro)")
 UI.Flags      = {}
 UI.FlagValues = {}
 UI.ConfigFolder = "AzucarDulce"
@@ -199,17 +199,18 @@ local Palettes = {
 		TextDim    = Color3.fromRGB(150, 165, 130),
 		Active     = Color3.fromRGB(217, 130, 43),
 	},
+	-- Troll Oscuro: piedra negra con tinte morado, sangre y hueso (esquinas filosas).
 	["Troll Oscuro"] = {
-		Background = Color3.fromRGB(14, 18, 13),
-		Panel      = Color3.fromRGB(22, 28, 20),
-		Field      = Color3.fromRGB(30, 38, 27),
-		RowIdle    = Color3.fromRGB(19, 25, 17),
-		Line       = Color3.fromRGB(42, 54, 37),
-		LineOpen   = Color3.fromRGB(58, 74, 50),
-		Border     = Color3.fromRGB(86, 112, 60),
-		Text       = Color3.fromRGB(222, 214, 188),
-		TextDim    = Color3.fromRGB(128, 138, 108),
-		Active     = Color3.fromRGB(232, 106, 28),
+		Background = Color3.fromRGB(10, 8, 14),
+		Panel      = Color3.fromRGB(18, 14, 24),
+		Field      = Color3.fromRGB(27, 20, 35),
+		RowIdle    = Color3.fromRGB(14, 11, 19),
+		Line       = Color3.fromRGB(46, 30, 52),
+		LineOpen   = Color3.fromRGB(78, 34, 58),
+		Border     = Color3.fromRGB(150, 26, 40),
+		Text       = Color3.fromRGB(232, 222, 200),
+		TextDim    = Color3.fromRGB(145, 122, 132),
+		Active     = Color3.fromRGB(214, 36, 52),
 	},
 }
 UI.Palettes = Palettes
@@ -276,6 +277,7 @@ function UI:SetAccentColor(paletteName)
 	end
 	local old = themeSnapshot()
 	UI.CurrentPalette = key
+	pcall(function() UI:SetCornerStyle(key == "Troll Oscuro" and "Sharp" or "Round") end)
 	for k, v in pairs(BaseTheme) do Theme[k] = v end
 	if typeof(p) == "table" then
 		for k, v in pairs(p) do Theme[k] = v end
