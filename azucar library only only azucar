@@ -105,9 +105,9 @@ local GuiService       = game:GetService("GuiService")
 
 local UI = {}
 UI.__index = UI
-UI.Version    = "2.9"
+UI.Version    = "3.0"
 UI.Windows    = {}
-warn("[SugarUI] Libreria v2.9 cargada (Troll / Troll Oscuro)")
+warn("[SugarUI] Libreria v3.0 cargada (Troll / Troll Oscuro)")
 UI.Flags      = {}
 UI.FlagValues = {}
 UI.ConfigFolder = "AzucarDulce"
@@ -594,8 +594,8 @@ end
 function UI:CreateWindow(config)
 	config = config or {}
 
-	if config.CornerStyle ~= nil then UI:SetCornerStyle(config.CornerStyle) end
 	if config.Theme ~= nil then UI:SetAccentColor(config.Theme) end
+	UI:SetCornerStyle(config.CornerStyle == "Sharp" and "Sharp" or "Round") -- siempre redondeadas salvo que pidas "Sharp"
 
 	local title = config.Title or config.Name or "Azúcar Dulce"
 	local cardW = config.TabWidth or CARD_W
