@@ -99,19 +99,20 @@ local function tableToColor(t) return Color3.fromRGB(t[1] or 255, t[2] or 255, t
 -- Iconos dibujados con cuadros (no dependen de la fuente)
 -- ============================================================
 local Icons = {
-	target = { "...###...", ".##...##.", ".#.....#.", "#..###..#", "#..#.#..#", "#..###..#", ".#.....#.", ".##...##.", "...###..." },
-	eye    = { ".........", "..#####..", ".#.....#.", "#..###..#", "#.#####.#", "#..###..#", ".#.....#.", "..#####..", "........." },
-	gear   = { "...#.#...", ".#######.", ".##...##.", "##.....##", "#...#...#", "##.....##", ".##...##.", ".#######.", "...#.#..." },
-	star   = { "....#....", "....#....", "...###...", ".#######.", "#########", ".#######.", "...###...", "....#....", "....#...." },
-	list   = { ".........", "#.#######", ".........", "#.#######", ".........", "#.#######", ".........", ".........", "........." },
-	user   = { "...###...", "..#####..", "..#####..", "...###...", ".........", ".#######.", "#########", "#########", "........." },
-	dot    = { ".........", ".........", "..#####..", "..#####..", "..#####..", "..#####..", "..#####..", ".........", "........." },
-	sword  = { "....#....", "...###...", "...###...", "...###...", "...###...", ".#######.", "....#....", "....#....", "...###..." },
-	home   = { "....#....", "...###...", "..#####..", ".#######.", "#########", ".##...##.", ".##...##.", ".##...##.", "........." },
+	target = { "...#####...", ".##.....##.", ".#.......#.", "#...###...#", "#..#...#..#", "#..#.#.#..#", "#..#...#..#", "#...###...#", ".#.......#.", ".##.....##.", "...#####..." },
+	eye    = { "...#####...", ".##.....##.", "#...###...#", "#..#####..#", "#..#####..#", "#...###...#", ".##.....##.", "...#####..." },
+	gear   = { "....###....", ".##.###.##.", ".#########.", "..##...##..", "####...####", "####...####", "####...####", "..##...##..", ".#########.", ".##.###.##.", "....###...." },
+	star   = { ".....#.....", ".....#.....", "....###....", "...#####...", ".#########.", "###########", ".#########.", "...#####...", "....###....", ".....#.....", ".....#....." },
+	list   = { "##.########", "...........", "##.########", "...........", "##.########" },
+	user   = { "....###....", "...#####...", "...#####...", "...#####...", "....###....", "...........", "..#######..", ".#########.", "###########", "###########" },
+	dot    = { "#####", "#####", "#####", "#####", "#####" },
+	sword  = { "........###", ".......####", "......####.", ".....####..", "....####...", "#..####....", ".#####.....", "..###......", "..####.....", ".##..#.....", "##........." },
+	home   = { ".....#.....", "....###....", "...#####...", "..#######..", ".#########.", "###########", ".##.....##.", ".##.###.##.", ".##.###.##.", ".##.###.##." },
 }
 
 -- Dibuja un dibujo de pixeles (filas de texto con # = pixel) con cuadritos de 1px
-local function drawPixels(parent, rows, color)
+local function drawPixels(parent, rows, color, ox, oy)
+	ox, oy = ox or 0, oy or 0
 	local parts = {}
 	for y, row in ipairs(rows) do
 		local x = 1
@@ -120,7 +121,7 @@ local function drawPixels(parent, rows, color)
 				local x2 = x
 				while x2 < #row and row:sub(x2 + 1, x2 + 1) == "#" do x2 = x2 + 1 end
 				table.insert(parts, new("Frame", {
-					BackgroundColor3 = color, BorderSizePixel = 0, Position = UDim2.new(0, x - 1, 0, y - 1),
+					BackgroundColor3 = color, BorderSizePixel = 0, Position = UDim2.new(0, x - 1 + ox, 0, y - 1 + oy),
 					Size = UDim2.new(0, x2 - x + 1, 0, 1), Parent = parent,
 				}))
 				x = x2 + 1
@@ -137,9 +138,11 @@ local function makeIcon(parent, name)
 	if not rows then return nil end
 	local box = new("Frame", {
 		BackgroundTransparency = 1, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.new(0, 9, 0, 9), Parent = parent,
+		Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.new(0, 11, 0, 11), Parent = parent,
 	})
-	local parts = drawPixels(box, rows, Theme.Text)
+	local w = 0
+	for _, r in ipairs(rows) do w = math.max(w, #r) end
+	local parts = drawPixels(box, rows, Theme.Text, math.floor((11 - w) / 2), math.floor((11 - #rows) / 2))
 	return { paint = function(color) for _, p in ipairs(parts) do p.BackgroundColor3 = color end end }
 end
 
@@ -262,12 +265,13 @@ function Group:AddToggle(name, opts)
 	local row = self:_row(18, holder, 1)
 	local box = new("Frame", {
 		BackgroundColor3 = Theme.Field, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(0, 12, 0, 12), Parent = row,
+		Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(0, 13, 0, 13), Parent = row,
 	}, { stroke(Theme.Border, 1) })
 	local fill = new("Frame", {
-		BackgroundColor3 = Theme.Accent, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 6, 0, 6), Visible = false, Parent = box,
+		BackgroundTransparency = 1, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 7, 0, 6), Visible = false, Parent = box,
 	})
+	drawPixels(fill, { "......#", ".....##", "#...##.", "##.##..", ".###...", "..#...." }, Theme.Accent)
 	label({ Text = tostring(name), Position = UDim2.new(0, 20, 0, 0), Size = UDim2.new(1, -20, 1, 0), Parent = row })
 	local btn = new("TextButton", { Text = "", BackgroundTransparency = 1, Size = UDim2.new(1, -60, 1, 0), Parent = row })
 
@@ -479,11 +483,11 @@ function Group:AddDropdown(name, opts)
 		Size = UDim2.new(1, 0, 0, 19), LayoutOrder = 2, Parent = holder,
 	}, { stroke(Theme.Border, 1) })
 	local cur = label({ Text = "", Position = UDim2.new(0, 5, 0, 0), Size = UDim2.new(1, -22, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, Parent = head })
-	local arrowBox = new("Frame", { BackgroundTransparency = 1, BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -6, 0.5, 0), Size = UDim2.new(0, 7, 0, 4), Parent = head })
+	local arrowBox = new("Frame", { BackgroundTransparency = 1, BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -6, 0.5, 0), Size = UDim2.new(0, 9, 0, 5), Parent = head })
 	local arrowDown = new("Frame", { BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.new(1, 0, 1, 0), Parent = arrowBox })
 	local arrowUp = new("Frame", { BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.new(1, 0, 1, 0), Visible = false, Parent = arrowBox })
-	drawPixels(arrowDown, { "#######", ".#####.", "..###..", "...#..." }, Theme.Text)
-	drawPixels(arrowUp, { "...#...", "..###..", ".#####.", "#######" }, Theme.Accent)
+	drawPixels(arrowDown, { "#########", ".#######.", "..#####..", "...###...", "....#...." }, Theme.Text)
+	drawPixels(arrowUp, { "....#....", "...###...", "..#####..", ".#######.", "#########" }, Theme.Accent)
 	local arrow = setmetatable({}, { __newindex = function(_, k, v)
 		if k == "Text" then arrowDown.Visible = (v == "v") arrowUp.Visible = (v ~= "v") end
 	end })
@@ -643,7 +647,7 @@ function Window:CreateTab(name, icon)
 	local tab = setmetatable({ _page = page, _btn = btn, _left = column(0), _right = column(0.5), _window = self }, Tab)
 	if icon then
 		tab._icon = makeIcon(btn, icon)
-		if tab._icon then btn.Text = "   " .. btn.Text end
+		if tab._icon then btn.Text = "     " .. btn.Text end
 	end
 	table.insert(self._tabs, tab)
 	btn.MouseButton1Click:Connect(function() self:SelectTab(tab) end)
@@ -775,7 +779,7 @@ function SquareUI:CreateWindow(config)
 		Position = config.Position or UDim2.new(0, 70, 0.5, -size.Y / 2), Parent = gui,
 	}, { stroke(Theme.Border, 1) })
 	self._main = main
-	new("UIScale", { Scale = config.Scale or 0.95, Parent = main })
+	new("UIScale", { Scale = config.Scale or 1.15, Parent = main })
 
 	local titlebar = new("Frame", { BackgroundColor3 = Theme.Title, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 22), Parent = main })
 	new("Frame", { BackgroundColor3 = Theme.Accent, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.new(0, 8, 0, 8), Parent = titlebar })
