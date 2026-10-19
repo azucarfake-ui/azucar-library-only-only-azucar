@@ -1,3 +1,4 @@
+local SquareUI = (function()
 local Players          = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local HttpService      = game:GetService("HttpService")
@@ -756,7 +757,7 @@ function SquareUI:CreateWindow(config)
 	local preset = SquareUI.Themes[config.Theme or "Troll"]
 	if preset then for k, v in pairs(preset) do Theme[k] = v end end
 	if config.Accent then Theme.Accent = config.Accent end
-	local size = config.Size or Vector2.new(440, 340)
+	local size = config.Size or Vector2.new(360, 430)
 	local self = setmetatable({
 		_tabs = {}, _conns = {}, _visible = true, _toggles = {}, _flagObjs = {},
 		_listOn = config.ActiveList ~= false,
@@ -771,7 +772,7 @@ function SquareUI:CreateWindow(config)
 
 	local main = new("Frame", {
 		Name = "Main", BackgroundColor3 = Theme.Back, BorderSizePixel = 0, Size = UDim2.new(0, size.X, 0, size.Y),
-		Position = UDim2.new(0.5, -size.X / 2, 0.5, -size.Y / 2), Parent = gui,
+		Position = config.Position or UDim2.new(0, 70, 0.5, -size.Y / 2), Parent = gui,
 	}, { stroke(Theme.Border, 1) })
 	self._main = main
 
@@ -835,3 +836,43 @@ function SquareUI:CreateWindow(config)
 end
 
 return SquareUI
+end)()
+
+local Window = SquareUI:CreateWindow({
+	Title = "Square Hub Lite",
+	Size = Vector2.new(360, 430),
+	ToggleKey = Enum.KeyCode.K,
+	Theme = "Troll",
+})
+
+local Combat = Window:CreateTab("combat", "sword")
+local Visuals = Window:CreateTab("visuals", "eye")
+local Misc = Window:CreateTab("misc", "gear")
+
+local Aim = Combat:CreateGroupbox("Camera Aim", "Right")
+Aim:AddToggle("Enable Camera Aim", { Flag = "CamAim", Callback = function(v) print("CamAim", v) end }):AddKeybind({ Default = Enum.KeyCode.E })
+Aim:AddSlider("Aim Speed", { Min = 1, Max = 100, Default = 35, Flag = "AimSpeed" })
+Aim:AddDropdown("Aim Part", { Options = { "Auto", "Head", "Torso" }, Default = "Auto", Flag = "AimPart" })
+
+local Rage = Combat:CreateGroupbox("Ragebot", "Right")
+local tabs = Rage:AddSubtabs({ "Ragebot", "Visualizer" })
+tabs.Ragebot:AddToggle("Enable", { Flag = "Rage" })
+tabs.Ragebot:AddToggle("Auto Target", { Flag = "AutoTarget" })
+tabs.Visualizer:AddToggle("Show Line", { Flag = "ShowLine" }):AddColorpicker({ Default = Color3.fromRGB(217, 130, 43) })
+
+local Anti = Combat:CreateGroupbox("Anti Aim", "Left")
+Anti:AddToggle("Enable", { Flag = "AntiAim" })
+Anti:AddDropdown("Yaw", { Options = { "none", "spin", "jitter" }, Flag = "Yaw" })
+Anti:AddSlider("Custom Angle", { Min = 0, Max = 360, Default = 0, Suffix = "deg", Flag = "Angle" })
+Anti:AddDivider()
+Anti:AddButton("Reset", function() SquareUI.Flags.Angle:Set(0) end)
+
+local Esp = Visuals:CreateGroupbox("ESP", "Left")
+Esp:AddToggle("Boxes", { Flag = "Boxes" }):AddColorpicker({ Default = Color3.fromRGB(255, 80, 80) })
+Esp:AddToggle("Names", { Flag = "Names" })
+Esp:AddColorpicker("Tracer Color", { Default = Color3.fromRGB(217, 130, 43), Flag = "TracerColor" })
+Esp:AddInput("Tag", { Placeholder = "texto...", Flag = "Tag" })
+
+local Info = Misc:CreateGroupbox("Info", "Left")
+Info:AddLabel("Square UI " .. SquareUI.Version)
+Info:AddButton("Notificar", function() Window:Notify("Hola desde Square UI", 3) end)
