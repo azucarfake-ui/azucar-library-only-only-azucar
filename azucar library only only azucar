@@ -335,10 +335,22 @@ local SilhouetteRows = {
 local function makeSilhouette(parent, winSize)
 	local cols, rowsN = #SilhouetteRows[1], #SilhouetteRows
 	local S = math.max(3, math.floor(math.min(winSize.X * 0.65 / cols, (winSize.Y - 110) * 0.85 / rowsN)))
+	local T = math.max(1, math.floor(S / 4)) -- grosor del borde
 	local holder = new("Frame", {
 		Name = "Silhouette", BackgroundTransparency = 1, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0.5, 0, 0.5, 17), Size = UDim2.new(0, cols * S, 0, rowsN * S), Parent = parent,
 	})
+	local function filled(x, y)
+		local r = SilhouetteRows[y]
+		return r ~= nil and x >= 1 and x <= cols and r:sub(x, x) ~= "."
+	end
+	local function box(x, y, w, h, color, transp)
+		new("Frame", {
+			BackgroundColor3 = color, BackgroundTransparency = transp, BorderSizePixel = 0,
+			Position = UDim2.new(0, x, 0, y), Size = UDim2.new(0, w, 0, h), Parent = holder,
+		})
+	end
+	-- Relleno (y ojos en rojo apagado).
 	for y, row in ipairs(SilhouetteRows) do
 		local x = 1
 		while x <= #row do
@@ -346,14 +358,48 @@ local function makeSilhouette(parent, winSize)
 			if ch ~= "." then
 				local x2 = x
 				while x2 < #row and row:sub(x2 + 1, x2 + 1) == ch do x2 = x2 + 1 end
-				new("Frame", {
-					BackgroundColor3 = (ch == "e") and Theme.Active or Theme.Field,
-					BackgroundTransparency = (ch == "e") and 0.55 or 0.45, BorderSizePixel = 0,
-					Position = UDim2.new(0, (x - 1) * S, 0, (y - 1) * S), Size = UDim2.new(0, (x2 - x + 1) * S, 0, S), Parent = holder,
-				})
+				if ch == "e" then
+					box((x - 1) * S, (y - 1) * S, (x2 - x + 1) * S, S, Theme.Active, 0.3)
+				else
+					box((x - 1) * S, (y - 1) * S, (x2 - x + 1) * S, S, Theme.Field, 0.15)
+				end
 				x = x2 + 1
 			else
 				x = x + 1
+			end
+		end
+	end
+	-- Borde rojizo apagado: bordes horizontales (arriba / abajo) fusionados en tramos.
+	for y = 1, rowsN do
+		for _, side in ipairs({ -1, 1 }) do
+			local x = 1
+			while x <= cols do
+				if filled(x, y) and not filled(x, y + side) then
+					local x2 = x
+					while x2 < cols and filled(x2 + 1, y) and not filled(x2 + 1, y + side) do x2 = x2 + 1 end
+					local py = (side == -1) and (y - 1) * S or y * S - T
+					box((x - 1) * S, py, (x2 - x + 1) * S, T, Theme.ActiveDim, 0.2)
+					x = x2 + 1
+				else
+					x = x + 1
+				end
+			end
+		end
+	end
+	-- Bordes verticales (izquierda / derecha) fusionados en tramos.
+	for x = 1, cols do
+		for _, side in ipairs({ -1, 1 }) do
+			local y = 1
+			while y <= rowsN do
+				if filled(x, y) and not filled(x + side, y) then
+					local y2 = y
+					while y2 < rowsN and filled(x, y2 + 1) and not filled(x + side, y2 + 1) do y2 = y2 + 1 end
+					local px = (side == -1) and (x - 1) * S or x * S - T
+					box(px, (y - 1) * S, T, (y2 - y + 1) * S, Theme.ActiveDim, 0.2)
+					y = y2 + 1
+				else
+					y = y + 1
+				end
 			end
 		end
 	end
