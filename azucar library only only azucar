@@ -309,7 +309,7 @@ function Group:AddToggle(name, opts)
 				end
 				return
 			end
-			if not processed and key and i.KeyCode == key then obj:Set(not obj.Value) end
+			if key and i.KeyCode == key and not UserInputService:GetFocusedTextBox() then obj:Set(not obj.Value) end
 		end)
 		obj.Key = key
 		function obj:SetKey(k) key = k obj.Key = k show() window:_changed() end
@@ -757,7 +757,7 @@ function SquareUI:CreateWindow(config)
 	local preset = SquareUI.Themes[config.Theme or "Troll"]
 	if preset then for k, v in pairs(preset) do Theme[k] = v end end
 	if config.Accent then Theme.Accent = config.Accent end
-	local size = config.Size or Vector2.new(360, 430)
+	local size = config.Size or Vector2.new(340, 400)
 	local self = setmetatable({
 		_tabs = {}, _conns = {}, _visible = true, _toggles = {}, _flagObjs = {},
 		_listOn = config.ActiveList ~= false,
@@ -775,6 +775,7 @@ function SquareUI:CreateWindow(config)
 		Position = config.Position or UDim2.new(0, 70, 0.5, -size.Y / 2), Parent = gui,
 	}, { stroke(Theme.Border, 1) })
 	self._main = main
+	new("UIScale", { Scale = config.Scale or 0.85, Parent = main })
 
 	local titlebar = new("Frame", { BackgroundColor3 = Theme.Title, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 22), Parent = main })
 	new("Frame", { BackgroundColor3 = Theme.Accent, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.new(0, 8, 0, 8), Parent = titlebar })
@@ -820,7 +821,7 @@ function SquareUI:CreateWindow(config)
 	label({ Text = tostring(config.Theme or "Troll"), TextColor3 = Theme.Accent, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Right, Position = UDim2.new(0.5, 0, 0, 0), Size = UDim2.new(0.5, -8, 1, 0), Parent = footer })
 
 	self:_connect(UserInputService.InputBegan, function(i, processed)
-		if not processed and i.KeyCode == toggleKey then self:Toggle() end
+		if i.KeyCode == toggleKey and not UserInputService:GetFocusedTextBox() then self:Toggle() end
 	end)
 
 	-- cargar la configuracion guardada (los elementos la toman al crearse)
@@ -840,7 +841,7 @@ end)()
 
 local Window = SquareUI:CreateWindow({
 	Title = "Square Hub Lite",
-	Size = Vector2.new(360, 430),
+	Size = Vector2.new(340, 400),
 	ToggleKey = Enum.KeyCode.K,
 	Theme = "Troll",
 })
