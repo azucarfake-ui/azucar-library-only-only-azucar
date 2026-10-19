@@ -1,5 +1,5 @@
 --[[
-	AzucarSquare v3.3 — misma lógica y misma API que AzucarDulce (SugarUI), con estilo CUADRADO.
+	AzucarSquare v3.4 — misma lógica y misma API que AzucarDulce (SugarUI), con estilo CUADRADO.
 
 	Se usa igual:
 		local UI = loadstring(game:HttpGet("..."))()
@@ -14,6 +14,9 @@
 		UI.Flags, UI.FlagValues, UI:SaveConfig / LoadConfig / ListConfigs, AutoSaveConfig, AutoSaveIgnore, ActiveList...
 
 	Tema: "Gengar" (violeta oscuro + rojo de los ojos). Es el único tema y viene por defecto.
+
+	v3.4:
+	  • Silueta de Gengar de fondo detrás de todo (no tapa ningún control). Silhouette = false en CreateWindow para quitarla.
 
 	v3.3:
 	  • Se quitaron los temas Troll y Troll Oscuro. Ahora solo existe el tema Gengar.
@@ -40,7 +43,7 @@ local HttpService      = game:GetService("HttpService")
 
 local UI = {}
 UI.__index = UI
-UI.Version      = "3.3"
+UI.Version      = "3.4"
 UI.Windows      = {}
 UI.Flags        = {}
 UI.FlagValues   = {}
@@ -293,6 +296,68 @@ local function makeIcon(parent, spec)
 	for _, r in ipairs(rows) do w = math.max(w, #r) end
 	local parts = drawPixels(box, rows, Theme.Text, math.floor((11 - w) / 2), math.floor((11 - #rows) / 2))
 	return { box = box, paint = function(color) for _, p in ipairs(parts) do p.BackgroundColor3 = color end end }
+end
+
+-- ============================================================
+-- 	SILUETA DE FONDO (Gengar). Va detrás de todo: no tapa ningún control.
+-- ============================================================
+local SilhouetteRows = {
+	"...#..................#...",
+	"...##................##...",
+	"...###..............###...",
+	"...####............####...",
+	"..#####............#####..",
+	"..######################..",
+	".########################.",
+	"##########################",
+	".########################.",
+	"###ee################ee###",
+	".###eee############eee###.",
+	"##########################",
+	".########################.",
+	"##......................##",
+	"###....................###",
+	"####..................####",
+	"##########################",
+	".########################.",
+	"..######################..",
+	"..######################..",
+	"###.##################.###",
+	"####.################.####",
+	".###.################.###.",
+	"..##.################.##..",
+	"...####################...",
+	"..#########....#########..",
+	".##########....##########.",
+	"###########....###########",
+}
+
+local function makeSilhouette(parent, winSize)
+	local cols, rowsN = #SilhouetteRows[1], #SilhouetteRows
+	local S = math.max(3, math.floor(math.min(winSize.X * 0.65 / cols, (winSize.Y - 110) * 0.85 / rowsN)))
+	local holder = new("Frame", {
+		Name = "Silhouette", BackgroundTransparency = 1, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 17), Size = UDim2.new(0, cols * S, 0, rowsN * S), Parent = parent,
+	})
+	for y, row in ipairs(SilhouetteRows) do
+		local x = 1
+		while x <= #row do
+			local ch = row:sub(x, x)
+			if ch ~= "." then
+				local x2 = x
+				while x2 < #row and row:sub(x2 + 1, x2 + 1) == ch do x2 = x2 + 1 end
+				new("Frame", {
+					BackgroundColor3 = (ch == "e") and Theme.Active or Theme.Field,
+					BackgroundTransparency = (ch == "e") and 0.55 or 0.45, BorderSizePixel = 0,
+					Position = UDim2.new(0, (x - 1) * S, 0, (y - 1) * S), Size = UDim2.new(0, (x2 - x + 1) * S, 0, S), Parent = holder,
+				})
+				x = x2 + 1
+			else
+				x = x + 1
+			end
+		end
+	end
+	return holder
 end
 
 -- ============================================================
@@ -1030,6 +1095,7 @@ function UI:CreateWindow(config)
 		Position = UDim2.new(0, 70, 0.5, -size.Y / 2), Parent = ScreenGui,
 	}, { stroke(Theme.Border, 1) })
 	if scale ~= 1 then new("UIScale", { Scale = scale, Parent = Main }) end
+	if config.Silhouette ~= false then makeSilhouette(Main, size) end -- Silhouette = false para quitarla
 
 	local window = setmetatable({
 		ScreenGui = ScreenGui, Container = Main, _tabs = {}, _connections = {}, _visible = true, _loadId = LOAD_ID,
