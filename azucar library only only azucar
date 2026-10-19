@@ -1,5 +1,5 @@
 --[[
-	AzucarSquare v3.0 — misma lógica y misma API que AzucarDulce (SugarUI), con estilo CUADRADO.
+	AzucarSquare v3.1 — misma lógica y misma API que AzucarDulce (SugarUI), con estilo CUADRADO.
 
 	Se usa igual:
 		local UI = loadstring(game:HttpGet("..."))()
@@ -13,7 +13,16 @@
 		Window:Notify("texto")  |  Window:Notify({ Title = "", Text = "", Duration = 3 })
 		UI.Flags, UI.FlagValues, UI:SaveConfig / LoadConfig / ListConfigs, AutoSaveConfig, AutoSaveIgnore, ActiveList...
 
-	Temas: "Troll" (verde musgo + naranja) y "Troll Oscuro" (azul noche). Escala: Scale = 1.15 (config).
+	Temas: "Troll" (verde musgo + naranja) y "Troll Oscuro" (azul noche).
+
+	v3.1 (más parecida a una UI clásica tipo "Hub Lite"):
+	  • Toggle: cuadradito que se RELLENA completo cuando está prendido (ya no hay palomita).
+	  • Las cajas (grupos) usan el mismo fondo que la ventana, así el título que corta el borde
+	    queda limpio (antes se veía un parche de otro color).
+	  • Sin barras de scroll visibles (rueda del mouse / dedo igual funcionan).
+	  • Escala por defecto 1 (con 1.15 las líneas de 1 px y los pixeles se veían borrosos y desparejos).
+	    Si la querés más grande, usá Size = Vector2.new(400, 460) o TextSize = 14 en vez de Scale.
+	  • Ventana un poco más grande, barra de título más limpia, filas con resaltado al pasar el mouse.
 ]]
 
 local Players          = game:GetService("Players")
@@ -23,7 +32,7 @@ local HttpService      = game:GetService("HttpService")
 
 local UI = {}
 UI.__index = UI
-UI.Version      = "3.0"
+UI.Version      = "3.1"
 UI.Windows      = {}
 UI.Flags        = {}
 UI.FlagValues   = {}
@@ -48,7 +57,7 @@ local Theme = {
 	Font       = Enum.Font.Code,
 	FontBold   = Enum.Font.Code,
 	FontMono   = Enum.Font.Code,
-	TextSize   = 12,
+	TextSize   = 13,
 }
 UI.Theme = Theme
 
@@ -356,12 +365,14 @@ end
 -- ============================================================
 -- 	CAJAS (groupbox) dentro de cada pestaña
 -- ============================================================
+-- La caja usa el MISMO fondo que la ventana (transparente), así el
+-- título que corta el borde queda limpio.
 local function newGroup(tab, title)
 	local hL, hR = tab._heights[1], tab._heights[2]
 	local col = (hL <= hR) and 1 or 2
 	local column = tab._cols[col]
 	local frame = new("Frame", {
-		BackgroundColor3 = Theme.Panel, BorderSizePixel = 0, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0),
+		BackgroundTransparency = 1, BorderSizePixel = 0, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0),
 		LayoutOrder = #column:GetChildren(), Parent = column,
 	}, { stroke(Theme.Border, 1) })
 	local titleLabel
@@ -469,8 +480,8 @@ function UI:CreateButton(config)
 	local text = config.Text or config.Name or config.Title or "Botón"
 	local list, window, owner = host(self)
 	if not list then return setmetatable({}, Stub) end
-	local body = tabBody(owner, 20)
-	local row = rowFrame(body, 20, nextOrder(owner))
+	local body = tabBody(owner, 22)
+	local row = rowFrame(body, 22, nextOrder(owner))
 	local Btn = new("TextButton", {
 		Text = tostring(text), Font = Theme.Font, TextSize = Theme.TextSize, TextColor3 = Theme.Text,
 		BackgroundColor3 = Theme.Field, BorderSizePixel = 0, AutoButtonColor = false, Size = UDim2.new(1, 0, 1, 0), Parent = row,
@@ -493,6 +504,7 @@ function UI:CreateButton(config)
 	return Button
 end
 
+-- Toggle: un cuadradito que se RELLENA completo cuando está prendido.
 function UI:CreateToggle(config)
 	config = config or {}
 	local callback = resolveCallback(config)
@@ -507,22 +519,27 @@ function UI:CreateToggle(config)
 	local opt = makeOption(owner)
 
 	local box = new("Frame", {
-		BackgroundColor3 = Theme.Field, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundColor3 = state and Theme.Active or Theme.Field, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(0, 13, 0, 13), Parent = row,
 	}, { stroke(Theme.Border, 1) })
-	local check = new("Frame", {
-		BackgroundTransparency = 1, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(0, 7, 0, 6), Visible = state, Parent = box,
-	})
-	drawPixels(check, { "......#", ".....##", "#...##.", "##.##..", ".###...", "..#...." }, Theme.Active)
-	label({ Text = tostring(config.Text or config.Name or "Opción"), Position = UDim2.new(0, 21, 0, 0), Size = UDim2.new(1, -21, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, Parent = row })
+	local nameLabel = label({ Text = tostring(config.Text or config.Name or "Opción"), TextColor3 = state and Theme.Text or Theme.TextDim, Position = UDim2.new(0, 21, 0, 0), Size = UDim2.new(1, -21, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, Parent = row })
 	local Click = new("TextButton", { Text = "", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Parent = row })
 
 	local Toggle = setmetatable({ Value = state, Callback = callback, _threads = {} }, UI)
+	local hovering = false
+	local function paint()
+		if Toggle.Value then
+			box.BackgroundColor3 = Theme.Active
+			nameLabel.TextColor3 = Theme.Text
+		else
+			box.BackgroundColor3 = hovering and Theme.Line or Theme.Field
+			nameLabel.TextColor3 = hovering and Theme.Text or Theme.TextDim
+		end
+	end
 	function Toggle:Set(newState)
 		newState = not not newState
 		self.Value = newState
-		check.Visible = newState
+		paint()
 		opt.SetActive(newState)
 		setFlagValue(config.Flag, newState)
 		return safeCall(self, self.Callback, newState)
@@ -531,8 +548,8 @@ function UI:CreateToggle(config)
 	function Toggle:Stop() stopAllThreads(self) end
 	opt.SetActive(state)
 	table.insert(window._connections, Click.MouseButton1Click:Connect(function() Toggle:Set(not Toggle.Value) end))
-	table.insert(window._connections, Click.MouseEnter:Connect(function() box.BackgroundColor3 = Theme.Line end))
-	table.insert(window._connections, Click.MouseLeave:Connect(function() box.BackgroundColor3 = Theme.Field end))
+	table.insert(window._connections, Click.MouseEnter:Connect(function() hovering = true paint() end))
+	table.insert(window._connections, Click.MouseLeave:Connect(function() hovering = false paint() end))
 	registerFlag(config.Flag, Toggle, state)
 	return Toggle
 end
@@ -555,12 +572,12 @@ function UI:CreateSlider(config)
 
 	local list, window, owner = host(self)
 	if not list then return setmetatable({}, Stub) end
-	local body = tabBody(owner, 34)
-	local row = rowFrame(body, 34, nextOrder(owner))
+	local body = tabBody(owner, 36)
+	local row = rowFrame(body, 36, nextOrder(owner))
 	local opt = makeOption(owner)
 	label({ Text = tostring(config.Text or config.Name or "Valor"), Size = UDim2.new(1, 0, 0, 14), TextTruncate = Enum.TextTruncate.AtEnd, Parent = row })
 	local bar = new("Frame", {
-		BackgroundColor3 = Theme.Field, BorderSizePixel = 0, Position = UDim2.new(0, 0, 0, 17), Size = UDim2.new(1, 0, 0, 15),
+		BackgroundColor3 = Theme.Field, BorderSizePixel = 0, Position = UDim2.new(0, 0, 0, 17), Size = UDim2.new(1, 0, 0, 17),
 		ClipsDescendants = true, Parent = row,
 	}, { stroke(Theme.Border, 1) })
 	local fill = new("Frame", { BackgroundColor3 = Theme.Active, BorderSizePixel = 0, Size = UDim2.new(0, 0, 1, 0), Parent = bar })
@@ -618,9 +635,9 @@ function UI:CreateDropdown(config)
 
 	local list, window, owner = host(self)
 	if not list then return setmetatable({}, Stub) end
-	local body = tabBody(owner, 41)
+	local body = tabBody(owner, 43)
 	local opt = makeOption(owner)
-	local ROW_H, MAX_ROWS = 18, 6
+	local ROW_H, MAX_ROWS = 19, 6
 
 	local holder = new("Frame", {
 		BackgroundTransparency = 1, BorderSizePixel = 0, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0),
@@ -629,7 +646,7 @@ function UI:CreateDropdown(config)
 	label({ Text = tostring(config.Text or config.Name or "Opciones"), Size = UDim2.new(1, 0, 0, 14), TextTruncate = Enum.TextTruncate.AtEnd, LayoutOrder = 1, Parent = holder })
 	local head = new("TextButton", {
 		Text = "", AutoButtonColor = false, BackgroundColor3 = Theme.Field, BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 19), LayoutOrder = 2, Parent = holder,
+		Size = UDim2.new(1, 0, 0, 20), LayoutOrder = 2, Parent = holder,
 	}, { stroke(Theme.Border, 1) })
 	local cur = label({ Text = "", Position = UDim2.new(0, 5, 0, 0), Size = UDim2.new(1, -22, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, Parent = head })
 	local arrowBox = new("Frame", { BackgroundTransparency = 1, BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -6, 0.5, 0), Size = UDim2.new(0, 9, 0, 5), Parent = head })
@@ -639,14 +656,18 @@ function UI:CreateDropdown(config)
 	drawPixels(arrowUp, { "....#....", "...###...", "..#####..", ".#######.", "#########" }, Theme.Active)
 	local listFrame = new("ScrollingFrame", {
 		BackgroundColor3 = Theme.Field, BorderSizePixel = 0, Visible = false, LayoutOrder = 3, Size = UDim2.new(1, 0, 0, 0),
-		ScrollBarThickness = 2, ScrollBarImageColor3 = Theme.Border, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollBarThickness = 0, ScrollBarImageTransparency = 1, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		Parent = holder,
 	}, { stroke(Theme.Line, 1), new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }) })
 
 	local Dropdown = setmetatable({ Instance = head, Value = selected, Options = options, Callback = callback, _threads = {} }, UI)
 	local buttons = {}
 	local function paint()
-		for _, b in ipairs(buttons) do b.btn.TextColor3 = (b.opt == Dropdown.Value) and Theme.Active or Theme.TextDim end
+		for _, b in ipairs(buttons) do
+			local on = (b.opt == Dropdown.Value)
+			b.btn.TextColor3 = on and Theme.Active or Theme.TextDim
+			b.btn.BackgroundTransparency = on and 0.6 or 1
+		end
 	end
 	local function close() listFrame.Visible = false arrowDown.Visible = true arrowUp.Visible = false end
 	local function rebuild()
@@ -655,9 +676,11 @@ function UI:CreateDropdown(config)
 		for i, o in ipairs(options) do
 			local b = new("TextButton", {
 				Text = " " .. display(o), Font = Theme.Font, TextSize = Theme.TextSize, TextColor3 = Theme.TextDim,
-				TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1, BorderSizePixel = 0,
+				TextXAlignment = Enum.TextXAlignment.Left, BackgroundColor3 = Theme.Line, BackgroundTransparency = 1, BorderSizePixel = 0,
 				AutoButtonColor = false, Size = UDim2.new(1, 0, 0, ROW_H), LayoutOrder = i, Parent = listFrame,
 			})
+			b.MouseEnter:Connect(function() if o ~= Dropdown.Value then b.TextColor3 = Theme.Text end end)
+			b.MouseLeave:Connect(function() if o ~= Dropdown.Value then b.TextColor3 = Theme.TextDim end end)
 			b.MouseButton1Click:Connect(function() Dropdown:Set(o) close() end)
 			table.insert(buttons, { btn = b, opt = o })
 		end
@@ -690,6 +713,8 @@ function UI:CreateDropdown(config)
 		arrowDown.Visible = not listFrame.Visible
 		arrowUp.Visible = listFrame.Visible
 	end))
+	table.insert(window._connections, head.MouseEnter:Connect(function() head.BackgroundColor3 = Theme.Line end))
+	table.insert(window._connections, head.MouseLeave:Connect(function() head.BackgroundColor3 = Theme.Field end))
 	cur.Text = selected ~= nil and display(selected) or "-"
 	rebuild()
 	opt.SetActive(false)
@@ -702,15 +727,15 @@ function UI:CreateInput(config)
 	local callback = resolveCallback(config)
 	local list, window, owner = host(self)
 	if not list then return setmetatable({}, Stub) end
-	local body = tabBody(owner, 38)
-	local row = rowFrame(body, 38, nextOrder(owner))
+	local body = tabBody(owner, 40)
+	local row = rowFrame(body, 40, nextOrder(owner))
 	local opt = makeOption(owner)
 	label({ Text = tostring(config.Text or config.Name or "Texto"), Size = UDim2.new(1, 0, 0, 14), TextTruncate = Enum.TextTruncate.AtEnd, Parent = row })
 	local Box = new("TextBox", {
 		Text = tostring(config.Default or config.CurrentValue or ""), PlaceholderText = config.PlaceholderText or config.Placeholder or "...",
 		PlaceholderColor3 = Theme.TextDim, Font = Theme.FontMono, TextSize = Theme.TextSize, TextColor3 = Theme.Text, ClearTextOnFocus = false,
 		TextXAlignment = Enum.TextXAlignment.Left, ClipsDescendants = true, BackgroundColor3 = Theme.Field, BorderSizePixel = 0,
-		Position = UDim2.new(0, 0, 0, 17), Size = UDim2.new(1, 0, 0, 19), Parent = row,
+		Position = UDim2.new(0, 0, 0, 17), Size = UDim2.new(1, 0, 0, 20), Parent = row,
 	}, { stroke(Theme.Border, 1), pad(5, 0, 5, 0) })
 
 	local Input = setmetatable({ Instance = Box, Value = Box.Text, Callback = callback, _threads = {} }, UI)
@@ -746,13 +771,13 @@ function UI:CreateKeybind(config)
 	local listening = false
 	local list, window, owner = host(self)
 	if not list then return setmetatable({}, Stub) end
-	local body = tabBody(owner, 20)
-	local row = rowFrame(body, 20, nextOrder(owner))
-	label({ Text = tostring(config.Text or config.Name or "Tecla"), Size = UDim2.new(1, -70, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, Parent = row })
+	local body = tabBody(owner, 22)
+	local row = rowFrame(body, 22, nextOrder(owner))
+	label({ Text = tostring(config.Text or config.Name or "Tecla"), Size = UDim2.new(1, -72, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, Parent = row })
 	local KeyButton = new("TextButton", {
-		Text = currentKey.Name, Font = Theme.FontMono, TextSize = 11, TextColor3 = Theme.Text, TextTruncate = Enum.TextTruncate.AtEnd,
+		Text = currentKey.Name, Font = Theme.FontMono, TextSize = 12, TextColor3 = Theme.Text, TextTruncate = Enum.TextTruncate.AtEnd,
 		AutoButtonColor = false, BackgroundColor3 = Theme.Field, BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 64, 0, 18), Parent = row,
+		Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 66, 0, 20), Parent = row,
 	}, { stroke(Theme.Border, 1) })
 
 	local Keybind = setmetatable({ Instance = KeyButton, Value = currentKey, Callback = callback, _threads = {} }, UI)
@@ -801,12 +826,13 @@ function UI:CreateTab(config, icon)
 	local page = new("Frame", {
 		BackgroundTransparency = 1, BorderSizePixel = 0, Visible = false, Size = UDim2.new(1, 0, 1, 0), Parent = window._content,
 	})
+	-- Dos columnas que scrollean (rueda / dedo) SIN barra visible.
 	local function column(x)
 		return new("ScrollingFrame", {
 			BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.new(x, x == 0 and 0 or 3, 0, 0),
-			Size = UDim2.new(0.5, -3, 1, 0), ScrollBarThickness = 2, ScrollBarImageColor3 = Theme.Border,
+			Size = UDim2.new(0.5, -3, 1, 0), ScrollBarThickness = 0, ScrollBarImageTransparency = 1,
 			CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, Parent = page,
-		}, { new("UIListLayout", { Padding = UDim.new(0, 12), SortOrder = Enum.SortOrder.LayoutOrder }), pad(0, 8, 2, 4) })
+		}, { new("UIListLayout", { Padding = UDim.new(0, 12), SortOrder = Enum.SortOrder.LayoutOrder }), pad(2, 8, 2, 4) })
 	end
 	local btn = new("TextButton", {
 		Text = "", BackgroundColor3 = Theme.Field, BorderSizePixel = 0, AutoButtonColor = false, Parent = window._tabbar,
@@ -886,15 +912,15 @@ function UI:Notify(config)
 	local titleText = config.Title
 	local bodyText = config.Text or config.Message or config.Content or ""
 	local hasTitle = titleText ~= nil and tostring(titleText) ~= ""
-	local h = hasTitle and 38 or 24
+	local h = hasTitle and 40 or 26
 	self._notifyCount = (self._notifyCount or 0) + 1
 	local card = new("Frame", {
 		BackgroundColor3 = Theme.Title, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, h), LayoutOrder = self._notifyCount, Parent = holder,
 	}, { stroke(Theme.Border, 1) })
-	new("Frame", { BackgroundColor3 = Theme.Active, BorderSizePixel = 0, Size = UDim2.new(0, 2, 1, 0), Parent = card })
+	new("Frame", { BackgroundColor3 = Theme.Active, BorderSizePixel = 0, Size = UDim2.new(0, 3, 1, 0), Parent = card })
 	if hasTitle then
 		label({ Text = tostring(titleText), TextColor3 = Theme.Active, Position = UDim2.new(0, 10, 0, 2), Size = UDim2.new(1, -14, 0, 16), TextTruncate = Enum.TextTruncate.AtEnd, Parent = card })
-		label({ Text = tostring(bodyText), TextColor3 = Theme.TextDim, Position = UDim2.new(0, 10, 0, 18), Size = UDim2.new(1, -14, 0, 16), TextTruncate = Enum.TextTruncate.AtEnd, Parent = card })
+		label({ Text = tostring(bodyText), TextColor3 = Theme.TextDim, Position = UDim2.new(0, 10, 0, 20), Size = UDim2.new(1, -14, 0, 16), TextTruncate = Enum.TextTruncate.AtEnd, Parent = card })
 	else
 		label({ Text = tostring(bodyText), Position = UDim2.new(0, 10, 0, 0), Size = UDim2.new(1, -14, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, Parent = card })
 	end
@@ -930,11 +956,11 @@ function UI:_activeRefresh()
 			local open = (self._current == r.tab) and self._visible
 			local item = new("TextButton", {
 				Text = "", AutoButtonColor = false, BackgroundColor3 = Theme.Title, BackgroundTransparency = 0.1, BorderSizePixel = 0,
-				AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.new(0, 0, 0, 16), LayoutOrder = i, Parent = box,
+				AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.new(0, 0, 0, 17), LayoutOrder = i, Parent = box,
 			}, { pad(8, 0, 6, 0) })
 			new("Frame", { BackgroundColor3 = open and Theme.Active or Theme.Border, BorderSizePixel = 0, Position = UDim2.new(0, -8, 0, 0), Size = UDim2.new(0, 2, 1, 0), Parent = item })
 			label({
-				Text = r.tab.Name .. "  " .. r.n .. "/" .. r.total, TextSize = 11, TextColor3 = open and Theme.Active or Theme.Text,
+				Text = r.tab.Name .. "  " .. r.n .. "/" .. r.total, TextSize = 12, TextColor3 = open and Theme.Active or Theme.Text,
 				AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.new(0, 0, 1, 0), Parent = item,
 			})
 			item.MouseButton1Click:Connect(function()
@@ -961,9 +987,10 @@ function UI:CreateWindow(config)
 	cleanupOldWindows(guiParent)
 
 	if config.Theme ~= nil then UI:SetAccentColor(config.Theme) end
+	if config.TextSize then Theme.TextSize = config.TextSize end
 
-	local size = config.Size or Vector2.new(340, 400)
-	local scale = config.Scale or 1.15
+	local size = config.Size or Vector2.new(360, 420)
+	local scale = config.Scale or 1
 	local title = tostring(config.Title or config.Name or "Azúcar Square")
 	local badge = config.Badge and tostring(config.Badge) or ""
 	local serverName = config.ServerName and tostring(config.ServerName) or ""
@@ -979,17 +1006,18 @@ function UI:CreateWindow(config)
 	local Main = new("Frame", {
 		Name = "Main", BackgroundColor3 = Theme.Background, BorderSizePixel = 0, Size = UDim2.new(0, size.X, 0, size.Y),
 		Position = UDim2.new(0, 70, 0.5, -size.Y / 2), Parent = ScreenGui,
-	}, { stroke(Theme.Border, 1), new("UIScale", { Scale = scale }) })
+	}, { stroke(Theme.Border, 1) })
+	if scale ~= 1 then new("UIScale", { Scale = scale, Parent = Main }) end
 
 	local window = setmetatable({
 		ScreenGui = ScreenGui, Container = Main, _tabs = {}, _connections = {}, _visible = true, _loadId = LOAD_ID,
 		_loadStagger = config.AutoLoadStagger or 0, _loadOrder = config.AutoLoadOrder, _activeOn = config.ActiveList ~= false,
 	}, UI)
 
-	local titlebar = new("Frame", { BackgroundColor3 = Theme.Title, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 22), Parent = Main })
-	new("Frame", { BackgroundColor3 = Theme.Active, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.new(0, 8, 0, 8), Parent = titlebar })
-	label({ Text = title, Position = UDim2.new(0, 22, 0, 0), Size = UDim2.new(1, -90, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, Parent = titlebar })
-	label({ Text = badge, TextColor3 = Theme.Active, TextXAlignment = Enum.TextXAlignment.Right, Position = UDim2.new(1, -120, 0, 0), Size = UDim2.new(0, 112, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, Parent = titlebar })
+	-- Barra de título limpia: título a la izquierda, Badge a la derecha, línea de acento abajo.
+	local titlebar = new("Frame", { BackgroundColor3 = Theme.Title, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 24), Parent = Main })
+	label({ Text = title, Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(1, -130, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, Parent = titlebar })
+	label({ Text = badge, TextColor3 = Theme.Active, TextXAlignment = Enum.TextXAlignment.Right, Position = UDim2.new(1, -128, 0, 0), Size = UDim2.new(0, 120, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, Parent = titlebar })
 	new("Frame", { BackgroundColor3 = Theme.Active, BorderSizePixel = 0, Position = UDim2.new(0, 0, 1, -1), Size = UDim2.new(1, 0, 0, 1), Parent = titlebar })
 
 	local dragging, dragStart, startPos = false, nil, nil
@@ -1004,26 +1032,23 @@ function UI:CreateWindow(config)
 	end))
 	table.insert(window._connections, UserInputService.InputEnded:Connect(function(i) if isClick(i) then dragging = false end end))
 
-	new("Frame", {
-		BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.new(0, 3, 0, 52), Size = UDim2.new(1, -6, 1, -72), Parent = Main,
-	}, { stroke(Theme.Line, 1) })
 	window._tabbar = new("Frame", {
-		BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.new(0, 6, 0, 28), Size = UDim2.new(1, -12, 0, 20), Parent = Main,
+		BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.new(0, 6, 0, 30), Size = UDim2.new(1, -12, 0, 22), Parent = Main,
 	})
 	window._content = new("Frame", {
-		BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.new(0, 8, 0, 58), Size = UDim2.new(1, -16, 1, -84), Parent = Main,
+		BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.new(0, 6, 0, 60), Size = UDim2.new(1, -12, 1, -86), Parent = Main,
 	})
 
 	local toggleKey = config.ToggleKey
 	if toggleKey == nil then toggleKey = Enum.KeyCode.K end
-	local footer = new("Frame", { BackgroundColor3 = Theme.Title, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 18), Parent = Main })
+	local footer = new("Frame", { BackgroundColor3 = Theme.Title, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 20), Parent = Main })
 	new("Frame", { BackgroundColor3 = Theme.Line, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 1), Parent = footer })
 	label({ Text = toggleKey and ("[" .. toggleKey.Name .. "] mostrar / ocultar") or "", TextColor3 = Theme.TextDim, TextSize = 11, Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(0.55, 0, 1, 0), Parent = footer })
 	label({ Text = serverName, TextColor3 = Theme.Active, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Right, Position = UDim2.new(0.4, 0, 0, 0), Size = UDim2.new(0.6, -8, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, Parent = footer })
 
 	window._notes = new("Frame", {
 		BackgroundTransparency = 1, BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -12, 1, -12),
-		Size = UDim2.new(0, 230, 0, 240), ZIndex = 50, Parent = ScreenGui,
+		Size = UDim2.new(0, 240, 0, 240), ZIndex = 50, Parent = ScreenGui,
 	}, { new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Bottom }) })
 
 	local activeGui = new("ScreenGui", {
