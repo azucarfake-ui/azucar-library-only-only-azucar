@@ -19,7 +19,7 @@
 	  • Letra pixelada (Enum.Font.Arcade). Si algo se corta, subí el tamaño de la ventana: Size = Vector2.new(400, 460).
 	  • Reloj ARRIBA en formato 12 h con AM/PM (ej. 6:44 PM).
 	  • Sonido en cada clic dentro de la UI: ClickSound = false lo quita, ClickSoundId = "rbxassetid://..." cambia el sonido,
-	    ClickVolume = 0.6. También Window:SetClickSound(id, volumen) y Window:SetClickSoundEnabled(true/false).
+	    ClickVolume = 5 (por defecto, global en UI.ClickVolume). También Window:SetClickSound(id, volumen) y Window:SetClickSoundEnabled(true/false).
 	  • Silueta de Gengar con más detalle (96x97 pixeles).
 
 	v3.4:
@@ -55,6 +55,11 @@ UI.Windows      = {}
 UI.Flags        = {}
 UI.FlagValues   = {}
 UI.ConfigFolder = "AzucarDulce"
+
+-- Sonido de clic (global para toda la librería; no hace falta pasarlo al crear la ventana).
+UI.ClickSound   = true                              -- false = sin sonido
+UI.ClickSoundId = "rbxasset://sounds/button.wav"    -- cambialo por "rbxassetid://..." si querés otro
+UI.ClickVolume  = 5                                 -- 0 a 10 (se multiplica por el volumen de Roblox)
 
 -- ============================================================
 -- 	TEMAS
@@ -1304,10 +1309,10 @@ function UI:CreateWindow(config)
 	end
 
 	-- Sonido en cada clic dentro de la ventana (ClickSound = false para quitarlo).
-	window._clickEnabled = config.ClickSound ~= false
+	if config.ClickSound == nil then window._clickEnabled = UI.ClickSound ~= false else window._clickEnabled = config.ClickSound ~= false end
 	local clickSound = new("Sound", {
-		Name = "AzucarClick", SoundId = config.ClickSoundId or "rbxasset://sounds/button.wav",
-		Volume = config.ClickVolume or 0.6, Parent = ScreenGui,
+		Name = "AzucarClick", SoundId = config.ClickSoundId or UI.ClickSoundId,
+		Volume = config.ClickVolume or UI.ClickVolume, Parent = ScreenGui,
 	})
 	window._click = clickSound
 	table.insert(window._connections, UserInputService.InputBegan:Connect(function(input)
