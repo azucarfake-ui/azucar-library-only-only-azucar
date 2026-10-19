@@ -50,17 +50,17 @@ UI.ConfigFolder = "AzucarDulce"
 -- 	TEMAS
 -- ============================================================
 local Theme = {
-	Background = Color3.fromRGB(38, 24, 58),
-	Title      = Color3.fromRGB(26, 16, 42),
-	Panel      = Color3.fromRGB(46, 30, 70),
-	Field      = Color3.fromRGB(60, 40, 90),
-	Line       = Color3.fromRGB(76, 52, 112),
-	LineOpen   = Color3.fromRGB(96, 66, 140),
-	Border     = Color3.fromRGB(132, 88, 196),
-	Text       = Color3.fromRGB(240, 232, 250),
-	TextDim    = Color3.fromRGB(160, 140, 190),
-	Active     = Color3.fromRGB(224, 48, 64),
-	ActiveDim  = Color3.fromRGB(170, 34, 48),
+	Background = Color3.fromRGB(22, 17, 32),
+	Title      = Color3.fromRGB(14, 11, 22),
+	Panel      = Color3.fromRGB(28, 22, 41),
+	Field      = Color3.fromRGB(38, 30, 56),
+	Line       = Color3.fromRGB(52, 42, 76),
+	LineOpen   = Color3.fromRGB(68, 55, 98),
+	Border     = Color3.fromRGB(88, 70, 128),
+	Text       = Color3.fromRGB(222, 216, 232),
+	TextDim    = Color3.fromRGB(140, 128, 160),
+	Active     = Color3.fromRGB(178, 52, 64),
+	ActiveDim  = Color3.fromRGB(132, 40, 50),
 	OnAccent   = Color3.fromRGB(255, 255, 255),
 	Font       = Enum.Font.Code,
 	FontBold   = Enum.Font.Code,
@@ -71,10 +71,10 @@ UI.Theme = Theme
 
 local Palettes = {
 	["Gengar"] = {
-		Background = Color3.fromRGB(38, 24, 58), Title = Color3.fromRGB(26, 16, 42), Panel = Color3.fromRGB(46, 30, 70),
-		Field = Color3.fromRGB(60, 40, 90), Line = Color3.fromRGB(76, 52, 112), LineOpen = Color3.fromRGB(96, 66, 140),
-		Border = Color3.fromRGB(132, 88, 196), Text = Color3.fromRGB(240, 232, 250), TextDim = Color3.fromRGB(160, 140, 190),
-		Active = Color3.fromRGB(224, 48, 64), ActiveDim = Color3.fromRGB(170, 34, 48), OnAccent = Color3.fromRGB(255, 255, 255),
+		Background = Color3.fromRGB(22, 17, 32), Title = Color3.fromRGB(14, 11, 22), Panel = Color3.fromRGB(28, 22, 41),
+		Field = Color3.fromRGB(38, 30, 56), Line = Color3.fromRGB(52, 42, 76), LineOpen = Color3.fromRGB(68, 55, 98),
+		Border = Color3.fromRGB(88, 70, 128), Text = Color3.fromRGB(222, 216, 232), TextDim = Color3.fromRGB(140, 128, 160),
+		Active = Color3.fromRGB(178, 52, 64), ActiveDim = Color3.fromRGB(132, 40, 50), OnAccent = Color3.fromRGB(255, 255, 255),
 	},
 }
 UI.Palettes = Palettes
