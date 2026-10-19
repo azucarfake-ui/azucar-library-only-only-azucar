@@ -1,5 +1,5 @@
 --[[
-	AzucarSquare v3.5 — misma lógica y misma API que AzucarDulce (SugarUI), con estilo CUADRADO.
+	GengarUI v3.5 — librería de UI para Roblox con estilo CUADRADO y tema Gengar.
 
 	Se usa igual:
 		local UI = loadstring(game:HttpGet("..."))()
@@ -18,9 +18,11 @@
 	v3.5:
 	  • Letra pixelada (Enum.Font.Arcade). Si algo se corta, subí el tamaño de la ventana: Size = Vector2.new(400, 460).
 	  • Reloj ARRIBA en formato 12 h con AM/PM (ej. 6:44 PM).
-	  • Sonido en cada clic dentro de la UI: ClickSound = false lo quita, ClickSoundId = "rbxassetid://..." cambia el sonido,
+	  • Sonido al hacer clic en toggle, slider, input, botón, listas y pestañas: ClickSound = false lo quita, ClickSoundId = "rbxassetid://..." cambia el sonido,
 	    ClickVolume = 10 (por defecto, global en UI.ClickVolume). También Window:SetClickSound(id, volumen) y Window:SetClickSoundEnabled(true/false).
 	  • Silueta de Gengar con más detalle (96x97 pixeles).
+
+	  • Sonido al escribir en un Input: UI.TypeSound / UI.TypeSoundId / UI.TypeVolume (o TypeSound, TypeSoundId, TypeVolume en CreateWindow).
 
 	v3.4:
 	  • Silueta de Gengar (pixel art, con borde rojizo) de fondo detrás de todo (no tapa ningún control). Silhouette = false en CreateWindow para quitarla.
@@ -54,12 +56,17 @@ UI.Version      = "3.5"
 UI.Windows      = {}
 UI.Flags        = {}
 UI.FlagValues   = {}
-UI.ConfigFolder = "AzucarDulce"
+UI.ConfigFolder = "GengarUI"
 
 -- Sonido de clic (global para toda la librería; no hace falta pasarlo al crear la ventana).
 UI.ClickSound   = true                              -- false = sin sonido
 UI.ClickSoundId = "rbxasset://sounds/button.wav"    -- cambialo por "rbxassetid://..." si querés otro
 UI.ClickVolume  = 10                                -- 0 a 10 (se multiplica por el volumen de Roblox)
+
+-- Sonido al escribir en un Input (un "tac" corto con tono que varía un poquito en cada tecla).
+UI.TypeSound    = true
+UI.TypeSoundId  = "rbxasset://sounds/clickfast.wav"
+UI.TypeVolume   = 6
 
 -- ============================================================
 -- 	TEMAS
@@ -141,7 +148,7 @@ function UI:SetAccentColor(name)
 		end
 	end
 	if not p then
-		warn("[AzucarSquare] Tema desconocido: " .. tostring(name) .. ". Temas: Gengar.")
+		warn("[GengarUI] Tema desconocido: " .. tostring(name) .. ". Temas: Gengar.")
 		return
 	end
 	local old = themeSnapshot()
@@ -212,7 +219,7 @@ end
 
 local LOAD_ID = tostring(os.clock()) .. "-" .. tostring(math.random(1, 1000000000))
 local function cleanupOldWindows(guiParent)
-	local registry = rawget(_G, "__AzucarDulceWindows")
+	local registry = rawget(_G, "__GengarUIWindows")
 	if typeof(registry) == "table" then
 		for i = #registry, 1, -1 do
 			local w = registry[i]
@@ -229,8 +236,8 @@ local function cleanupOldWindows(guiParent)
 	for _, place in ipairs(places) do
 		pcall(function()
 			for _, child in ipairs(place:GetChildren()) do
-				if child:IsA("ScreenGui") and (child.Name == "AzucarDulce" or child.Name == "AzucarActiveList")
-					and child:GetAttribute("AzucarLoadId") ~= LOAD_ID then
+				if child:IsA("ScreenGui") and (child.Name == "GengarUI" or child.Name == "GengarActiveList")
+					and child:GetAttribute("GengarLoadId") ~= LOAD_ID then
 					child:Destroy()
 				end
 			end
@@ -487,7 +494,7 @@ local function makeSilhouette(parent, winSize)
 end
 
 -- ============================================================
--- 	NUCLEO: callbacks en hilos + flags + guardado (igual que AzucarDulce)
+-- 	NUCLEO: callbacks en hilos + flags + guardado
 -- ============================================================
 local autoSaveTargets = {}
 local loadingConfig = false
@@ -509,7 +516,7 @@ local function safeCall(controller, fn, ...)
 		local thisThread = coroutine.running()
 		if controller then controller._threads[thisThread] = true end
 		local ok, err = pcall(function() fn(table.unpack(args, 1, args.n)) end)
-		if not ok then warn("[AzucarSquare] Error en tu callback: " .. tostring(err)) end
+		if not ok then warn("[GengarUI] Error en tu callback: " .. tostring(err)) end
 		if controller and controller._threads then controller._threads[thisThread] = nil end
 	end)
 end
@@ -532,7 +539,7 @@ local function resolveCallback(config)
 			if typeof(logic.Toggle) == "function" then logic.Toggle(value)
 			elseif typeof(logic.Set) == "function" then logic.Set(value)
 			elseif typeof(logic.Run) == "function" then logic.Run(value)
-			else warn("[AzucarSquare] La tabla en Logic no tiene :Toggle/:Enable+Disable/:Set/:Run.") end
+			else warn("[GengarUI] La tabla en Logic no tiene :Toggle/:Enable+Disable/:Set/:Run.") end
 		end
 	end
 	return function() end
@@ -554,13 +561,29 @@ local function nextOrder(owner)
 	return owner._rowCount
 end
 
+local function playClick(window)
+	if window and window._clickEnabled and window._click then
+		window._click.TimePosition = 0
+		window._click:Play()
+	end
+end
+
+local function playType(window)
+	local snd = window and window._typeEnabled and window._typeSound
+	if snd then
+		snd.PlaybackSpeed = 0.92 + math.random() * 0.2 -- tono variable, se siente más natural
+		snd.TimePosition = 0
+		snd:Play()
+	end
+end
+
 local Stub = {}
 Stub.__index = function() return function() end end
 
 local function host(self)
 	if self.List then return self.List, (self.Window or self), self end
 	if self._tabs and self._tabs[1] then
-		warn("[AzucarSquare] Creaste un control sobre la ventana en vez de sobre una pestaña. Se agregó a la primera pestaña.")
+		warn("[GengarUI] Creaste un control sobre la ventana en vez de sobre una pestaña. Se agregó a la primera pestaña.")
 		return self._tabs[1].List, self, self._tabs[1]
 	end
 	return nil, (self.Window or self), self
@@ -708,7 +731,7 @@ function UI:CreateButton(config)
 	function Button:Stop() stopAllThreads(self) end
 	table.insert(window._connections, Btn.MouseEnter:Connect(function() if Btn.BackgroundColor3 == Theme.Field then Btn.BackgroundColor3 = Theme.Line end end))
 	table.insert(window._connections, Btn.MouseLeave:Connect(function() if Btn.BackgroundColor3 == Theme.Line then Btn.BackgroundColor3 = Theme.Field end end))
-	table.insert(window._connections, Btn.MouseButton1Click:Connect(function() Button:Set() end))
+	table.insert(window._connections, Btn.MouseButton1Click:Connect(function() playClick(window) Button:Set() end))
 	registerFlag(config.Flag, Button, nil)
 	return Button
 end
@@ -756,7 +779,7 @@ function UI:CreateToggle(config)
 	function Toggle:Get() return self.Value end
 	function Toggle:Stop() stopAllThreads(self) end
 	opt.SetActive(state)
-	table.insert(window._connections, Click.MouseButton1Click:Connect(function() Toggle:Set(not Toggle.Value) end))
+	table.insert(window._connections, Click.MouseButton1Click:Connect(function() playClick(window) Toggle:Set(not Toggle.Value) end))
 	table.insert(window._connections, Click.MouseEnter:Connect(function() hovering = true paint() end))
 	table.insert(window._connections, Click.MouseLeave:Connect(function() hovering = false paint() end))
 	registerFlag(config.Flag, Toggle, state)
@@ -818,7 +841,7 @@ function UI:CreateSlider(config)
 		local rel = math.clamp((x - bar.AbsolutePosition.X) / math.max(bar.AbsoluteSize.X, 1), 0, 1)
 		Slider:Set(min + rel * (max - min), dragging)
 	end
-	table.insert(window._connections, bar.InputBegan:Connect(function(i) if isClick(i) then dragging = true setFromX(i.Position.X) end end))
+	table.insert(window._connections, bar.InputBegan:Connect(function(i) if isClick(i) then playClick(window) dragging = true setFromX(i.Position.X) end end))
 	table.insert(window._connections, UserInputService.InputChanged:Connect(function(i) if dragging and isMove(i) then setFromX(i.Position.X) end end))
 	table.insert(window._connections, UserInputService.InputEnded:Connect(function(i)
 		if isClick(i) and dragging then
@@ -891,7 +914,7 @@ function UI:CreateDropdown(config)
 			})
 			b.MouseEnter:Connect(function() if o ~= Dropdown.Value then b.TextColor3 = Theme.Text end end)
 			b.MouseLeave:Connect(function() if o ~= Dropdown.Value then b.TextColor3 = Theme.TextDim end end)
-			b.MouseButton1Click:Connect(function() Dropdown:Set(o) close() end)
+			b.MouseButton1Click:Connect(function() playClick(window) Dropdown:Set(o) close() end)
 			table.insert(buttons, { btn = b, opt = o })
 		end
 		listFrame.Size = UDim2.new(1, 0, 0, math.min(#options, MAX_ROWS) * ROW_H + 2)
@@ -919,6 +942,7 @@ function UI:CreateDropdown(config)
 	Dropdown.SetOptions = Dropdown.Refresh
 
 	table.insert(window._connections, head.MouseButton1Click:Connect(function()
+		playClick(window)
 		listFrame.Visible = not listFrame.Visible
 		arrowDown.Visible = not listFrame.Visible
 		arrowUp.Visible = listFrame.Visible
@@ -964,6 +988,8 @@ function UI:CreateInput(config)
 			safeCall(Input, Input.Callback, Box.Text)
 		end
 	end))
+	table.insert(window._connections, Box.Focused:Connect(function() playClick(window) end))
+	table.insert(window._connections, Box:GetPropertyChangedSignal("Text"):Connect(function() if Box:IsFocused() then playType(window) end end))
 	table.insert(window._connections, Box:GetPropertyChangedSignal("Text"):Connect(function() opt.SetActive(Box.Text ~= "") end))
 	opt.SetActive(Box.Text ~= "")
 	registerFlag(config.Flag, Input, Box.Text)
@@ -1061,7 +1087,7 @@ function UI:CreateTab(config, icon)
 		if self._icon then self._icon.box:Destroy() self._icon = nil end
 		if spec ~= nil and spec ~= false then
 			self._icon = makeIcon(btn, spec)
-			if spec ~= nil and not self._icon then warn("[AzucarSquare] Icono desconocido: " .. tostring(spec)) end
+			if spec ~= nil and not self._icon then warn("[GengarUI] Icono desconocido: " .. tostring(spec)) end
 		end
 		lbl.Position = UDim2.new(0, self._icon and 18 or 0, 0, 0)
 		lbl.Size = UDim2.new(1, self._icon and -18 or 0, 1, 0)
@@ -1072,7 +1098,7 @@ function UI:CreateTab(config, icon)
 	tab:SetIcon(config.Icon)
 
 	table.insert(window._tabs, tab)
-	table.insert(window._connections, btn.MouseButton1Click:Connect(function() window:SelectTab(tab) end))
+	table.insert(window._connections, btn.MouseButton1Click:Connect(function() playClick(window) window:SelectTab(tab) end))
 	table.insert(window._connections, btn.MouseEnter:Connect(function() if not tab._on then btn.BackgroundColor3 = Theme.Line end end))
 	table.insert(window._connections, btn.MouseLeave:Connect(function() if not tab._on then btn.BackgroundColor3 = Theme.Field end end))
 	window:_layoutTabs()
@@ -1120,6 +1146,12 @@ function UI:SetClickSound(soundId, volume)
 	if volume then self._click.Volume = volume end
 end
 function UI:SetClickSoundEnabled(on) self._clickEnabled = not not on end
+function UI:SetTypeSound(soundId, volume)
+	if not self._typeSound then return end
+	if soundId then self._typeSound.SoundId = soundId end
+	if volume then self._typeSound.Volume = volume end
+end
+function UI:SetTypeSoundEnabled(on) self._typeEnabled = not not on end
 
 function UI:Notify(config)
 	if typeof(config) == "string" then config = { Text = config } end
@@ -1195,7 +1227,7 @@ function UI:Destroy()
 	if self.ScreenGui then pcall(function() self.ScreenGui:Destroy() end) end
 	if self._activeGui then pcall(function() self._activeGui:Destroy() end) end
 	for i, w in ipairs(UI.Windows) do if w == self then table.remove(UI.Windows, i) break end end
-	local registry = rawget(_G, "__AzucarDulceWindows")
+	local registry = rawget(_G, "__GengarUIWindows")
 	if typeof(registry) == "table" then
 		for i, w in ipairs(registry) do if w == self then table.remove(registry, i) break end end
 	end
@@ -1219,16 +1251,16 @@ function UI:CreateWindow(config)
 
 	local size = config.Size or Vector2.new(360, 420)
 	local scale = config.Scale or 1
-	local title = tostring(config.Title or config.Name or "Azúcar Square")
+	local title = tostring(config.Title or config.Name or "Gengar UI")
 	local badge = config.Badge and tostring(config.Badge) or ""
 	local serverName = config.ServerName and tostring(config.ServerName) or ""
 
 	local ScreenGui = new("ScreenGui", {
-		Name = "AzucarDulce", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		Name = "GengarUI", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		IgnoreGuiInset = config.IgnoreGuiInset ~= false, DisplayOrder = 10,
 	})
 	pcall(function() if syn and syn.protect_gui then syn.protect_gui(ScreenGui) end end)
-	ScreenGui:SetAttribute("AzucarLoadId", LOAD_ID)
+	ScreenGui:SetAttribute("GengarLoadId", LOAD_ID)
 	ScreenGui.Parent = guiParent
 
 	local Main = new("Frame", {
@@ -1289,10 +1321,10 @@ function UI:CreateWindow(config)
 	}, { new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Bottom }) })
 
 	local activeGui = new("ScreenGui", {
-		Name = "AzucarActiveList", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 997,
+		Name = "GengarActiveList", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 997,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling, Enabled = window._activeOn, Parent = guiParent,
 	})
-	activeGui:SetAttribute("AzucarLoadId", LOAD_ID)
+	activeGui:SetAttribute("GengarLoadId", LOAD_ID)
 	window._activeGui = activeGui
 	window._activeBox = new("Frame", {
 		BackgroundTransparency = 1, BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -4, 0, 44),
@@ -1303,37 +1335,27 @@ function UI:CreateWindow(config)
 		table.insert(window._connections, UserInputService.InputBegan:Connect(function(input)
 			if input.KeyCode == toggleKey and not UserInputService:GetFocusedTextBox() then
 				local ok, err = pcall(function() window:Toggle() window:_activeRefresh() end)
-				if not ok then warn("[AzucarSquare] Error al abrir/cerrar: " .. tostring(err)) end
+				if not ok then warn("[GengarUI] Error al abrir/cerrar: " .. tostring(err)) end
 			end
 		end))
 	end
 
-	-- Sonido en cada clic dentro de la ventana (ClickSound = false para quitarlo).
+	-- Sonido de clic (se reproduce desde los controles; ClickSound = false para quitarlo).
 	if config.ClickSound == nil then window._clickEnabled = UI.ClickSound ~= false else window._clickEnabled = config.ClickSound ~= false end
 	local clickSound = new("Sound", {
-		Name = "AzucarClick", SoundId = config.ClickSoundId or UI.ClickSoundId,
+		Name = "GengarClick", SoundId = config.ClickSoundId or UI.ClickSoundId,
 		Volume = config.ClickVolume or UI.ClickVolume, Parent = ScreenGui,
 	})
 	window._click = clickSound
-	table.insert(window._connections, UserInputService.InputBegan:Connect(function(input)
-		if not window._clickEnabled or not window._visible then return end
-		local kind = input.UserInputType
-		if kind ~= Enum.UserInputType.MouseButton1 and kind ~= Enum.UserInputType.Touch then return end
-		local pos = (kind == Enum.UserInputType.Touch) and Vector2.new(input.Position.X, input.Position.Y) or UserInputService:GetMouseLocation()
-		if not ScreenGui.IgnoreGuiInset then
-			local okInset, inset = pcall(function() return game:GetService("GuiService"):GetGuiInset() end)
-			if okInset and inset then pos = pos - inset end
-		end
-		local p, sz = Main.AbsolutePosition, Main.AbsoluteSize
-		if pos.X >= p.X and pos.X <= p.X + sz.X and pos.Y >= p.Y and pos.Y <= p.Y + sz.Y then
-			clickSound.TimePosition = 0
-			clickSound:Play()
-		end
-	end))
+	if config.TypeSound == nil then window._typeEnabled = UI.TypeSound ~= false else window._typeEnabled = config.TypeSound ~= false end
+	window._typeSound = new("Sound", {
+		Name = "GengarType", SoundId = config.TypeSoundId or UI.TypeSoundId,
+		Volume = config.TypeVolume or UI.TypeVolume, Parent = ScreenGui,
+	})
 
 	table.insert(UI.Windows, window)
-	local registry = rawget(_G, "__AzucarDulceWindows")
-	if typeof(registry) ~= "table" then registry = {} rawset(_G, "__AzucarDulceWindows", registry) end
+	local registry = rawget(_G, "__GengarUIWindows")
+	if typeof(registry) ~= "table" then registry = {} rawset(_G, "__GengarUIWindows", registry) end
 	table.insert(registry, window)
 
 	-- Guardado/carga de configuración
@@ -1369,7 +1391,7 @@ end
 function UI:SaveConfig(name)
 	name = name or "default"
 	if typeof(writefile) ~= "function" then
-		warn("[AzucarSquare] Tu ejecutor no tiene writefile — no se puede guardar la config.")
+		warn("[GengarUI] Tu ejecutor no tiene writefile — no se puede guardar la config.")
 		return false
 	end
 	ensureConfigFolder()
@@ -1382,9 +1404,9 @@ function UI:SaveConfig(name)
 		end
 	end
 	local okJson, encoded = pcall(function() return HttpService:JSONEncode(data) end)
-	if not okJson then warn("[AzucarSquare] No se pudo convertir la config a JSON.") return false end
+	if not okJson then warn("[GengarUI] No se pudo convertir la config a JSON.") return false end
 	local okWrite, err = pcall(writefile, UI.ConfigFolder .. "/" .. name .. ".json", encoded)
-	if not okWrite then warn("[AzucarSquare] No se pudo guardar la config: " .. tostring(err)) return false end
+	if not okWrite then warn("[GengarUI] No se pudo guardar la config: " .. tostring(err)) return false end
 	return true
 end
 
@@ -1392,15 +1414,15 @@ function UI:LoadConfig(name, stagger)
 	name = name or "default"
 	if stagger == nil then stagger = self._loadStagger or 0 end
 	if typeof(readfile) ~= "function" or typeof(isfile) ~= "function" then
-		warn("[AzucarSquare] Tu ejecutor no tiene readfile/isfile — no se puede cargar la config.")
+		warn("[GengarUI] Tu ejecutor no tiene readfile/isfile — no se puede cargar la config.")
 		return false
 	end
 	local path = UI.ConfigFolder .. "/" .. name .. ".json"
 	if not isfile(path) then return false end
 	local okRead, raw = pcall(readfile, path)
-	if not okRead then warn("[AzucarSquare] No se pudo leer el archivo de config.") return false end
+	if not okRead then warn("[GengarUI] No se pudo leer el archivo de config.") return false end
 	local okJson, data = pcall(function() return HttpService:JSONDecode(raw) end)
-	if not okJson or typeof(data) ~= "table" then warn("[AzucarSquare] La config guardada está corrupta o vacía.") return false end
+	if not okJson or typeof(data) ~= "table" then warn("[GengarUI] La config guardada está corrupta o vacía.") return false end
 
 	local order = self._loadOrder
 	local function priority(flag)
@@ -1437,7 +1459,7 @@ function UI:LoadConfig(name, stagger)
 		end
 	end)
 	loadingConfig = false
-	if not ok then warn("[AzucarSquare] Ocurrió un error aplicando la config guardada.") return false end
+	if not ok then warn("[GengarUI] Ocurrió un error aplicando la config guardada.") return false end
 	return true
 end
 
