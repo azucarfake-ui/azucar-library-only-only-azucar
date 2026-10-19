@@ -1,5 +1,5 @@
 --[[
-	AzucarSquare v3.1 — misma lógica y misma API que AzucarDulce (SugarUI), con estilo CUADRADO.
+	AzucarSquare v3.2 — misma lógica y misma API que AzucarDulce (SugarUI), con estilo CUADRADO.
 
 	Se usa igual:
 		local UI = loadstring(game:HttpGet("..."))()
@@ -23,6 +23,14 @@
 	  • Escala por defecto 1 (con 1.15 las líneas de 1 px y los pixeles se veían borrosos y desparejos).
 	    Si la querés más grande, usá Size = Vector2.new(400, 460) o TextSize = 14 en vez de Scale.
 	  • Ventana un poco más grande, barra de título más limpia, filas con resaltado al pasar el mouse.
+
+	v3.2:
+	  • La ventana queda FIJA (Draggable = true si querés poder moverla).
+	  • Iconos nuevos más limpios (aim/crosshair, shield, lock, flag, target, eye, gear, star, heart...). Podés
+	    usarlos por nombre en CreateTab({ Icon = "shield" }) y en la barra de título (CreateWindow({ Icon = "skull" }),
+	    Icon = false para quitarlo). Flechitas del dropdown más nítidas.
+	  • Cajas con cuadradito de acento en el título y esquinitas; reloj en el pie; las notificaciones tienen una
+	    barrita que se va vaciando mientras dura el aviso; la barra del slider tiene un brillito arriba.
 ]]
 
 local Players          = game:GetService("Players")
@@ -32,7 +40,7 @@ local HttpService      = game:GetService("HttpService")
 
 local UI = {}
 UI.__index = UI
-UI.Version      = "3.1"
+UI.Version      = "3.2"
 UI.Windows      = {}
 UI.Flags        = {}
 UI.FlagValues   = {}
@@ -225,25 +233,36 @@ end
 -- 	ICONOS (dibujos de pixeles, no dependen de la fuente)
 -- ============================================================
 local Icons = {
-	target  = { "...#####...", ".##.....##.", ".#.......#.", "#...###...#", "#..#...#..#", "#..#.#.#..#", "#..#...#..#", "#...###...#", ".#.......#.", ".##.....##.", "...#####..." },
-	eye     = { "...#####...", ".##.....##.", "#...###...#", "#..#####..#", "#..#####..#", "#...###...#", ".##.....##.", "...#####..." },
-	gear    = { "....###....", ".##.###.##.", ".#########.", "..##...##..", "####...####", "####...####", "####...####", "..##...##..", ".#########.", ".##.###.##.", "....###...." },
-	star    = { ".....#.....", ".....#.....", "....###....", "...#####...", ".#########.", "###########", ".#########.", "...#####...", "....###....", ".....#.....", ".....#....." },
-	list    = { "##.########", "...........", "##.########", "...........", "##.########" },
-	user    = { "....###....", "...#####...", "...#####...", "...#####...", "....###....", "...........", "..#######..", ".#########.", "###########", "###########" },
-	dot     = { "#####", "#####", "#####", "#####", "#####" },
-	sword   = { "........###", ".......####", "......####.", ".....####..", "....####...", "#..####....", ".#####.....", "..###......", "..####.....", ".##..#.....", "##........." },
-	home    = { ".....#.....", "....###....", "...#####...", "..#######..", ".#########.", "###########", ".##.....##.", ".##.###.##.", ".##.###.##.", ".##.###.##." },
-	moon    = { "...###.....", "..###......", ".###.......", ".###.......", ".###.......", ".###.......", "..###......", "...####....", "....#####.." },
-	book    = { ".####.####.", "#...#.#...#", "#...#.#...#", "#...#.#...#", "#...#.#...#", ".####.####." },
-	heart   = { ".##...##.", "####.####", "#########", "#########", ".#######.", "..#####..", "...###...", "....#...." },
-	diamond = { ".....#.....", "....###....", "...#####...", "..#######..", ".#########.", "..#######..", "...#####...", "....###....", ".....#....." },
-	skull   = { ".#########.", "###########", "##..###..##", "##..###..##", "###########", ".####.####.", "..#.#.#.#..", "..#######.." },
+	target    = { "....###....", "..##...##..", ".#.......#.", ".#..###..#.", "#..#...#..#", "#..#.#.#..#", "#..#...#..#", ".#..###..#.", ".#.......#.", "..##...##..", "....###...." },
+	crosshair = { ".....#.....", ".....#.....", "...#####...", "..#..#..#..", ".#...#...#.", "#####.#####", ".#...#...#.", "..#..#..#..", "...#####...", ".....#.....", ".....#....." },
+	eye       = { "...#####...", ".##.....##.", "#...###...#", "#..#####..#", "#...###...#", ".##.....##.", "...#####..." },
+	shield    = { ".#########.", "###########", "##.......##", "##.......##", "##.......##", "##.......##", ".##.....##.", ".##.....##.", "..##...##..", "...##.##...", ".....#....." },
+	gear      = { "....###....", ".#.#####.#.", ".#########.", "..###.###..", "####...####", "###.....###", "####...####", "..###.###..", ".#########.", ".#.#####.#.", "....###...." },
+	star      = { ".....#.....", ".....#.....", "....###....", "....###....", "###########", ".#########.", "..#######..", "...#####...", "..###.###..", "..##...##..", ".##.....##." },
+	list      = { "##.########", "...........", "##.########", "...........", "##.########" },
+	user      = { "...#####...", "..#######..", "..#######..", "..#######..", "...#####...", "....###....", ".#########.", "###########", "###########", "###########" },
+	home      = { ".....#.....", "....###....", "...#####...", "..#######..", ".#########.", "###########", ".##.....##.", ".##.###.##.", ".##.###.##.", ".##.###.##." },
+	moon      = { "....####...", "..####.....", ".####......", ".###.......", "####.......", "####.......", ".###.......", ".####......", "..####.....", "....####..." },
+	book      = { ".####.####.", "#...#.#...#", "#.#.#.#.#.#", "#...#.#...#", "#.#.#.#.#.#", "#...#.#...#", ".####.####." },
+	heart     = { ".###...###.", "#####.#####", "###########", "###########", ".#########.", "..#######..", "...#####...", "....###....", ".....#....." },
+	diamond   = { "..#######..", ".####.####.", "###########", ".#########.", "..#######..", "...#####...", "....###....", ".....#....." },
+	skull     = { ".#########.", "###########", "##..###..##", "##..###..##", "###########", ".####.####.", "..#.#.#.#..", "..#######.." },
+	lock      = { "...#####...", "..##...##..", "..#.....#..", "..#.....#..", ".#########.", ".#########.", ".####.####.", ".####.####.", ".#########.", ".#########." },
+	flag      = { "#..........", "#######....", "#########..", "###########", "#########..", "#######....", "#..........", "#..........", "#.........." },
+	sword     = { "........###", ".......####", "......####.", ".....####..", "....####...", "#..####....", ".#####.....", "..###......", "..####.....", ".##..#.....", "##........." },
+	dot       = { "#####", "#####", "#####", "#####", "#####" },
 }
 local IconAliases = {
-	swords = "sword", sword = "sword", eye = "eye", book = "book", rings = "target", circles = "target", target = "target",
-	heart = "heart", diamond = "diamond", gem = "diamond", moon = "moon", skull = "skull", star = "star",
-	gear = "gear", settings = "gear", list = "list", user = "user", home = "home", dot = "dot",
+	swords = "sword", sword = "sword", fight = "sword", combat = "sword",
+	eye = "eye", visuals = "eye", esp = "eye", view = "eye",
+	book = "book", rings = "target", circles = "target", target = "target",
+	aim = "crosshair", crosshair = "crosshair", aimbot = "crosshair",
+	shield = "shield", defense = "shield", protect = "shield",
+	lock = "lock", safe = "lock", flag = "flag", team = "flag",
+	heart = "heart", health = "heart", diamond = "diamond", gem = "diamond",
+	moon = "moon", skull = "skull", star = "star", favorite = "star",
+	gear = "gear", settings = "gear", config = "gear", list = "list", menu = "list",
+	user = "user", player = "user", home = "home", main = "home", dot = "dot",
 }
 
 local function drawPixels(parent, rows, color, ox, oy)
@@ -375,12 +394,17 @@ local function newGroup(tab, title)
 		BackgroundTransparency = 1, BorderSizePixel = 0, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0),
 		LayoutOrder = #column:GetChildren(), Parent = column,
 	}, { stroke(Theme.Border, 1) })
+	-- Esquinitas de acento (detalle retro).
+	for _, c in ipairs({ { 0, -1, 0, -1 }, { 1, -2, 0, -1 }, { 0, -1, 1, -2 }, { 1, -2, 1, -2 } }) do
+		new("Frame", { BackgroundColor3 = Theme.Active, BorderSizePixel = 0, Position = UDim2.new(c[1], c[2], c[3], c[4]), Size = UDim2.new(0, 3, 0, 3), ZIndex = 4, Parent = frame })
+	end
 	local titleLabel
 	if title then
 		titleLabel = label({
-			Text = " " .. tostring(title) .. " ", TextColor3 = Theme.Active, BackgroundTransparency = 0, BackgroundColor3 = Theme.Background,
+			Text = "  " .. tostring(title) .. " ", TextColor3 = Theme.Active, BackgroundTransparency = 0, BackgroundColor3 = Theme.Background,
 			AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.new(0, 0, 0, 14), Position = UDim2.new(0, 8, 0, -8), ZIndex = 5, Parent = frame,
 		})
+		new("Frame", { BackgroundColor3 = Theme.Active, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 5, 0.5, 0), Size = UDim2.new(0, 5, 0, 5), Parent = titleLabel })
 	end
 	local body = new("Frame", {
 		BackgroundTransparency = 1, BorderSizePixel = 0, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0), Parent = frame,
@@ -425,7 +449,7 @@ function UI:CreateSection(config)
 	if not list then return setmetatable({}, Stub) end
 	local grp = newGroup(owner, tostring(text))
 	local controller = setmetatable({ Instance = grp.frame }, UI)
-	function controller:Set(newText) if grp.title then grp.title.Text = " " .. tostring(newText) .. " " end end
+	function controller:Set(newText) if grp.title then grp.title.Text = "  " .. tostring(newText) .. " " end end
 	return controller
 end
 UI.CreateSectionLabel = UI.CreateSection
@@ -581,6 +605,7 @@ function UI:CreateSlider(config)
 		ClipsDescendants = true, Parent = row,
 	}, { stroke(Theme.Border, 1) })
 	local fill = new("Frame", { BackgroundColor3 = Theme.Active, BorderSizePixel = 0, Size = UDim2.new(0, 0, 1, 0), Parent = bar })
+	new("Frame", { BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.8, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 1), Parent = fill })
 	local txt = label({
 		Text = "", TextXAlignment = Enum.TextXAlignment.Center, Size = UDim2.new(1, 0, 1, 0), ZIndex = 3,
 		TextStrokeColor3 = Color3.new(0, 0, 0), TextStrokeTransparency = 0.3, Parent = bar,
@@ -649,11 +674,11 @@ function UI:CreateDropdown(config)
 		Size = UDim2.new(1, 0, 0, 20), LayoutOrder = 2, Parent = holder,
 	}, { stroke(Theme.Border, 1) })
 	local cur = label({ Text = "", Position = UDim2.new(0, 5, 0, 0), Size = UDim2.new(1, -22, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, Parent = head })
-	local arrowBox = new("Frame", { BackgroundTransparency = 1, BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -6, 0.5, 0), Size = UDim2.new(0, 9, 0, 5), Parent = head })
+	local arrowBox = new("Frame", { BackgroundTransparency = 1, BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -6, 0.5, 0), Size = UDim2.new(0, 7, 0, 4), Parent = head })
 	local arrowDown = new("Frame", { BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.new(1, 0, 1, 0), Parent = arrowBox })
 	local arrowUp = new("Frame", { BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.new(1, 0, 1, 0), Visible = false, Parent = arrowBox })
-	drawPixels(arrowDown, { "#########", ".#######.", "..#####..", "...###...", "....#...." }, Theme.Text)
-	drawPixels(arrowUp, { "....#....", "...###...", "..#####..", ".#######.", "#########" }, Theme.Active)
+	drawPixels(arrowDown, { "#######", ".#####.", "..###..", "...#..." }, Theme.Text)
+	drawPixels(arrowUp, { "...#...", "..###..", ".#####.", "#######" }, Theme.Active)
 	local listFrame = new("ScrollingFrame", {
 		BackgroundColor3 = Theme.Field, BorderSizePixel = 0, Visible = false, LayoutOrder = 3, Size = UDim2.new(1, 0, 0, 0),
 		ScrollBarThickness = 0, ScrollBarImageTransparency = 1, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y,
@@ -924,7 +949,10 @@ function UI:Notify(config)
 	else
 		label({ Text = tostring(bodyText), Position = UDim2.new(0, 10, 0, 0), Size = UDim2.new(1, -14, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, Parent = card })
 	end
-	task.delay(config.Duration or 3, function() if card.Parent then card:Destroy() end end)
+	local duration = config.Duration or 3
+	local timer = new("Frame", { BackgroundColor3 = Theme.Active, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 2), Parent = card })
+	TweenService:Create(timer, TweenInfo.new(duration, Enum.EasingStyle.Linear), { Size = UDim2.new(0, 0, 0, 2) }):Play()
+	task.delay(duration, function() if card.Parent then card:Destroy() end end)
 end
 
 -- Lista de activos pegada al borde derecho: una etiqueta por pestaña con opciones activas.
@@ -1016,10 +1044,15 @@ function UI:CreateWindow(config)
 
 	-- Barra de título limpia: título a la izquierda, Badge a la derecha, línea de acento abajo.
 	local titlebar = new("Frame", { BackgroundColor3 = Theme.Title, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 24), Parent = Main })
-	label({ Text = title, Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(1, -130, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, Parent = titlebar })
+	local titleIcon = nil
+	if config.Icon ~= false then titleIcon = makeIcon(titlebar, config.Icon or "diamond") end
+	if titleIcon then titleIcon.paint(Theme.Active) end
+	label({ Text = title, Position = UDim2.new(0, titleIcon and 22 or 8, 0, 0), Size = UDim2.new(1, titleIcon and -144 or -130, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, Parent = titlebar })
 	label({ Text = badge, TextColor3 = Theme.Active, TextXAlignment = Enum.TextXAlignment.Right, Position = UDim2.new(1, -128, 0, 0), Size = UDim2.new(0, 120, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, Parent = titlebar })
 	new("Frame", { BackgroundColor3 = Theme.Active, BorderSizePixel = 0, Position = UDim2.new(0, 0, 1, -1), Size = UDim2.new(1, 0, 0, 1), Parent = titlebar })
 
+	-- La ventana está FIJA. Con Draggable = true se mueve arrastrando la barra de título.
+	if config.Draggable == true then
 	local dragging, dragStart, startPos = false, nil, nil
 	table.insert(window._connections, titlebar.InputBegan:Connect(function(i)
 		if isClick(i) then dragging, dragStart, startPos = true, i.Position, Main.Position end
@@ -1031,6 +1064,7 @@ function UI:CreateWindow(config)
 		end
 	end))
 	table.insert(window._connections, UserInputService.InputEnded:Connect(function(i) if isClick(i) then dragging = false end end))
+	end
 
 	window._tabbar = new("Frame", {
 		BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.new(0, 6, 0, 30), Size = UDim2.new(1, -12, 0, 22), Parent = Main,
@@ -1045,6 +1079,8 @@ function UI:CreateWindow(config)
 	new("Frame", { BackgroundColor3 = Theme.Line, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 1), Parent = footer })
 	label({ Text = toggleKey and ("[" .. toggleKey.Name .. "] mostrar / ocultar") or "", TextColor3 = Theme.TextDim, TextSize = 11, Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(0.55, 0, 1, 0), Parent = footer })
 	label({ Text = serverName, TextColor3 = Theme.Active, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Right, Position = UDim2.new(0.4, 0, 0, 0), Size = UDim2.new(0.6, -8, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, Parent = footer })
+	local clock = label({ Text = os.date("%H:%M:%S"), TextColor3 = Theme.TextDim, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Center, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 0), Size = UDim2.new(0, 64, 1, 0), Parent = footer })
+	task.spawn(function() while clock.Parent do clock.Text = os.date("%H:%M:%S") task.wait(1) end end)
 
 	window._notes = new("Frame", {
 		BackgroundTransparency = 1, BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -12, 1, -12),
