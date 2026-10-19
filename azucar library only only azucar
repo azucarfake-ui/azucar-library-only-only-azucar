@@ -1,4 +1,3 @@
-local SquareUI = (function()
 local Players          = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local HttpService      = game:GetService("HttpService")
@@ -98,51 +97,49 @@ local function tableToColor(t) return Color3.fromRGB(t[1] or 255, t[2] or 255, t
 -- ============================================================
 -- Iconos dibujados con cuadros (no dependen de la fuente)
 -- ============================================================
-local Icons = {}
-local function part(parent, list, kind, props, children)
-	local f = new("Frame", props, children)
-	f.Parent = parent
-	table.insert(list, { inst = f, kind = kind })
-	return f
-end
-local function fillPart(parent, list, x, y, w, h, rot, round_)
-	return part(parent, list, "bg", {
-		BackgroundColor3 = Theme.Text, BorderSizePixel = 0, Position = UDim2.new(0, x, 0, y), Size = UDim2.new(0, w, 0, h), Rotation = rot or 0,
-	}, round_ and { new("UICorner", { CornerRadius = UDim.new(1, 0) }) } or nil)
-end
-local function ringPart(parent, list, x, y, w, h, rot, radius)
-	return part(parent, list, "stroke", {
-		BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.new(0, x, 0, y), Size = UDim2.new(0, w, 0, h), Rotation = rot or 0,
-	}, { new("UIStroke", { Color = Theme.Text, Thickness = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
-		radius and new("UICorner", { CornerRadius = UDim.new(0, radius) }) or nil })
-end
-Icons.target = function(p, l) ringPart(p, l, 0, 0, 10, 10, 0, 5) fillPart(p, l, 3, 3, 4, 4, 0, true) end
-Icons.eye    = function(p, l) ringPart(p, l, 0, 2, 10, 6, 0, 3) fillPart(p, l, 3.5, 3.5, 3, 3, 0, true) end
-Icons.gear   = function(p, l) ringPart(p, l, 1, 1, 8, 8, 0) ringPart(p, l, 1, 1, 8, 8, 45) fillPart(p, l, 3.5, 3.5, 3, 3) end
-Icons.star   = function(p, l) fillPart(p, l, 1.5, 1.5, 7, 7, 0) fillPart(p, l, 1.5, 1.5, 7, 7, 45) end
-Icons.list   = function(p, l) fillPart(p, l, 0, 1, 10, 2) fillPart(p, l, 0, 4, 10, 2) fillPart(p, l, 0, 7, 10, 2) end
-Icons.user   = function(p, l) fillPart(p, l, 3, 0, 4, 4, 0, true) fillPart(p, l, 1, 5, 8, 5) end
-Icons.dot    = function(p, l) fillPart(p, l, 3, 3, 4, 4) end
-Icons.sword  = function(p, l) fillPart(p, l, 4, 0, 2, 8) fillPart(p, l, 1, 6, 8, 2) fillPart(p, l, 4, 8, 2, 2) end
-Icons.home   = function(p, l) fillPart(p, l, 1.5, 0.5, 7, 7, 45) fillPart(p, l, 2, 5, 6, 5) end
+local Icons = {
+	target = { "...###...", ".##...##.", ".#.....#.", "#..###..#", "#..#.#..#", "#..###..#", ".#.....#.", ".##...##.", "...###..." },
+	eye    = { ".........", "..#####..", ".#.....#.", "#..###..#", "#.#####.#", "#..###..#", ".#.....#.", "..#####..", "........." },
+	gear   = { "...#.#...", ".#######.", ".##...##.", "##.....##", "#...#...#", "##.....##", ".##...##.", ".#######.", "...#.#..." },
+	star   = { "....#....", "....#....", "...###...", ".#######.", "#########", ".#######.", "...###...", "....#....", "....#...." },
+	list   = { ".........", "#.#######", ".........", "#.#######", ".........", "#.#######", ".........", ".........", "........." },
+	user   = { "...###...", "..#####..", "..#####..", "...###...", ".........", ".#######.", "#########", "#########", "........." },
+	dot    = { ".........", ".........", "..#####..", "..#####..", "..#####..", "..#####..", "..#####..", ".........", "........." },
+	sword  = { "....#....", "...###...", "...###...", "...###...", "...###...", ".#######.", "....#....", "....#....", "...###..." },
+	home   = { "....#....", "...###...", "..#####..", ".#######.", "#########", ".##...##.", ".##...##.", ".##...##.", "........." },
+}
 
-local function makeIcon(parent, name)
-	local build = Icons[name]
-	if not build then return nil end
-	local box = new("Frame", {
-		BackgroundTransparency = 1, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.new(0, 10, 0, 10), Parent = parent,
-	})
-	local list = {}
-	build(box, list)
-	local function paint(color)
-		for _, p in ipairs(list) do
-			if p.kind == "bg" then p.inst.BackgroundColor3 = color
-			else local s = p.inst:FindFirstChildOfClass("UIStroke") if s then s.Color = color end end
+-- Dibuja un dibujo de pixeles (filas de texto con # = pixel) con cuadritos de 1px
+local function drawPixels(parent, rows, color)
+	local parts = {}
+	for y, row in ipairs(rows) do
+		local x = 1
+		while x <= #row do
+			if row:sub(x, x) == "#" then
+				local x2 = x
+				while x2 < #row and row:sub(x2 + 1, x2 + 1) == "#" do x2 = x2 + 1 end
+				table.insert(parts, new("Frame", {
+					BackgroundColor3 = color, BorderSizePixel = 0, Position = UDim2.new(0, x - 1, 0, y - 1),
+					Size = UDim2.new(0, x2 - x + 1, 0, 1), Parent = parent,
+				}))
+				x = x2 + 1
+			else
+				x = x + 1
+			end
 		end
 	end
-	paint(Theme.Text)
-	return { paint = paint }
+	return parts
+end
+
+local function makeIcon(parent, name)
+	local rows = Icons[name]
+	if not rows then return nil end
+	local box = new("Frame", {
+		BackgroundTransparency = 1, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.new(0, 9, 0, 9), Parent = parent,
+	})
+	local parts = drawPixels(box, rows, Theme.Text)
+	return { paint = function(color) for _, p in ipairs(parts) do p.BackgroundColor3 = color end end }
 end
 
 -- ============================================================
@@ -481,7 +478,14 @@ function Group:AddDropdown(name, opts)
 		Size = UDim2.new(1, 0, 0, 19), LayoutOrder = 2, Parent = holder,
 	}, { stroke(Theme.Border, 1) })
 	local cur = label({ Text = "", Position = UDim2.new(0, 5, 0, 0), Size = UDim2.new(1, -22, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, Parent = head })
-	local arrow = label({ Text = "v", TextXAlignment = Enum.TextXAlignment.Center, Position = UDim2.new(1, -16, 0, 0), Size = UDim2.new(0, 14, 1, 0), Parent = head })
+	local arrowBox = new("Frame", { BackgroundTransparency = 1, BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -6, 0.5, 0), Size = UDim2.new(0, 7, 0, 4), Parent = head })
+	local arrowDown = new("Frame", { BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.new(1, 0, 1, 0), Parent = arrowBox })
+	local arrowUp = new("Frame", { BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.new(1, 0, 1, 0), Visible = false, Parent = arrowBox })
+	drawPixels(arrowDown, { "#######", ".#####.", "..###..", "...#..." }, Theme.Text)
+	drawPixels(arrowUp, { "...#...", "..###..", ".#####.", "#######" }, Theme.Accent)
+	local arrow = setmetatable({}, { __newindex = function(_, k, v)
+		if k == "Text" then arrowDown.Visible = (v == "v") arrowUp.Visible = (v ~= "v") end
+	end })
 	local list = new("ScrollingFrame", {
 		BackgroundColor3 = Theme.Field, BorderSizePixel = 0, Visible = false, LayoutOrder = 3, Size = UDim2.new(1, 0, 0, 0),
 		ScrollBarThickness = 2, ScrollBarImageColor3 = Theme.Border, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y,
@@ -746,19 +750,6 @@ function Window:Destroy()
 	for i, w in ipairs(SquareUI.Windows) do if w == self then table.remove(SquareUI.Windows, i) break end end
 end
 
-local function cornerMarks(parent)
-	local function bar(ax, ay, w, h)
-		new("Frame", {
-			BackgroundColor3 = Theme.Accent, BorderSizePixel = 0, AnchorPoint = Vector2.new(ax, ay),
-			Position = UDim2.new(ax, 0, ay, 0), Size = UDim2.new(0, w, 0, h), ZIndex = 20, Parent = parent,
-		})
-	end
-	for _, c in ipairs({ { 0, 0 }, { 1, 0 }, { 0, 1 }, { 1, 1 } }) do
-		bar(c[1], c[2], 10, 2)
-		bar(c[1], c[2], 2, 10)
-	end
-end
-
 function SquareUI:CreateWindow(config)
 	config = config or {}
 	for _, old in ipairs(SquareUI.Windows) do pcall(function() old:Destroy() end) end
@@ -826,7 +817,6 @@ function SquareUI:CreateWindow(config)
 	new("Frame", { BackgroundColor3 = Theme.Dim, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 1), Parent = footer })
 	label({ Text = "[" .. toggleKey.Name .. "] mostrar / ocultar", TextColor3 = Theme.TextDim, TextSize = 11, Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(0.6, 0, 1, 0), Parent = footer })
 	label({ Text = tostring(config.Theme or "Troll"), TextColor3 = Theme.Accent, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Right, Position = UDim2.new(0.5, 0, 0, 0), Size = UDim2.new(0.5, -8, 1, 0), Parent = footer })
-	cornerMarks(main)
 
 	self:_connect(UserInputService.InputBegan, function(i, processed)
 		if not processed and i.KeyCode == toggleKey then self:Toggle() end
@@ -845,43 +835,3 @@ function SquareUI:CreateWindow(config)
 end
 
 return SquareUI
-end)()
-
-local Window = SquareUI:CreateWindow({
-	Title = "Square Hub Lite",
-	Size = Vector2.new(440, 340),
-	ToggleKey = Enum.KeyCode.K,
-	Theme = "Troll",
-})
-
-local Combat = Window:CreateTab("combat", "sword")
-local Visuals = Window:CreateTab("visuals", "eye")
-local Misc = Window:CreateTab("misc", "gear")
-
-local Aim = Combat:CreateGroupbox("Camera Aim", "Right")
-Aim:AddToggle("Enable Camera Aim", { Flag = "CamAim", Callback = function(v) print("CamAim", v) end }):AddKeybind({ Default = Enum.KeyCode.E })
-Aim:AddSlider("Aim Speed", { Min = 1, Max = 100, Default = 35, Flag = "AimSpeed" })
-Aim:AddDropdown("Aim Part", { Options = { "Auto", "Head", "Torso" }, Default = "Auto", Flag = "AimPart" })
-
-local Rage = Combat:CreateGroupbox("Ragebot", "Right")
-local tabs = Rage:AddSubtabs({ "Ragebot", "Visualizer" })
-tabs.Ragebot:AddToggle("Enable", { Flag = "Rage" })
-tabs.Ragebot:AddToggle("Auto Target", { Flag = "AutoTarget" })
-tabs.Visualizer:AddToggle("Show Line", { Flag = "ShowLine" }):AddColorpicker({ Default = Color3.fromRGB(217, 130, 43) })
-
-local Anti = Combat:CreateGroupbox("Anti Aim", "Left")
-Anti:AddToggle("Enable", { Flag = "AntiAim" })
-Anti:AddDropdown("Yaw", { Options = { "none", "spin", "jitter" }, Flag = "Yaw" })
-Anti:AddSlider("Custom Angle", { Min = 0, Max = 360, Default = 0, Suffix = "deg", Flag = "Angle" })
-Anti:AddDivider()
-Anti:AddButton("Reset", function() SquareUI.Flags.Angle:Set(0) end)
-
-local Esp = Visuals:CreateGroupbox("ESP", "Left")
-Esp:AddToggle("Boxes", { Flag = "Boxes" }):AddColorpicker({ Default = Color3.fromRGB(255, 80, 80) })
-Esp:AddToggle("Names", { Flag = "Names" })
-Esp:AddColorpicker("Tracer Color", { Default = Color3.fromRGB(217, 130, 43), Flag = "TracerColor" })
-Esp:AddInput("Tag", { Placeholder = "texto...", Flag = "Tag" })
-
-local Info = Misc:CreateGroupbox("Info", "Left")
-Info:AddLabel("Square UI " .. SquareUI.Version)
-Info:AddButton("Notificar", function() Window:Notify("Hola desde Square UI", 3) end)
